@@ -199,6 +199,16 @@ NULL check combined with comparison:
 
 OGC API - Processes exposes server-side processing tasks. Each process defines typed inputs and outputs and can be executed synchronously or asynchronously via `POST`.
 
+### Terminology note
+
+`Component` in this repository is an internal engineering term, not an OGC standard type.
+
+- OGC terms describe **API surfaces** (`Features`, `EDR`, `Tiles`, `Processes`).
+- Components describe **internal reusable logic** called by those wrappers.
+
+Detailed architecture rules and mapping:
+- `docs/architecture-ogc-wrapper-model.md`
+
 ### Available processes
 
 | Process                   | ID                       | Description                                                                                                |
@@ -206,10 +216,8 @@ OGC API - Processes exposes server-side processing tasks. Each process defines t
 | Zonal statistics          | `zonal-statistics`       | Compute zonal stats from GeoJSON features and a raster source                                              |
 | ERA5-Land                 | `era5-land-download`     | Download ERA5-Land hourly climate data (temperature, precipitation, etc.)                                  |
 | CHIRPS3                   | `chirps3-download`       | Download CHIRPS3 daily precipitation data                                                                  |
-| Feature fetch             | `feature-fetch`          | Normalize features from inline GeoJSON or DHIS2 selectors                                                  |
-| Data aggregate            | `data-aggregate`         | Aggregate downloaded raster data over workflow features                                                     |
-| DHIS2 dataValue build     | `dhis2-datavalue-build`  | Build DHIS2 `dataValueSet` and table output from aggregated rows                                           |
-| CHIRPS3 -> DHIS2 workflow | `chirps3-dhis2-workflow` | Process-first assembly: feature-fetch -> chirps3-download -> data-aggregate -> dhis2-datavalue-build      |
+| WorldPop -> DHIS2 workflow | `worldpop-dhis2-workflow` | Orchestrate WorldPop sync/request and build DHIS2 `dataValueSet` payload                                |
+| CHIRPS3 -> DHIS2 workflow | `chirps3-dhis2-workflow` | Orchestrate feature resolution, CHIRPS download, aggregation, and DHIS2 dataValue generation                |
 
 ### Endpoints
 
@@ -222,6 +230,17 @@ OGC API - Processes exposes server-side processing tasks. Each process defines t
 | GET    | `/ogcapi/jobs/{jobId}`                    | Get job status                                 |
 | GET    | `/ogcapi/jobs/{jobId}/results`            | Get job results                                |
 | DELETE | `/ogcapi/jobs/{jobId}`                    | Cancel or delete a job                         |
+
+### Canonical OGC access pattern
+
+- Feature selection and org unit geometry retrieval:
+  - OGC Features collections (`/ogcapi/collections/dhis2-org-units*`)
+- Value retrieval by location/area:
+  - OGC EDR endpoints on EDR-enabled collections
+- Map rendering:
+  - OGC Tiles (and Styles where configured)
+- End-to-end orchestration:
+  - OGC Processes (`*-workflow` process IDs)
 
 ### Common inputs (download processes)
 
@@ -375,12 +394,12 @@ All processes return a JSON object with:
 
 ### CHIRPS3 to DHIS2 workflow (`chirps3-dhis2-workflow`)
 
-Runs process-first orchestration in one execution:
+Runs one orchestrator process in one execution:
 
-1. `feature-fetch`
-2. `chirps3-download`
-3. `data-aggregate`
-4. `dhis2-datavalue-build`
+1. resolve features (inline GeoJSON or DHIS2 selectors)
+2. download CHIRPS3 files
+3. aggregate data over features
+4. build DHIS2 `dataValueSet`
 
 Example request using DHIS2 org units as source features:
 
@@ -419,6 +438,47 @@ Notes:
 - `temporal_resolution` supports `daily`, `weekly`, and `monthly`.
 - `flavor` supports `rnl` and `sat`. If `stage` is `prelim`, `flavor` must be `sat`.
 - DHIS2 timeout/retry behavior is configured globally via adapter env vars (`DHIS2_HTTP_TIMEOUT_SECONDS`, `DHIS2_HTTP_RETRIES`).
+- `dry_run` is currently informational for this workflow. The workflow returns `dataValueSet` and does not perform DHIS2 import.
+
+### WorldPop to DHIS2 workflow (`worldpop-dhis2-workflow`)
+
+Runs one orchestrator process that:
+1. syncs/locates WorldPop raster files (component-first)
+2. resolves features (inline `features_geojson` or DHIS2 selectors)
+3. aggregates by resolved features
+4. returns a DHIS2-valid `dataValueSet` payload
+
+Example request using local test raster (manual testing path):
+
+```bash
+curl -X POST http://localhost:8000/ogcapi/processes/worldpop-dhis2-workflow/execution \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "raster_files": ["tests/data/sle_pop_2026_CN_1km_R2025A_UA_v1.tif"],
+      "start_year": 2026,
+      "end_year": 2026,
+      "features_geojson": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "data_element": "DATAELEMENT_UID",
+      "reducer": "sum"
+    }
+  }'
+```
+
+For real WorldPop download via `dhis2eo`:
+- use `country_code` (for example `ETH`)
+- use `output_format: "netcdf"`
+- set `dry_run: false`
+
+Feature inputs:
+- Option A: pass `features_geojson` directly
+- Option B: omit `features_geojson` and pass selectors:
+  - `org_unit_level`
+  - optional `parent_org_unit`
+  - optional `org_unit_ids`
 
 ## Async execution and job management
 
