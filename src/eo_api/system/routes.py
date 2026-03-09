@@ -6,9 +6,9 @@ from importlib.metadata import version
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from eo_api.schemas import AppInfo, HealthStatus, Link, RootResponse, Status
+from .schemas import AppInfo, HealthStatus, Link, RootResponse, Status
 
-router = APIRouter(tags=["System"])
+router = APIRouter()
 
 
 @router.get("/")

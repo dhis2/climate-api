@@ -12,18 +12,18 @@ import xarray as xr
 from fastapi import BackgroundTasks
 
 from .constants import BBOX, CACHE_OVERRIDE, COUNTRY_CODE
-from .utils import get_lon_lat_dims, get_time_dim, numpy_period_string
+from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-_cache_dir = SCRIPT_DIR / "cache"
+_download_dir = SCRIPT_DIR.parent.parent.parent.parent / 'data' / 'downloads'
 if CACHE_OVERRIDE:
-    _cache_dir = Path(CACHE_OVERRIDE)
-CACHE_DIR: Path = _cache_dir
+    _download_dir = Path(CACHE_OVERRIDE)
+DOWNLOAD_DIR = _download_dir
 
 
-def build_dataset_cache(
+def download_dataset(
     dataset: dict[str, Any],
     start: str,
     end: str | None,
@@ -40,7 +40,7 @@ def build_dataset_cache(
         {
             "start": start,
             "end": end or datetime.date.today().isoformat(),
-            "dirname": CACHE_DIR,
+            "dirname": DOWNLOAD_DIR,
             "prefix": _get_cache_prefix(dataset),
             "overwrite": overwrite,
         }
@@ -50,14 +50,17 @@ def build_dataset_cache(
     if "bbox" in sig.parameters:
         params["bbox"] = BBOX
     elif "country_code" in sig.parameters:
-        params["country_code"] = COUNTRY_CODE
+        if COUNTRY_CODE:
+            params["country_code"] = COUNTRY_CODE
+        else:
+            raise Exception('Downloading WorldPop data requires COUNTRY_CODE environment variable')
 
     if background_tasks is not None:
         background_tasks.add_task(eo_download_func, **params)
 
 
-def optimize_dataset_cache(dataset: dict[str, Any]) -> None:
-    """Collect all cache files into a single optimised zarr archive."""
+def build_dataset_zarr(dataset: dict[str, Any]) -> None:
+    """Collect all dataset files into a single optimised zarr archive."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
     files = get_cache_files(dataset)
@@ -82,7 +85,7 @@ def optimize_dataset_cache(dataset: dict[str, Any]) -> None:
 
     # save as zarr
     logger.info("Saving to optimized zarr file")
-    zarr_path = CACHE_DIR / f"{_get_cache_prefix(dataset)}.zarr"
+    zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
     ds_chunked = ds.chunk(uniform_chunks)
     ds_chunked.to_zarr(zarr_path, mode="w")
     ds_chunked.close()
@@ -116,31 +119,31 @@ def _compute_time_space_chunks(
     return chunks
 
 
-def get_cache_info(dataset: dict[str, Any]) -> dict[str, Any]:
-    """Return temporal and spatial coverage metadata for the cached dataset."""
-    files = get_cache_files(dataset)
-    if not files:
-        return {"temporal_coverage": None, "spatial_coverage": None}
+# def get_cache_info(dataset: dict[str, Any]) -> dict[str, Any]:
+#     """Return temporal and spatial coverage metadata for the cached dataset."""
+#     files = get_cache_files(dataset)
+#     if not files:
+#         return {"temporal_coverage": None, "spatial_coverage": None}
 
-    ds = xr.open_dataset(sorted(files)[0])
+#     ds = xr.open_dataset(sorted(files)[0])
 
-    time_dim = get_time_dim(ds)
-    lon_dim, lat_dim = get_lon_lat_dims(ds)
+#     time_dim = get_time_dim(ds)
+#     lon_dim, lat_dim = get_lon_lat_dims(ds)
 
-    start = numpy_period_string(ds[time_dim].min().values, dataset["periodType"])  # type: ignore[arg-type]
+#     start = numpy_period_string(ds[time_dim].min().values, dataset["periodType"])  # type: ignore[arg-type]
 
-    xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
-    ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()
+#     xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
+#     ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()
 
-    ds = xr.open_dataset(sorted(files)[-1])
-    end = numpy_period_string(ds[time_dim].max().values, dataset["periodType"])  # type: ignore[arg-type]
+#     ds = xr.open_dataset(sorted(files)[-1])
+#     end = numpy_period_string(ds[time_dim].max().values, dataset["periodType"])  # type: ignore[arg-type]
 
-    return {
-        "coverage": {
-            "temporal": {"start": start, "end": end},
-            "spatial": {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax},
-        }
-    }
+#     return {
+#         "coverage": {
+#             "temporal": {"start": start, "end": end},
+#             "spatial": {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax},
+#         }
+#     }
 
 
 def _get_cache_prefix(dataset: dict[str, Any]) -> str:
@@ -151,13 +154,13 @@ def get_cache_files(dataset: dict[str, Any]) -> list[Path]:
     """Return all NetCDF cache files matching this dataset's prefix."""
     # TODO: not bulletproof -- e.g. 2m_temperature matches 2m_temperature_modified
     prefix = _get_cache_prefix(dataset)
-    return list(CACHE_DIR.glob(f"{prefix}*.nc"))
+    return list(DOWNLOAD_DIR.glob(f"{prefix}*.nc"))
 
 
 def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     """Return the optimised zarr archive path if it exists."""
     prefix = _get_cache_prefix(dataset)
-    optimized = CACHE_DIR / f"{prefix}.zarr"
+    optimized = DOWNLOAD_DIR / f"{prefix}.zarr"
     if optimized.exists():
         return optimized
     return None
