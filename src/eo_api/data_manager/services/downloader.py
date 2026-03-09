@@ -31,11 +31,11 @@ def download_dataset(
     background_tasks: BackgroundTasks | None,
 ) -> None:
     """Download dataset from source and store as local NetCDF cache files."""
-    cache_info = dataset["cacheInfo"]
-    eo_download_func_path = cache_info["eoFunction"]
+    cache_info = dataset["cache_info"]
+    eo_download_func_path = cache_info["eo_function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
 
-    params: dict[str, Any] = dict(cache_info["defaultParams"])
+    params = dict(cache_info.get("default_params", {}))
     params.update(
         {
             "start": start,
@@ -102,7 +102,7 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    period_type = dataset["periodType"]
+    period_type = dataset["period_type"]
     if period_type == "hourly":
         chunks[dim] = 24 * 7
     elif period_type == "daily":
