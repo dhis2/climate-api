@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from eo_api.integrations.components.services.gridded_aggregation_service import run_spatial_aggregation_stage
+
 
 def run(params: dict[str, Any]) -> dict[str, Any]:
-    """Pass through because CHIRPS spatial reduction already happened upstream."""
-    return {
-        "rows": params.get("rows", []),
-        "_step_control": {
-            "action": "pass_through",
-            "reason": "Spatial reduction already produced in CHIRPS aggregate component.",
-        },
-    }
+    """Run generic spatial stage for CHIRPS inputs."""
+    return run_spatial_aggregation_stage(params)

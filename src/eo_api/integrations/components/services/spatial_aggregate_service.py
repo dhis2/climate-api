@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -14,8 +14,6 @@ from pygeoapi.process.base import ProcessorExecuteError
 from rasterio.mask import mask
 from rasterio.warp import transform_geom
 from rioxarray.exceptions import NoDataInBounds
-
-from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
 
 _YEAR_RE = re.compile(r"(19|20)\d{2}")
 
@@ -74,7 +72,7 @@ def _compute_stat(values: np.ndarray[Any, np.dtype[np.float64]], reducer: str) -
     raise ValueError(f"Unsupported reducer '{reducer}'")
 
 
-def build_worldpop_rows(
+def aggregate_gridded_rows_by_features(
     *,
     files: list[str],
     feature_collection: dict[str, Any],
@@ -82,7 +80,7 @@ def build_worldpop_rows(
     org_unit_id_property: str = "id",
     reducer: str = "sum",
 ) -> dict[str, Any]:
-    """Aggregate WorldPop raster files by features and return canonical rows."""
+    """Aggregate gridded raster files by features and return canonical rows."""
     if feature_collection.get("type") != "FeatureCollection":
         raise ValueError("feature_collection must be a GeoJSON FeatureCollection")
     features = feature_collection.get("features")
@@ -147,47 +145,3 @@ def build_worldpop_rows(
         yearly.append({"year": year, "row_count": file_row_count, "raster_path": file_path, "reducer": reducer})
 
     return {"rows": rows, "summary": {"years_processed": sorted({item["year"] for item in yearly}), "yearly": yearly}}
-
-
-def build_worldpop_datavalueset(
-    *,
-    features_geojson: dict[str, Any],
-    raster_path: str,
-    year: int,
-    data_element: str,
-    org_unit_id_property: str = "id",
-    reducer: str = "sum",
-    category_option_combo: str | None = None,
-    attribute_option_combo: str | None = None,
-    data_set: str | None = None,
-) -> dict[str, Any]:
-    """Aggregate one raster by features and format a DHIS2-compatible payload."""
-    features = features_geojson.get("features")
-    if not isinstance(features, list):
-        raise ValueError("features_geojson.features must be an array")
-    rows_result = build_worldpop_rows(
-        files=[raster_path],
-        feature_collection=features_geojson,
-        start_year=year,
-        org_unit_id_property=org_unit_id_property,
-        reducer=reducer,
-    )
-    rows = cast(list[dict[str, Any]], rows_result["rows"])
-    payload = build_data_value_set(
-        rows=rows,
-        data_element=data_element,
-        category_option_combo=category_option_combo,
-        attribute_option_combo=attribute_option_combo,
-        data_set=data_set,
-    )
-    return {
-        "dataValueSet": payload["dataValueSet"],
-        "table": payload["table"],
-        "summary": {
-            "year": year,
-            "reducer": reducer,
-            "feature_count": len(features),
-            "row_count": len(rows),
-            "raster_path": raster_path,
-        },
-    }

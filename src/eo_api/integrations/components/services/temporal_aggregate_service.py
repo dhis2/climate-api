@@ -135,7 +135,7 @@ def _write_cached_rows(cache_file: str, rows: list[dict[str, Any]]) -> None:
     deduped.to_csv(cache_file, index=False)
 
 
-def aggregate_chirps_rows(
+def aggregate_gridded_time_rows_by_features(
     *,
     files: list[str],
     valid_features: list[dict[str, Any]],
@@ -146,13 +146,14 @@ def aggregate_chirps_rows(
     temporal_reducer: str,
     value_rounding: int,
     cache_root: str,
+    preferred_var: str | None = None,
     stage: str = "final",
     flavor: str = "rnl",
 ) -> dict[str, Any]:
-    """Aggregate CHIRPS files over valid features and return row/caching metadata."""
+    """Aggregate gridded time-series files over features and return canonical rows."""
     dataset = xr.open_mfdataset(files, combine="by_coords")
     try:
-        data_var = resolve_value_var(dataset, preferred_var="precip")
+        data_var = resolve_value_var(dataset, preferred_var=preferred_var)
         data_array = dataset[data_var]
         start_dt = pd.Timestamp(start_date)
         end_dt = pd.Timestamp(end_date)

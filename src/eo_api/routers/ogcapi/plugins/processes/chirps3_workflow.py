@@ -13,7 +13,7 @@ from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 from eo_api.integrations.components.services.chirps3_fetch_service import download_chirps3
 from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
 from eo_api.integrations.components.services.feature_resolver_service import resolve_features
-from eo_api.integrations.components.services.temporal_aggregate_service import aggregate_chirps_rows
+from eo_api.integrations.components.services.temporal_aggregate_service import aggregate_gridded_time_rows_by_features
 from eo_api.integrations.orchestration.runtime import run_component_with_trace
 from eo_api.routers.ogcapi.plugins.processes.schemas import ClimateDhis2WorkflowInput, FeatureFetchInput
 
@@ -174,7 +174,7 @@ class Chirps3WorkflowProcessor(BaseProcessor):
         aggregate_result = run_component_with_trace(
             workflow_trace,
             step_name="aggregate",
-            fn=aggregate_chirps_rows,
+            fn=aggregate_gridded_time_rows_by_features,
             start_date=str(inputs.start_date),
             end_date=str(inputs.end_date),
             files=files,
@@ -184,6 +184,7 @@ class Chirps3WorkflowProcessor(BaseProcessor):
             temporal_reducer=inputs.temporal_reducer,
             value_rounding=inputs.value_rounding,
             cache_root=DOWNLOAD_DIR,
+            preferred_var="precip",
             stage=inputs.stage,
             flavor=inputs.flavor,
         )

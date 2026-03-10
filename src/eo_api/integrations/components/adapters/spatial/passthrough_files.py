@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from eo_api.integrations.components.services.gridded_aggregation_service import run_spatial_aggregation_stage
+
 
 def run(params: dict[str, Any]) -> dict[str, Any]:
-    """Pass through files for datasets with deferred spatial aggregation."""
-    return {
-        "files": params.get("files", []),
-        "rows": params.get("rows", []),
-        "_step_control": {
-            "action": "pass_through",
-            "reason": "Spatial aggregation deferred to dataset-specific payload/analysis component.",
-        },
-    }
+    """Run generic spatial stage for passthrough datasets."""
+    return run_spatial_aggregation_stage(params)

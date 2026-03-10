@@ -25,7 +25,7 @@ def test_chirps3_workflow_uses_component_orchestration(monkeypatch: Any) -> None
     )
     monkeypatch.setattr(
         module,
-        "aggregate_chirps_rows",
+        "aggregate_gridded_time_rows_by_features",
         lambda **kwargs: {
             "rows": [{"orgUnit": "OU_1", "period": "202501", "value": 12.345}],
             "cache": {"key": "agg", "file": "/tmp/cache.csv", "cached_rows_reused": 0, "computed_rows_delta": 1},
@@ -92,7 +92,7 @@ def test_chirps3_workflow_selector_feature_source(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(
         module,
-        "aggregate_chirps_rows",
+        "aggregate_gridded_time_rows_by_features",
         lambda **kwargs: {"rows": [{"orgUnit": "OU_2", "period": "202501", "value": 1.2}], "cache": {"key": "a"}},
     )
     monkeypatch.setattr(
