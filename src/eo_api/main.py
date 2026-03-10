@@ -68,11 +68,22 @@ if openapi_path and config_path and not Path(openapi_path).exists():
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import RedirectResponse  # noqa: E402
+from starlette.responses import JSONResponse, Response  # noqa: E402
 
 from eo_api.integrations.orchestration.output_collections import ensure_output_collections_seeded  # noqa: E402
+from eo_api.ogc_async import enrich_async_job_payload  # noqa: E402
+from eo_api.ogc_jobs import install_processes_jobs_filter_patch  # noqa: E402
 from eo_api.routers import cog, ogcapi, pipelines, prefect, root, workflow_capabilities  # noqa: E402
 
 ensure_output_collections_seeded()
+install_processes_jobs_filter_patch()
+
+
+def _safe_forward_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Drop hop-by-hop/body-size headers before building a new response."""
+    blocked = {"content-length", "transfer-encoding", "connection"}
+    return {key: value for key, value in headers.items() if key.lower() not in blocked}
+
 
 # Keep app progress logs visible while muting noisy third-party info logs.
 eo_logger = logging.getLogger("eo_api")
@@ -129,6 +140,66 @@ app.include_router(root.router)
 app.include_router(cog.router, prefix="/cog", tags=["Cloud Optimized GeoTIFF"])
 app.include_router(pipelines.router, prefix="/pipelines", tags=["Pipelines"])
 app.include_router(workflow_capabilities.router)
+
+
+@app.middleware("http")
+async def enrich_ogc_async_execution_response(request, call_next):  # type: ignore[no-untyped-def]
+    """Add absolute job URLs into OGC async accepted response bodies."""
+    response = await call_next(request)
+
+    is_ogc_execution = request.url.path.startswith("/ogcapi/processes/") and request.url.path.endswith("/execution")
+    if not is_ogc_execution or response.status_code != 201:
+        return response
+
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return response
+
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+
+    try:
+        import json
+
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=_safe_forward_headers(dict(response.headers)),
+            media_type=response.media_type,
+        )
+
+    if not isinstance(payload, dict):
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=_safe_forward_headers(dict(response.headers)),
+            media_type=response.media_type,
+        )
+
+    location = response.headers.get("Location")
+    base_url = f"{request.url.scheme}://{request.url.netloc}/"
+    enriched = enrich_async_job_payload(payload, location=location, base_url=base_url)
+    return JSONResponse(
+        content=enriched,
+        status_code=response.status_code,
+        headers=_safe_forward_headers(dict(response.headers)),
+    )
+
+
+@app.middleware("http")
+async def scope_ogc_jobs_process_filter(request, call_next):  # type: ignore[no-untyped-def]
+    """Expose active jobs process filter in response headers for diagnostics."""
+    if request.url.path.rstrip("/") != "/ogcapi/jobs":
+        return await call_next(request)
+
+    process_id = request.query_params.get("process_id") or request.query_params.get("processID")
+    response = await call_next(request)
+    if process_id:
+        response.headers["X-EO-Jobs-Process-Filter"] = process_id
+    return response
 
 
 @app.get("/ogcapi", include_in_schema=False)
