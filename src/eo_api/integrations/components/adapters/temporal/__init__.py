@@ -1,0 +1,1 @@
+"""Temporal adapters by dataset."""

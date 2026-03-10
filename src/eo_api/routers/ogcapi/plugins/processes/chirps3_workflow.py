@@ -10,11 +10,11 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.chirps3_fetch import download_chirps3
-from eo_api.integrations.data_aggregate import aggregate_chirps_rows
-from eo_api.integrations.dhis2_datavalues import build_data_value_set
-from eo_api.integrations.feature_fetch import resolve_features
-from eo_api.integrations.workflow_runtime import run_component_with_trace
+from eo_api.integrations.components.services.chirps3_fetch_service import download_chirps3
+from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
+from eo_api.integrations.components.services.feature_resolver_service import resolve_features
+from eo_api.integrations.components.services.temporal_aggregate_service import aggregate_chirps_rows
+from eo_api.integrations.orchestration.runtime import run_component_with_trace
 from eo_api.routers.ogcapi.plugins.processes.schemas import ClimateDhis2WorkflowInput, FeatureFetchInput
 
 LOGGER = logging.getLogger(__name__)

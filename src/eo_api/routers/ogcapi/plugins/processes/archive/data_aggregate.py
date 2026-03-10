@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.data_aggregate import aggregate_chirps_rows
+from eo_api.integrations.components.services.temporal_aggregate_service import aggregate_chirps_rows
 from eo_api.routers.ogcapi.plugins.processes.schemas import DataAggregateInput
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/data")

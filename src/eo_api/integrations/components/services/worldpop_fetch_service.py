@@ -1,4 +1,4 @@
-"""WorldPop sync planning utilities shared by API wrappers."""
+"""WorldPop fetch/sync service."""
 
 from __future__ import annotations
 
@@ -137,3 +137,99 @@ def sync_worldpop(
         plan["implementation_status"] = "planning_only"
 
     return plan
+
+
+def resolve_worldpop_files(
+    *,
+    raster_files: Sequence[str] | None,
+    country_code: str | None,
+    bbox: Sequence[float] | None,
+    start_year: int,
+    end_year: int,
+    output_format: str,
+    root_dir: Path,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Resolve file availability using cache-first + download strategy."""
+    if raster_files:
+        files = [str(path) for path in raster_files]
+        return {
+            "files": files,
+            "plan": {"mode": "provided-raster-files", "planned_files": files},
+            "strategy_used": "provided-raster-files",
+            "cache_hit": all(Path(path).exists() for path in files),
+            "download_attempted": False,
+            "not_implemented_reason": None,
+            "reason": None if files else "No raster_files were provided.",
+        }
+
+    initial_plan = build_sync_plan(
+        country_code=country_code,
+        bbox=bbox,
+        start_year=start_year,
+        end_year=end_year,
+        output_format=output_format,
+        root_dir=root_dir,
+    )
+    initial_existing = [path for path in initial_plan["planned_files"] if Path(path).exists()]
+    initial_missing = [path for path in initial_plan["planned_files"] if not Path(path).exists()]
+
+    can_download_netcdf = output_format == "netcdf" and country_code is not None
+    download_attempted = False
+    not_implemented_reason: str | None = None
+    reason: str | None
+
+    if dry_run:
+        plan = sync_worldpop(
+            country_code=country_code,
+            bbox=bbox,
+            start_year=start_year,
+            end_year=end_year,
+            output_format=output_format,
+            root_dir=root_dir,
+            dry_run=True,
+        )
+        files = initial_existing
+        strategy_used = "dry-run-plan-only"
+        reason = "Dry run mode does not fetch missing files."
+    elif can_download_netcdf:
+        download_attempted = bool(initial_missing)
+        plan = sync_worldpop(
+            country_code=country_code,
+            bbox=bbox,
+            start_year=start_year,
+            end_year=end_year,
+            output_format=output_format,
+            root_dir=root_dir,
+            dry_run=False,
+        )
+        files = [path for path in plan["planned_files"] if Path(path).exists()]
+        strategy_used = "cache-only" if not download_attempted else "cache-and-download"
+        reason = None if files else "WorldPop netcdf download attempted but no files were produced."
+    else:
+        plan = sync_worldpop(
+            country_code=country_code,
+            bbox=bbox,
+            start_year=start_year,
+            end_year=end_year,
+            output_format=output_format,
+            root_dir=root_dir,
+            dry_run=False,
+        )
+        files = initial_existing
+        strategy_used = "cache-only"
+        if initial_missing:
+            not_implemented_reason = (
+                f"Download strategy for output_format='{output_format}' is not implemented yet in fetch service."
+            )
+        reason = not_implemented_reason or (None if files else "No cached files were found for requested scope.")
+
+    return {
+        "files": files,
+        "plan": plan,
+        "strategy_used": strategy_used,
+        "cache_hit": bool(initial_existing) and not bool(initial_missing),
+        "download_attempted": download_attempted,
+        "not_implemented_reason": not_implemented_reason,
+        "reason": reason,
+    }

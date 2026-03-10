@@ -1,0 +1,53 @@
+workflow_id: worldpop-dhis2-template
+version: "0.1.0"
+nodes:
+  - id: features
+    component: workflow.features
+    params:
+      features_geojson: "{{input.features_geojson}}"
+      org_unit_level: "{{input.org_unit_level}}"
+      parent_org_unit: "{{input.parent_org_unit}}"
+      org_unit_ids: "{{input.org_unit_ids}}"
+      org_unit_id_property: "{{input.org_unit_id_property}}"
+      bbox: "{{input.bbox}}"
+
+  - id: download
+    component: workflow.download
+    params:
+      dataset: worldpop
+      raster_files: "{{input.raster_files}}"
+      country_code: "{{input.country_code}}"
+      bbox: "{{input.bbox}}"
+      start_year: "{{input.start_year}}"
+      end_year: "{{input.end_year}}"
+      output_format: "{{input.output_format}}"
+      dry_run: "{{input.dry_run}}"
+
+  - id: temporal_aggregation
+    component: workflow.temporal_aggregation
+    params:
+      dataset: worldpop
+      source_temporal_resolution: "{{download.source_temporal_resolution}}"
+      files: "{{download.files}}"
+      temporal_resolution: "{{input.temporal_resolution}}"
+
+  - id: spatial_aggregation
+    component: workflow.spatial_aggregation
+    params:
+      dataset: worldpop
+      files: "{{temporal_aggregation.files}}"
+      feature_collection: "{{features.feature_collection}}"
+      start_year: "{{input.start_year}}"
+      org_unit_id_property: "{{input.org_unit_id_property}}"
+      reducer: "{{input.reducer}}"
+
+  - id: dhis2_payload_builder
+    component: workflow.dhis2_payload_builder
+    params:
+      dataset: worldpop
+      rows: "{{spatial_aggregation.rows}}"
+      summary: "{{spatial_aggregation.summary}}"
+      data_element: "{{input.data_element}}"
+      category_option_combo: "{{input.category_option_combo}}"
+      attribute_option_combo: "{{input.attribute_option_combo}}"
+      data_set: "{{input.data_set}}"

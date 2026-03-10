@@ -379,3 +379,8 @@ resources:
     type: process
     processor:
       name: eo_api.routers.ogcapi.plugins.processes.worldpop_dhis2_workflow.WorldPopDhis2WorkflowProcessor
+
+  generic-dhis2-workflow:
+    type: process
+    processor:
+      name: eo_api.routers.ogcapi.plugins.processes.generic_dhis2_workflow.GenericDhis2WorkflowProcessor

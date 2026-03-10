@@ -1,0 +1,1 @@
+"""Spatial adapters by dataset."""

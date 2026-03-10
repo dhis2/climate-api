@@ -1,0 +1,102 @@
+version: "0.2.0"
+datasets:
+  chirps3:
+    title: "CHIRPS3 Precipitation"
+    provider_capabilities:
+      source_temporal_resolution: "daily"
+      supported_temporal_resolutions:
+        - "daily"
+        - "weekly"
+        - "monthly"
+      supported_output_formats:
+        - "netcdf"
+        - "zarr"
+      supports:
+        temporal_downsample: true
+        temporal_disaggregate: false
+      reducers:
+        temporal:
+          - "sum"
+          - "mean"
+        spatial:
+          - "sum"
+          - "mean"
+    integration_capabilities:
+      source_temporal_resolution: "daily"
+      supported_temporal_resolutions:
+        - "daily"
+        - "weekly"
+        - "monthly"
+      supported_output_formats:
+        - "netcdf"
+      supports:
+        temporal_downsample: true
+        temporal_disaggregate: false
+      reducers:
+        temporal:
+          - "sum"
+          - "mean"
+        spatial:
+          - "sum"
+          - "mean"
+    stages:
+      features:
+        adapter: "workflow.features"
+      download:
+        adapter: "components.adapters.download.chirps3"
+      temporal_aggregation:
+        adapter: "components.adapters.temporal.chirps3"
+      spatial_aggregation:
+        adapter: "components.adapters.spatial.chirps3"
+      dhis2_payload_builder:
+        adapter: "components.adapters.payload.chirps3"
+
+  worldpop:
+    title: "WorldPop Total Population"
+    provider_capabilities:
+      source_temporal_resolution: "yearly"
+      supported_temporal_resolutions:
+        - "yearly"
+        - "annual"
+      supported_output_formats:
+        - "geotiff"
+        - "netcdf"
+        - "zarr"
+      supports:
+        temporal_downsample: true
+        temporal_disaggregate: false
+      reducers:
+        temporal:
+          - "sum"
+          - "mean"
+        spatial:
+          - "sum"
+          - "mean"
+    integration_capabilities:
+      source_temporal_resolution: "yearly"
+      supported_temporal_resolutions:
+        - "yearly"
+        - "annual"
+      supported_output_formats:
+        - "netcdf"
+      supports:
+        temporal_downsample: true
+        temporal_disaggregate: false
+      reducers:
+        temporal:
+          - "sum"
+          - "mean"
+        spatial:
+          - "sum"
+          - "mean"
+    stages:
+      features:
+        adapter: "workflow.features"
+      download:
+        adapter: "components.adapters.download.worldpop"
+      temporal_aggregation:
+        adapter: "components.adapters.temporal.worldpop"
+      spatial_aggregation:
+        adapter: "components.adapters.spatial.worldpop"
+      dhis2_payload_builder:
+        adapter: "components.adapters.payload.worldpop"

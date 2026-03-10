@@ -7,9 +7,9 @@ from typing import Any
 
 from pygeoapi.process.base import ProcessorExecuteError
 
-from eo_api.integrations.workflow_registry import ComponentRegistry
-from eo_api.integrations.workflow_runtime import run_component_with_trace
-from eo_api.integrations.workflow_spec import WorkflowSpec
+from eo_api.integrations.orchestration.registry import ComponentRegistry
+from eo_api.integrations.orchestration.runtime import run_planned_component_with_trace, should_exit_workflow
+from eo_api.integrations.orchestration.spec import WorkflowSpec
 
 _REF_PATTERN = re.compile(r"^\{\{([a-zA-Z0-9_.-]+)\}\}$")
 
@@ -52,7 +52,7 @@ def execute_workflow_spec(
         namespace = {**run_context, **outputs}
         resolved_params = _resolve_param_value(node.params, namespace)
         descriptor = registry.get(node.component)
-        output = run_component_with_trace(
+        output = run_planned_component_with_trace(
             trace,
             step_name=node.id,
             fn=descriptor.fn,
@@ -60,6 +60,18 @@ def execute_workflow_spec(
             context=run_context,
         )
         outputs[node.id] = output
+        exit_requested, reason = should_exit_workflow(output)
+        if exit_requested:
+            result: dict[str, Any] = {
+                "workflowId": spec.workflow_id,
+                "status": "exited",
+                "outputs": outputs,
+                "workflowTrace": trace,
+                "exit": {"step": node.id},
+            }
+            if reason:
+                result["exit"]["reason"] = reason
+            return result
 
     return {
         "workflowId": spec.workflow_id,

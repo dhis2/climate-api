@@ -782,6 +782,7 @@ dependencies = [
     { name = "prefect" },
     { name = "pygeoapi" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "titiler-core" },
     { name = "uvicorn" },
 ]
@@ -806,6 +807,7 @@ requires-dist = [
     { name = "prefect", specifier = ">=3.6" },
     { name = "pygeoapi", specifier = ">=0.22.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "titiler-core", specifier = ">=1.2.0" },
     { name = "uvicorn", specifier = ">=0.41.0" },
 ]

@@ -8,8 +8,8 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.era5_land_fetch import download_era5_land
-from eo_api.integrations.workflow_runtime import run_component_with_trace
+from eo_api.integrations.components.services.era5_land_fetch_service import download_era5_land
+from eo_api.integrations.orchestration.runtime import run_component_with_trace
 from eo_api.routers.ogcapi.plugins.processes.schemas import ERA5LandInput, ProcessOutput
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/data")

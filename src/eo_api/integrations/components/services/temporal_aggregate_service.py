@@ -1,4 +1,4 @@
-"""Reusable CHIRPS3 aggregation component."""
+"""Generic temporal aggregation services for gridded datasets."""
 
 from __future__ import annotations
 
@@ -9,39 +9,12 @@ from typing import Any, cast
 import pandas as pd
 import xarray as xr
 from pygeoapi.process.base import ProcessorExecuteError
-from rioxarray.exceptions import NoDataInBounds
+
+from eo_api.integrations.components.services.spatial_aggregate_service import clip_spatial_series, resolve_value_var
 
 
-def _resolve_value_var(dataset: xr.Dataset) -> str:
-    if "precip" in dataset.data_vars:
-        return "precip"
-    keys = list(dataset.data_vars.keys())
-    if not keys:
-        raise ProcessorExecuteError("Downloaded CHIRPS3 dataset has no data variables")
-    return str(keys[0])
-
-
-def _clip_spatial_series(data_array: xr.DataArray, geometry: dict[str, Any], spatial_reducer: str) -> pd.Series:
-    try:
-        clipped = data_array.rio.clip([geometry], crs="EPSG:4326", drop=True)
-    except NoDataInBounds:
-        return pd.Series(dtype=float)
-    spatial_dims = [dim for dim in clipped.dims if dim != "time"]
-    if not spatial_dims:
-        raise ProcessorExecuteError("Unable to resolve spatial dimensions in CHIRPS3 dataset")
-    reduced = (
-        clipped.mean(dim=spatial_dims, skipna=True)
-        if spatial_reducer == "mean"
-        else clipped.sum(dim=spatial_dims, skipna=True)
-    )
-    series: pd.Series[Any] = reduced.to_series().dropna()
-    if series.empty:
-        return series
-    series.index = pd.DatetimeIndex(pd.to_datetime(series.index))
-    return series
-
-
-def _format_period_code(timestamp: pd.Timestamp, temporal_resolution: str) -> str:
+def format_period_code(timestamp: pd.Timestamp, temporal_resolution: str) -> str:
+    """Format one timestamp into a DHIS2-compatible period code."""
     if temporal_resolution == "daily":
         return str(timestamp.strftime("%Y%m%d"))
     if temporal_resolution == "monthly":
@@ -58,19 +31,20 @@ def _as_timestamp(value: Any) -> pd.Timestamp:
     return ts
 
 
-def _apply_temporal_aggregation(
+def apply_temporal_aggregation(
     series: pd.Series,
     temporal_resolution: str,
     temporal_reducer: str,
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
 ) -> list[tuple[str, float]]:
+    """Aggregate time series into target temporal resolution."""
     windowed = series[(series.index >= start_date) & (series.index <= end_date)]
     if windowed.empty:
         return []
     if temporal_resolution == "daily":
         return [
-            (_format_period_code(_as_timestamp(ts), temporal_resolution), float(val)) for ts, val in windowed.items()
+            (format_period_code(_as_timestamp(ts), temporal_resolution), float(val)) for ts, val in windowed.items()
         ]
     if temporal_resolution == "monthly":
         aggregated = (
@@ -79,7 +53,7 @@ def _apply_temporal_aggregation(
             else windowed.resample("MS").sum().dropna()
         )
         return [
-            (_format_period_code(_as_timestamp(ts), temporal_resolution), float(val)) for ts, val in aggregated.items()
+            (format_period_code(_as_timestamp(ts), temporal_resolution), float(val)) for ts, val in aggregated.items()
         ]
     index = pd.DatetimeIndex(pd.to_datetime(windowed.index))
     weekly_df = pd.DataFrame({"value": windowed.to_numpy()}, index=index)
@@ -93,6 +67,24 @@ def _apply_temporal_aggregation(
         iso_year, iso_week = cast(tuple[Any, Any], key)
         pairs.append((f"{int(iso_year):04d}W{int(iso_week):02d}", float(value)))
     return pairs
+
+
+def target_periods(start_date: pd.Timestamp, end_date: pd.Timestamp, temporal_resolution: str) -> list[str]:
+    """List expected period keys in the requested window."""
+    if temporal_resolution == "daily":
+        return [str(ts.strftime("%Y%m%d")) for ts in pd.date_range(start_date, end_date, freq="D")]
+    if temporal_resolution == "monthly":
+        return [str(ts.strftime("%Y%m")) for ts in pd.date_range(start_date, end_date, freq="MS")]
+    days = pd.date_range(start_date, end_date, freq="D")
+    keys: list[str] = []
+    seen: set[str] = set()
+    for ts in days:
+        iso = ts.isocalendar()
+        key = f"{int(iso.year):04d}W{int(iso.week):02d}"
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
 
 
 def _scope_token_from_files(files: list[str], fallback_stage: str, fallback_flavor: str) -> str:
@@ -117,23 +109,6 @@ def _cache_key(
 ) -> str:
     raw = "|".join([scope_token, spatial_reducer, temporal_resolution, temporal_reducer, str(value_rounding)])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _target_periods(start_date: pd.Timestamp, end_date: pd.Timestamp, temporal_resolution: str) -> list[str]:
-    if temporal_resolution == "daily":
-        return [str(ts.strftime("%Y%m%d")) for ts in pd.date_range(start_date, end_date, freq="D")]
-    if temporal_resolution == "monthly":
-        return [str(ts.strftime("%Y%m")) for ts in pd.date_range(start_date, end_date, freq="MS")]
-    days = pd.date_range(start_date, end_date, freq="D")
-    keys: list[str] = []
-    seen: set[str] = set()
-    for ts in days:
-        iso = ts.isocalendar()
-        key = f"{int(iso.year):04d}W{int(iso.week):02d}"
-        if key not in seen:
-            seen.add(key)
-            keys.append(key)
-    return keys
 
 
 def _load_cached_rows(cache_file: str) -> list[dict[str, Any]]:
@@ -177,12 +152,12 @@ def aggregate_chirps_rows(
     """Aggregate CHIRPS files over valid features and return row/caching metadata."""
     dataset = xr.open_mfdataset(files, combine="by_coords")
     try:
-        data_var = _resolve_value_var(dataset)
+        data_var = resolve_value_var(dataset, preferred_var="precip")
         data_array = dataset[data_var]
         start_dt = pd.Timestamp(start_date)
         end_dt = pd.Timestamp(end_date)
-        target_periods = _target_periods(start_dt, end_dt, temporal_resolution)
-        target_period_set = set(target_periods)
+        expected_periods = target_periods(start_dt, end_dt, temporal_resolution)
+        expected_period_set = set(expected_periods)
         target_org_units = {str(item["orgUnit"]) for item in valid_features}
 
         scope_token = _scope_token_from_files(files, stage, flavor)
@@ -201,13 +176,13 @@ def aggregate_chirps_rows(
         for item in valid_features:
             org_unit_id = str(item["orgUnit"])
             geometry = item["geometry"]
-            missing_periods = [period for period in target_periods if (org_unit_id, period) not in cached_by_key]
+            missing_periods = [period for period in expected_periods if (org_unit_id, period) not in cached_by_key]
             if not missing_periods:
                 continue
-            series = _clip_spatial_series(data_array, geometry, spatial_reducer)
+            series = clip_spatial_series(data_array, geometry, spatial_reducer)
             if series.empty:
                 continue
-            period_values = _apply_temporal_aggregation(
+            period_values = apply_temporal_aggregation(
                 series,
                 temporal_resolution,
                 temporal_reducer,
@@ -217,7 +192,7 @@ def aggregate_chirps_rows(
             for period, value in period_values:
                 if pd.isna(value):
                     continue
-                if period in target_period_set and period in missing_periods:
+                if period in expected_period_set and period in missing_periods:
                     computed_rows.append(
                         {
                             "orgUnit": org_unit_id,
@@ -235,7 +210,7 @@ def aggregate_chirps_rows(
     rows = [
         row
         for (org_unit, period), row in merged_rows_map.items()
-        if org_unit in target_org_units and period in target_period_set
+        if org_unit in target_org_units and period in expected_period_set
     ]
     if not rows:
         raise ProcessorExecuteError("No non-empty aggregated values were produced for the selected features")

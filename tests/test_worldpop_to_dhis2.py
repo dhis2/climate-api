@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from eo_api.integrations.dhis2_datavalues import build_data_value_set
-from eo_api.integrations.worldpop_to_dhis2 import build_worldpop_datavalueset
+from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
+from eo_api.integrations.components.services.spatial_aggregate_service import build_worldpop_datavalueset
 
 
 def _load_geojson(path: Path) -> dict:

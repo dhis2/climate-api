@@ -1,8 +1,8 @@
 """WorldPop to DHIS2 workflow process.
 
 This process is a thin orchestrator over reusable components:
-- eo_api.integrations.worldpop_sync
-- eo_api.integrations.worldpop_to_dhis2
+- eo_api.integrations.components.services.worldpop_fetch_service
+- eo_api.integrations.components.services.spatial_aggregate_service
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.feature_fetch import resolve_features
-from eo_api.integrations.workflow_runtime import run_component_with_trace
-from eo_api.integrations.worldpop_sync import sync_worldpop
-from eo_api.integrations.worldpop_to_dhis2 import build_worldpop_datavalueset
+from eo_api.integrations.components.services.feature_resolver_service import resolve_features
+from eo_api.integrations.components.services.spatial_aggregate_service import build_worldpop_datavalueset
+from eo_api.integrations.components.services.worldpop_fetch_service import sync_worldpop
+from eo_api.integrations.orchestration.runtime import run_component_with_trace
 from eo_api.routers.ogcapi.plugins.processes.schemas import FeatureFetchInput, WorldPopDhis2WorkflowInput
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/data")

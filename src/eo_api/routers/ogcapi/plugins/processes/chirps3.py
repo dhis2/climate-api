@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.chirps3_fetch import download_chirps3
+from eo_api.integrations.components.services.chirps3_fetch_service import download_chirps3
 from eo_api.routers.ogcapi.plugins.processes.schemas import CHIRPS3Input, ProcessOutput
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/data")

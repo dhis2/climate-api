@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from dhis2eo.data.chc.chirps3 import daily as chirps3_daily
 
@@ -69,4 +69,57 @@ def download_chirps3(
             "reused_count": len(files) - len(downloaded_now),
             "dir": str(download_dir),
         },
+    }
+
+
+def resolve_chirps3_files(
+    *,
+    start: str,
+    end: str,
+    bbox: Sequence[float],
+    stage: str,
+    flavor: str,
+    download_root: Path,
+    output_format: str = "netcdf",
+) -> dict[str, Any]:
+    """Resolve CHIRPS3 files using cache-aware download strategy."""
+    if output_format != "netcdf":
+        return {
+            "files": [],
+            "planned_files": [],
+            "existing_files": [],
+            "missing_files": [],
+            "strategy_used": "cache-only",
+            "cache_hit": False,
+            "download_attempted": False,
+            "implementation_status": "not_implemented",
+            "not_implemented_reason": (
+                f"CHIRPS3 fetch output_format='{output_format}' is not implemented; supported: netcdf."
+            ),
+            "reason": f"Unsupported CHIRPS3 output_format '{output_format}'.",
+        }
+
+    result = download_chirps3(
+        start=start,
+        end=end,
+        bbox=[float(value) for value in bbox],
+        stage=stage,
+        flavor=flavor,
+        download_root=download_root,
+    )
+    files = [str(path) for path in result["files"]]
+    existing_files = [path for path in files if Path(path).exists()]
+    missing_files = [path for path in files if not Path(path).exists()]
+    return {
+        "files": existing_files,
+        "planned_files": files,
+        "existing_files": existing_files,
+        "missing_files": missing_files,
+        "strategy_used": "cache-and-download",
+        "cache_hit": bool(result.get("cache", {}).get("hit")),
+        "download_attempted": bool(result.get("cache", {}).get("downloaded_delta_count", 0)),
+        "implementation_status": "ok",
+        "not_implemented_reason": None,
+        "reason": None if existing_files else "CHIRPS3 download produced no local files.",
+        "cache": result.get("cache"),
     }

@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
-from eo_api.integrations.feature_fetch import resolve_features
+from eo_api.integrations.components.services.feature_resolver_service import resolve_features
 from eo_api.routers.ogcapi.plugins.processes.schemas import FeatureFetchInput
 
 PROCESS_METADATA = {

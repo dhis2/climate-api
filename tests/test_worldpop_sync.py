@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from eo_api.integrations.worldpop_sync import build_sync_plan, sync_worldpop
+from eo_api.integrations.components.services.worldpop_fetch_service import (
+    build_sync_plan,
+    resolve_worldpop_files,
+    sync_worldpop,
+)
 from eo_api.routers.ogcapi.plugins.processes.schemas import WorldPopSyncInput
 
 
@@ -61,9 +65,9 @@ def test_sync_worldpop_downloads_netcdf_for_country_scope(tmp_path: Path, monkey
     def _fake_download(**_: object) -> list[str]:
         return [str(expected_file)]
 
-    from eo_api.integrations import worldpop_sync
+    from eo_api.integrations.components.services import worldpop_fetch_service
 
-    monkeypatch.setattr(worldpop_sync, "_download_worldpop_yearly", _fake_download)
+    monkeypatch.setattr(worldpop_fetch_service, "_download_worldpop_yearly", _fake_download)
     plan = sync_worldpop(
         country_code="ETH",
         bbox=None,
@@ -92,3 +96,53 @@ def test_sync_worldpop_netcdf_rejects_bbox_only_scope(tmp_path: Path) -> None:
             root_dir=tmp_path,
             dry_run=False,
         )
+
+
+def test_resolve_worldpop_files_prefers_provided_raster_files(tmp_path: Path) -> None:
+    provided = tmp_path / "provided.tif"
+    provided.write_text("x", encoding="utf-8")
+    result = resolve_worldpop_files(
+        raster_files=[str(provided)],
+        country_code=None,
+        bbox=None,
+        start_year=2025,
+        end_year=2025,
+        output_format="geotiff",
+        root_dir=tmp_path,
+        dry_run=True,
+    )
+    assert result["files"] == [str(provided)]
+    assert result["strategy_used"] == "provided-raster-files"
+    assert result["download_attempted"] is False
+
+
+def test_resolve_worldpop_files_dry_run_does_not_download(tmp_path: Path) -> None:
+    result = resolve_worldpop_files(
+        raster_files=None,
+        country_code="SLE",
+        bbox=None,
+        start_year=2025,
+        end_year=2025,
+        output_format="netcdf",
+        root_dir=tmp_path,
+        dry_run=True,
+    )
+    assert result["files"] == []
+    assert result["strategy_used"] == "dry-run-plan-only"
+    assert "Dry run mode" in str(result["reason"])
+
+
+def test_resolve_worldpop_files_reports_not_implemented_download_strategy(tmp_path: Path) -> None:
+    result = resolve_worldpop_files(
+        raster_files=None,
+        country_code="SLE",
+        bbox=None,
+        start_year=2025,
+        end_year=2025,
+        output_format="geotiff",
+        root_dir=tmp_path,
+        dry_run=False,
+    )
+    assert result["files"] == []
+    assert result["strategy_used"] == "cache-only"
+    assert "not implemented" in str(result["not_implemented_reason"])

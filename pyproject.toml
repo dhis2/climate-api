@@ -10,6 +10,7 @@ dependencies = [
     "titiler-core>=1.2.0",
     "uvicorn>=0.41.0",
     "python-dotenv>=1.0.1",
+    "PyYAML>=6.0.2",
     "pygeoapi>=0.22.0",
     "dhis2eo @ git+https://github.com/dhis2/dhis2eo.git@v1.1.0",
     "dhis2-client @ git+https://github.com/dhis2/dhis2-python-client.git@V0.3.0",
@@ -59,6 +60,10 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "titiler.*", "rasterio.*", "pygeofilter.*", "prefect.*", "requests.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yaml"]
 ignore_missing_imports = true
 
 [tool.pyright]

@@ -216,6 +216,7 @@ Detailed architecture rules and mapping:
 | Zonal statistics          | `zonal-statistics`       | Compute zonal stats from GeoJSON features and a raster source                                              |
 | ERA5-Land                 | `era5-land-download`     | Download ERA5-Land hourly climate data (temperature, precipitation, etc.)                                  |
 | CHIRPS3                   | `chirps3-download`       | Download CHIRPS3 daily precipitation data                                                                  |
+| Generic dataset workflow  | `generic-dhis2-workflow` | Canonical component chain for multiple datasets with capability-aware execution                            |
 | WorldPop -> DHIS2 workflow | `worldpop-dhis2-workflow` | Orchestrate WorldPop sync/request and build DHIS2 `dataValueSet` payload                                |
 | CHIRPS3 -> DHIS2 workflow | `chirps3-dhis2-workflow` | Orchestrate feature resolution, CHIRPS download, aggregation, and DHIS2 dataValue generation                |
 
@@ -230,6 +231,12 @@ Detailed architecture rules and mapping:
 | GET    | `/ogcapi/jobs/{jobId}`                    | Get job status                                 |
 | GET    | `/ogcapi/jobs/{jobId}/results`            | Get job results                                |
 | DELETE | `/ogcapi/jobs/{jobId}`                    | Cancel or delete a job                         |
+
+Generic workflow discoverability endpoint:
+
+| Method | Path                                                     | Description                                                           |
+| ------ | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| GET    | `/ogcapi/processes/generic-dhis2-workflow/capabilities` | Dataset/service capabilities (provider vs integration) + stage bindings |
 
 ### Canonical OGC access pattern
 

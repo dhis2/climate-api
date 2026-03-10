@@ -1,0 +1,54 @@
+workflow_id: chirps3-dhis2-template
+version: "0.1.0"
+nodes:
+  - id: features
+    component: workflow.features
+    params:
+      features_geojson: "{{input.features_geojson}}"
+      org_unit_level: "{{input.org_unit_level}}"
+      parent_org_unit: "{{input.parent_org_unit}}"
+      org_unit_ids: "{{input.org_unit_ids}}"
+      org_unit_id_property: "{{input.org_unit_id_property}}"
+      bbox: "{{input.bbox}}"
+
+  - id: download
+    component: workflow.download
+    params:
+      dataset: chirps3
+      start: "{{input.start_month}}"
+      end: "{{input.end_month}}"
+      bbox: "{{features.effective_bbox}}"
+      stage: "{{input.stage}}"
+      flavor: "{{input.flavor}}"
+
+  - id: temporal_aggregation
+    component: workflow.temporal_aggregation
+    params:
+      dataset: chirps3
+      source_temporal_resolution: "{{download.source_temporal_resolution}}"
+      start_date: "{{input.start_date}}"
+      end_date: "{{input.end_date}}"
+      files: "{{download.files}}"
+      valid_features: "{{features.valid_features}}"
+      spatial_reducer: "{{input.spatial_reducer}}"
+      temporal_resolution: "{{input.temporal_resolution}}"
+      temporal_reducer: "{{input.temporal_reducer}}"
+      value_rounding: "{{input.value_rounding}}"
+      stage: "{{input.stage}}"
+      flavor: "{{input.flavor}}"
+
+  - id: spatial_aggregation
+    component: workflow.spatial_aggregation
+    params:
+      dataset: chirps3
+      rows: "{{temporal_aggregation.rows}}"
+
+  - id: dhis2_payload_builder
+    component: workflow.dhis2_payload_builder
+    params:
+      dataset: chirps3
+      rows: "{{spatial_aggregation.rows}}"
+      data_element: "{{input.data_element}}"
+      category_option_combo: "{{input.category_option_combo}}"
+      attribute_option_combo: "{{input.attribute_option_combo}}"
+      data_set: "{{input.data_set}}"
