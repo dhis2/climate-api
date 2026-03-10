@@ -489,21 +489,29 @@ Feature inputs:
 
 ## Async execution and job management
 
-Climate data downloads (ERA5-Land, CHIRPS3) can take minutes. To avoid HTTP timeouts, processes support asynchronous execution via the `Prefer: respond-async` header.
+Climate data downloads and workflows (ERA5-Land, CHIRPS3, generic workflow) can take minutes. To avoid HTTP timeouts, processes support asynchronous execution via the `Prefer: respond-async` header.
 
 ### Submitting an async request
 
 Add the `Prefer: respond-async` header to a normal execution request. The server returns `201 Created` with a `Location` header pointing to the job status endpoint.
 
 ```bash
-curl -X POST http://localhost:8000/ogcapi/processes/chirps3-download/execution \
+curl -X POST http://localhost:8000/ogcapi/processes/generic-dhis2-workflow/execution \
   -H "Prefer: respond-async" \
   -H "Content-Type: application/json" \
   -d '{
     "inputs": {
-      "start": "2024-01",
-      "end": "2024-01",
-      "bbox": [32, -2, 35, 1]
+      "dataset_type": "chirps3",
+      "start_date": "2024-01-01",
+      "end_date": "2024-01-31",
+      "org_unit_level": 3,
+      "data_element": "DE_UID",
+      "stage": "final",
+      "flavor": "rnl",
+      "temporal_resolution": "monthly",
+      "temporal_reducer": "sum",
+      "spatial_reducer": "mean",
+      "dry_run": true
     }
   }'
 ```
@@ -589,7 +597,7 @@ plugins/
     dhis2eo.py          # EDR provider stub
   processes/            # Processing plugins (BaseProcessor subclasses)
     __init__.py
-    schemas.py          # Pydantic models for process inputs/outputs
+    schemas/            # Pydantic models for process inputs/outputs (package)
     era5_land.py        # ERA5-Land download processor
     chirps3.py          # CHIRPS3 download processor
 ```

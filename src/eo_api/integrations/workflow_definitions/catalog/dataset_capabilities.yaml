@@ -64,7 +64,7 @@ datasets:
           description: "Derived output collection for previewing workflow tabular payload output."
           rel: "derived-from"
           path: "/ogcapi/collections/generic-dhis2-datavalue-preview"
-          exposed: false
+          exposed: true
 
   worldpop:
     title: "WorldPop Total Population"
@@ -129,4 +129,4 @@ datasets:
           description: "Derived output collection for previewing workflow tabular payload output."
           rel: "derived-from"
           path: "/ogcapi/collections/generic-dhis2-datavalue-preview"
-          exposed: false
+          exposed: true

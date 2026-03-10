@@ -33,6 +33,7 @@ def test_generic_capabilities_document_has_datasets_components_and_workflows() -
     assert doc["datasets"]["chirps3"]["collections"]["source"][0]["id"] == "generic-chirps3-source"
     assert "collections" in doc
     assert any(item["id"] == "generic-chirps3-source" for item in doc["collections"])
+    assert any(item["id"] == "generic-dhis2-datavalue-preview" and item["exposed"] for item in doc["collections"])
     assert "dataset_capabilities" not in doc["workflowDefinitions"]
     assert any(item["id"] == "workflow.features" for item in doc["components"])
     assert "chirps3-dhis2-template" in doc["workflowDefinitions"]

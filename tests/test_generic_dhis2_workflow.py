@@ -96,9 +96,11 @@ def test_generic_workflow_chirps3_branch(monkeypatch: Any) -> None:
     assert mimetype == "application/json"
     assert output["status"] == "completed"
     assert output["summary"]["dataset_type"] == "chirps3"
+    assert output["summary"]["output_collection"]["collection_id"] == "generic-dhis2-datavalue-preview"
     assert len(output["workflowTrace"]) == 5
     assert output["dataValueSet"]["dataValues"][0]["orgUnit"] == "OU_1"
     assert any(link["href"] == "/ogcapi/collections/generic-chirps3-source" for link in output["links"])
+    assert any(link["href"] == "/ogcapi/collections/generic-dhis2-datavalue-preview" for link in output["links"])
 
 
 def test_generic_workflow_worldpop_branch(monkeypatch: Any) -> None:
@@ -119,9 +121,11 @@ def test_generic_workflow_worldpop_branch(monkeypatch: Any) -> None:
 
     assert output["status"] == "completed"
     assert output["summary"]["dataset_type"] == "worldpop"
+    assert output["summary"]["output_collection"]["collection_id"] == "generic-dhis2-datavalue-preview"
     assert len(output["workflowTrace"]) == 5
     assert output["workflowTrace"][2]["status"] == "passed_through"
     assert any(link["href"] == "/ogcapi/collections/generic-worldpop-source" for link in output["links"])
+    assert any(link["href"] == "/ogcapi/collections/generic-dhis2-datavalue-preview" for link in output["links"])
 
 
 def test_generic_workflow_invalid_dataset_type() -> None:
@@ -134,3 +138,37 @@ def test_generic_workflow_invalid_dataset_type() -> None:
                 "data_element": "DE_UID",
             }
         )
+
+
+def test_generic_workflow_propagates_manager_job_id_to_output_collection(monkeypatch: Any) -> None:
+    from eo_api.routers.ogcapi.plugins.processes import generic_dhis2_workflow as module
+
+    monkeypatch.setattr(module, "build_default_component_registry", lambda: _build_mock_registry())
+    captured: dict[str, Any] = {}
+
+    def _fake_publish_dhis2_datavalue_preview(
+        *, dataset_type: str, rows: list[dict[str, Any]], job_id: str | None
+    ) -> dict[str, Any]:
+        captured["dataset_type"] = dataset_type
+        captured["rows"] = rows
+        captured["job_id"] = job_id
+        return {"collection_id": "generic-dhis2-datavalue-preview", "job_id": job_id, "item_count": len(rows)}
+
+    monkeypatch.setattr(module, "publish_dhis2_datavalue_preview", _fake_publish_dhis2_datavalue_preview)
+    processor = GenericDhis2WorkflowProcessor({"name": "generic-dhis2-workflow"})
+    processor.set_job_id("job-123")
+    _, output = processor.execute(
+        {
+            "dataset_type": "chirps3",
+            "start_date": dt.date(2025, 1, 1),
+            "end_date": dt.date(2025, 1, 31),
+            "features_geojson": {"type": "FeatureCollection", "features": []},
+            "data_element": "DE_UID",
+            "stage": "final",
+            "flavor": "rnl",
+        }
+    )
+
+    assert output["summary"]["job_id"] == "job-123"
+    assert output["summary"]["output_collection"]["job_id"] == "job-123"
+    assert captured["job_id"] == "job-123"

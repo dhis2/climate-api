@@ -10,6 +10,7 @@ from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
 from eo_api.integrations.orchestration.capabilities import build_collection_links_for_dataset, list_supported_datasets
 from eo_api.integrations.orchestration.executor import execute_workflow_spec
+from eo_api.integrations.orchestration.output_collections import publish_dhis2_datavalue_preview
 from eo_api.integrations.orchestration.registry import build_default_component_registry
 from eo_api.integrations.orchestration.templates import chirps3_dhis2_template, worldpop_dhis2_template
 from eo_api.routers.ogcapi.plugins.processes.schemas import (
@@ -30,7 +31,7 @@ PROCESS_METADATA = {
         "Generic orchestrator for dataset adapters and canonical workflow chain: "
         "features -> download -> temporal aggregation -> spatial aggregation -> DHIS2 payload builder."
     ),
-    "jobControlOptions": ["sync-execute"],
+    "jobControlOptions": ["sync-execute", "async-execute"],
     "keywords": ["workflow", "dhis2", "generic", "chirps3", "worldpop"],
     "inputs": {
         "dataset_type": {
@@ -151,6 +152,11 @@ class GenericDhis2WorkflowProcessor(BaseProcessor):
 
     def __init__(self, processor_def: dict[str, Any]) -> None:
         super().__init__(processor_def, PROCESS_METADATA)
+        self._job_id: str | None = None
+
+    def set_job_id(self, job_id: str) -> None:
+        """Receive pygeoapi manager-assigned job identifier."""
+        self._job_id = job_id
 
     def execute(self, data: dict[str, Any], outputs: Any = None) -> tuple[str, dict[str, Any]]:
         try:
@@ -182,10 +188,19 @@ class GenericDhis2WorkflowProcessor(BaseProcessor):
             "file_count": len(files),
             "workflow_status": run_result.get("status"),
         }
+        if self._job_id:
+            summary["job_id"] = self._job_id
         if "summary" in payload_step:
             summary["payload"] = payload_step["summary"]
         if run_result.get("status") == "exited":
             summary["exit"] = run_result.get("exit", {})
+        table_rows = payload_step.get("table", {}).get("rows", [])
+        if isinstance(table_rows, list) and table_rows:
+            summary["output_collection"] = publish_dhis2_datavalue_preview(
+                dataset_type=validated.dataset_type,
+                rows=table_rows,
+                job_id=self._job_id,
+            )
         include_workflow_outputs = bool(payload_step.get("table")) or bool(payload_step.get("dataValueSet"))
         collection_links = build_collection_links_for_dataset(
             validated.dataset_type,

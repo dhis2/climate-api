@@ -222,6 +222,24 @@ resources:
           timeout: 30
           colormap_name: viridis
 
+  generic-dhis2-datavalue-preview:
+    type: collection
+    title: Generic DHIS2 dataValue preview
+    description: Latest generic workflow tabular output exposed as OGC Features
+    keywords:
+      - generic-workflow
+      - dhis2
+      - datavalues
+    extents:
+      spatial:
+        bbox: [-180, -90, 180, 90]
+        crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
+    providers:
+      - type: feature
+        name: GeoJSON
+        data: /tmp/generic_dhis2_datavalue_preview.geojson
+        id_field: id
+
   zonal-statistics:
     type: process
     processor:
