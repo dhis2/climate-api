@@ -15,8 +15,9 @@ from typing import Any
 from pydantic import ValidationError
 from pygeoapi.process.base import BaseProcessor, ProcessorExecuteError
 
+from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
 from eo_api.integrations.components.services.feature_resolver_service import resolve_features
-from eo_api.integrations.components.services.spatial_aggregate_service import build_worldpop_datavalueset
+from eo_api.integrations.components.services.spatial_aggregate_service import aggregate_gridded_rows_by_features
 from eo_api.integrations.components.services.worldpop_fetch_service import sync_worldpop
 from eo_api.integrations.orchestration.runtime import run_component_with_trace
 from eo_api.routers.ogcapi.plugins.processes.schemas import FeatureFetchInput, WorldPopDhis2WorkflowInput
@@ -161,16 +162,22 @@ class WorldPopDhis2WorkflowProcessor(BaseProcessor):
 
         for path in raster_files:
             year = _extract_year(path, default_year)
+            aggregated = run_component_with_trace(
+                workflow_trace,
+                step_name=f"spatial_aggregate_{year}",
+                fn=aggregate_gridded_rows_by_features,
+                files=[path],
+                feature_collection=feature_collection,
+                start_year=year,
+                org_unit_id_property=inputs.org_unit_id_property,
+                reducer=inputs.reducer,
+            )
             result = run_component_with_trace(
                 workflow_trace,
                 step_name=f"build_datavalues_{year}",
-                fn=build_worldpop_datavalueset,
-                features_geojson=feature_collection,
-                raster_path=path,
-                year=year,
+                fn=build_data_value_set,
+                rows=aggregated["rows"],
                 data_element=inputs.data_element,
-                org_unit_id_property=inputs.org_unit_id_property,
-                reducer=inputs.reducer,
                 category_option_combo=inputs.category_option_combo,
                 attribute_option_combo=inputs.attribute_option_combo,
                 data_set=inputs.data_set,
@@ -178,7 +185,15 @@ class WorldPopDhis2WorkflowProcessor(BaseProcessor):
             all_data_values.extend(result["dataValueSet"]["dataValues"])
             table_columns = result["table"]["columns"]
             table_rows.extend(result["table"]["rows"])
-            yearly_summaries.append(result["summary"])
+            yearly_summaries.append(
+                {
+                    "year": year,
+                    "reducer": inputs.reducer,
+                    "feature_count": len(feature_result["valid_features"]),
+                    "row_count": len(aggregated["rows"]),
+                    "raster_path": path,
+                }
+            )
 
         payload: dict[str, Any] = {"dataValues": all_data_values}
         if inputs.data_set:

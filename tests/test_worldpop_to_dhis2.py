@@ -2,27 +2,30 @@ import json
 from pathlib import Path
 
 from eo_api.integrations.components.services.dhis2_datavalues_service import build_data_value_set
-from eo_api.integrations.components.services.spatial_aggregate_service import build_worldpop_datavalueset
+from eo_api.integrations.components.services.spatial_aggregate_service import aggregate_gridded_rows_by_features
 
 
 def _load_geojson(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_build_worldpop_datavalueset_returns_valid_shape() -> None:
+def test_build_gridded_rows_then_data_values_returns_valid_shape() -> None:
     root = Path(__file__).resolve().parents[1]
     features_geojson = _load_geojson(root / "tests" / "data" / "sierra_leone_districts.geojson")
     raster_path = str(root / "tests" / "data" / "sle_pop_2026_CN_1km_R2025A_UA_v1.tif")
 
-    result = build_worldpop_datavalueset(
-        features_geojson=features_geojson,
-        raster_path=raster_path,
-        year=2026,
-        data_element="DATAELEMENT_UID",
+    rows_result = aggregate_gridded_rows_by_features(
+        files=[raster_path],
+        feature_collection=features_geojson,
+        start_year=2026,
+        org_unit_id_property="id",
         reducer="sum",
     )
+    result = build_data_value_set(
+        rows=rows_result["rows"],
+        data_element="DATAELEMENT_UID",
+    )
 
-    assert "dataValueSet" in result
     assert "dataValues" in result["dataValueSet"]
     assert len(result["dataValueSet"]["dataValues"]) > 0
     first = result["dataValueSet"]["dataValues"][0]
@@ -30,7 +33,7 @@ def test_build_worldpop_datavalueset_returns_valid_shape() -> None:
     assert first["period"] == "2026"
     assert "orgUnit" in first
     assert "value" in first
-    assert result["summary"]["row_count"] == len(result["dataValueSet"]["dataValues"])
+    assert len(rows_result["rows"]) == len(result["dataValueSet"]["dataValues"])
 
 
 def test_build_data_value_set_component() -> None:
