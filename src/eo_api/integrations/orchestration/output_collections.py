@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from eo_api.integrations.orchestration import preview_store
 
@@ -26,11 +27,13 @@ def publish_dhis2_datavalue_preview(
     dataset_type: str,
     rows: list[dict[str, object]],
     job_id: str | None = None,
+    geometry_by_org_unit: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, object]:
     """Append DHIS2 dataValue preview rows to configured backend."""
     return preview_store.publish_preview_rows(
         dataset_type=dataset_type,
         rows=rows,
         job_id=job_id,
+        geometry_by_org_unit=geometry_by_org_unit,
         file_path=_PREVIEW_COLLECTION_PATH,
     )

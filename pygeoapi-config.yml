@@ -42,8 +42,8 @@ server:
   # cors: true
   pretty_print: true
   limits:
-    default_items: 20
-    max_items: 50
+    default_items: 50
+    max_items: 5000
   # templates:
   # path: /path/to/Jinja2/templates
   # static: /path/to/static/folder # css/js/img
@@ -225,11 +225,20 @@ resources:
   generic-dhis2-datavalue-preview:
     type: collection
     title: Generic DHIS2 dataValue preview
-    description: Latest generic workflow tabular output exposed as OGC Features
+    description: Generic workflow DHIS2 dataValues exposed as OGC Features (defaults to latest job snapshot)
     keywords:
       - generic-workflow
       - dhis2
       - datavalues
+    links:
+      - type: application/json
+        rel: related
+        title: Jobs for generic workflow process
+        href: /ogcapi/jobs?process_id=generic-dhis2-workflow
+      - type: application/geo+json
+        rel: related
+        title: All preview rows across all jobs
+        href: /ogcapi/collections/generic-dhis2-datavalue-preview/items?all_jobs=true
     extents:
       spatial:
         bbox: [-180, -90, 180, 90]

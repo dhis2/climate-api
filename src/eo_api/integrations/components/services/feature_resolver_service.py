@@ -30,9 +30,23 @@ def feature_org_unit_id(feature: dict[str, Any], id_property: str) -> str | None
     """Extract org unit id from feature.id or configured property key."""
     if feature.get("id"):
         return str(feature["id"])
-    props = feature.get("properties") or {}
+    props = feature.get("properties")
+    if not isinstance(props, dict):
+        props = {}
     if id_property in props and props[id_property] is not None:
         return str(props[id_property])
+    return None
+
+
+def feature_org_unit_name(feature: dict[str, Any]) -> str | None:
+    """Extract org unit name from common GeoJSON property fields."""
+    props = feature.get("properties")
+    if not isinstance(props, dict):
+        props = {}
+    for key in ("name", "displayName", "orgUnitName"):
+        value = props.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
 
 
@@ -101,7 +115,11 @@ def resolve_features(inputs: FeatureFetchInput) -> dict[str, Any]:
         org_unit_id = feature_org_unit_id(feature, inputs.org_unit_id_property)
         if not org_unit_id:
             continue
-        valid_features.append({"orgUnit": org_unit_id, "geometry": geometry})
+        org_unit_name = feature_org_unit_name(feature)
+        item: dict[str, Any] = {"orgUnit": org_unit_id, "geometry": geometry}
+        if org_unit_name:
+            item["orgUnitName"] = org_unit_name
+        valid_features.append(item)
 
     if not valid_features:
         raise ProcessorExecuteError("No valid features with geometry and org unit identifiers were found")

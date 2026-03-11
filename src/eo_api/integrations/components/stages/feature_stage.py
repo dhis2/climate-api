@@ -12,7 +12,16 @@ def _to_feature_collection(valid_features: list[dict[str, Any]]) -> dict[str, An
     return {
         "type": "FeatureCollection",
         "features": [
-            {"type": "Feature", "id": item["orgUnit"], "geometry": item["geometry"], "properties": {}}
+            {
+                "type": "Feature",
+                "id": item["orgUnit"],
+                "geometry": item["geometry"],
+                "properties": (
+                    {"orgUnitName": item.get("orgUnitName")}
+                    if isinstance(item.get("orgUnitName"), str) and item.get("orgUnitName")
+                    else {}
+                ),
+            }
             for item in valid_features
         ],
     }

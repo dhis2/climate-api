@@ -16,6 +16,10 @@ def build_data_value_set(
     data_set: str | None = None,
 ) -> dict[str, Any]:
     """Build DHIS2 dataValueSet payload and tabular output from normalized rows."""
+    source_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        source_by_key[(str(row["orgUnit"]), str(row["period"]))] = row
+
     data_values: list[dict[str, Any]] = []
     for row in rows:
         data_value: dict[str, Any] = {
@@ -34,8 +38,29 @@ def build_data_value_set(
     if data_set:
         payload["dataSet"] = data_set
 
-    columns = ["orgUnit", "period", "value", "dataElement", "categoryOptionCombo", "attributeOptionCombo"]
-    table_rows = [{column: value.get(column) for column in columns} for value in data_values]
+    columns = [
+        "orgUnit",
+        "orgUnitName",
+        "period",
+        "value",
+        "dataElement",
+        "categoryOptionCombo",
+        "attributeOptionCombo",
+    ]
+    table_rows: list[dict[str, Any]] = []
+    for value in data_values:
+        source = source_by_key.get((str(value.get("orgUnit")), str(value.get("period"))), {})
+        table_rows.append(
+            {
+                "orgUnit": value.get("orgUnit"),
+                "orgUnitName": source.get("orgUnitName"),
+                "period": value.get("period"),
+                "value": value.get("value"),
+                "dataElement": value.get("dataElement"),
+                "categoryOptionCombo": value.get("categoryOptionCombo"),
+                "attributeOptionCombo": value.get("attributeOptionCombo"),
+            }
+        )
 
     return {
         "dataValueSet": payload,

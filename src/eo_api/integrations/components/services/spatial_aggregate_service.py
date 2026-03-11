@@ -109,6 +109,7 @@ def aggregate_gridded_rows_by_features(
                 props = feature.get("properties")
                 properties = props if isinstance(props, dict) else {}
                 org_unit = feature.get("id") or properties.get(org_unit_id_property) or properties.get("id")
+                org_unit_name = properties.get("orgUnitName") or properties.get("name")
                 if org_unit is None:
                     continue
 
@@ -139,7 +140,15 @@ def aggregate_gridded_rows_by_features(
                 stat_value = _compute_stat(values, reducer=reducer)
                 if stat_value is None:
                     continue
-                rows.append({"orgUnit": str(org_unit), "period": period, "value": stat_value, "featureIndex": index})
+                row: dict[str, Any] = {
+                    "orgUnit": str(org_unit),
+                    "period": period,
+                    "value": stat_value,
+                    "featureIndex": index,
+                }
+                if isinstance(org_unit_name, str) and org_unit_name:
+                    row["orgUnitName"] = org_unit_name
+                rows.append(row)
                 file_row_count += 1
 
         yearly.append({"year": year, "row_count": file_row_count, "raster_path": file_path, "reducer": reducer})

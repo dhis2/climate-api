@@ -120,10 +120,18 @@ def _load_cached_rows(cache_file: str) -> list[dict[str, Any]]:
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df = df.dropna(subset=["value"])
     records = df.to_dict(orient="records")
-    return [
-        {"orgUnit": str(record["orgUnit"]), "period": str(record["period"]), "value": float(record["value"])}
-        for record in records
-    ]
+    parsed_rows: list[dict[str, Any]] = []
+    for record in records:
+        row: dict[str, Any] = {
+            "orgUnit": str(record["orgUnit"]),
+            "period": str(record["period"]),
+            "value": float(record["value"]),
+        }
+        org_name = record.get("orgUnitName")
+        if isinstance(org_name, str) and org_name:
+            row["orgUnitName"] = org_name
+        parsed_rows.append(row)
+    return parsed_rows
 
 
 def _write_cached_rows(cache_file: str, rows: list[dict[str, Any]]) -> None:
@@ -176,6 +184,7 @@ def aggregate_gridded_time_rows_by_features(
         computed_rows: list[dict[str, Any]] = []
         for item in valid_features:
             org_unit_id = str(item["orgUnit"])
+            org_unit_name = str(item["orgUnitName"]) if isinstance(item.get("orgUnitName"), str) else None
             geometry = item["geometry"]
             missing_periods = [period for period in expected_periods if (org_unit_id, period) not in cached_by_key]
             if not missing_periods:
@@ -199,6 +208,7 @@ def aggregate_gridded_time_rows_by_features(
                             "orgUnit": org_unit_id,
                             "period": period,
                             "value": round(value, value_rounding),
+                            **({"orgUnitName": org_unit_name} if org_unit_name else {}),
                         }
                     )
     finally:

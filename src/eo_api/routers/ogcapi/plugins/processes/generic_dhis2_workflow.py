@@ -196,11 +196,35 @@ class GenericDhis2WorkflowProcessor(BaseProcessor):
         if run_result.get("status") == "exited":
             summary["exit"] = run_result.get("exit", {})
         table_rows = payload_step.get("table", {}).get("rows", [])
+        org_unit_name_by_id = {
+            str(item["orgUnit"]): str(item["orgUnitName"])
+            for item in features_step.get("valid_features", [])
+            if isinstance(item, dict) and item.get("orgUnit") and isinstance(item.get("orgUnitName"), str)
+        }
+        if isinstance(table_rows, list):
+            enriched_rows: list[dict[str, Any]] = []
+            for row in table_rows:
+                if not isinstance(row, dict):
+                    continue
+                copied = dict(row)
+                org_unit = copied.get("orgUnit")
+                if isinstance(org_unit, str) and not copied.get("orgUnitName") and org_unit in org_unit_name_by_id:
+                    copied["orgUnitName"] = org_unit_name_by_id[org_unit]
+                enriched_rows.append(copied)
+            table_rows = enriched_rows
+            if isinstance(payload_step.get("table"), dict):
+                payload_step["table"]["rows"] = table_rows
+        geometry_by_org_unit = {
+            str(item["orgUnit"]): item["geometry"]
+            for item in features_step.get("valid_features", [])
+            if isinstance(item, dict) and item.get("orgUnit") and isinstance(item.get("geometry"), dict)
+        }
         if isinstance(table_rows, list) and table_rows:
             summary["output_collection"] = publish_dhis2_datavalue_preview(
                 dataset_type=validated.dataset_type,
                 rows=table_rows,
                 job_id=self._job_id,
+                geometry_by_org_unit=geometry_by_org_unit,
             )
         include_workflow_outputs = bool(payload_step.get("table")) or bool(payload_step.get("dataValueSet"))
         collection_links = build_collection_links_for_dataset(
@@ -208,13 +232,15 @@ class GenericDhis2WorkflowProcessor(BaseProcessor):
             include_workflow_outputs=include_workflow_outputs,
         )
         if self._job_id:
-            job_filter = quote(f"job_id='{self._job_id}'", safe="")
             collection_links.append(
                 {
                     "rel": "items",
                     "type": "application/geo+json",
                     "title": "Preview rows for this job",
-                    "href": f"/ogcapi/collections/generic-dhis2-datavalue-preview/items?filter={job_filter}",
+                    "href": (
+                        "/ogcapi/collections/generic-dhis2-datavalue-preview/items"
+                        f"?job_id={quote(self._job_id, safe='')}"
+                    ),
                 }
             )
 
@@ -231,7 +257,6 @@ class GenericDhis2WorkflowProcessor(BaseProcessor):
             "dataValueTable": payload_step.get("table"),
             "links": collection_links,
             "workflowTrace": run_result.get("workflowTrace", []),
-            "workflowOutputs": outputs_map,
             "exit": run_result.get("exit"),
         }
 

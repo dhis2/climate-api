@@ -8,6 +8,12 @@ from eo_api.integrations.orchestration.registry import ComponentDescriptor, Comp
 from eo_api.routers.ogcapi.plugins.processes.generic_dhis2_workflow import GenericDhis2WorkflowProcessor
 
 
+@pytest.fixture(autouse=True)
+def _force_file_backend(monkeypatch: Any) -> None:
+    """Prevent tests from writing preview rows into a live Postgres backend."""
+    monkeypatch.delenv("EO_API_PG_DSN", raising=False)
+
+
 def _build_mock_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register(
@@ -147,11 +153,16 @@ def test_generic_workflow_propagates_manager_job_id_to_output_collection(monkeyp
     captured: dict[str, Any] = {}
 
     def _fake_publish_dhis2_datavalue_preview(
-        *, dataset_type: str, rows: list[dict[str, Any]], job_id: str | None
+        *,
+        dataset_type: str,
+        rows: list[dict[str, Any]],
+        job_id: str | None,
+        geometry_by_org_unit: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         captured["dataset_type"] = dataset_type
         captured["rows"] = rows
         captured["job_id"] = job_id
+        captured["geometry_by_org_unit"] = geometry_by_org_unit
         return {"collection_id": "generic-dhis2-datavalue-preview", "job_id": job_id, "item_count": len(rows)}
 
     monkeypatch.setattr(module, "publish_dhis2_datavalue_preview", _fake_publish_dhis2_datavalue_preview)
@@ -172,4 +183,4 @@ def test_generic_workflow_propagates_manager_job_id_to_output_collection(monkeyp
     assert output["summary"]["job_id"] == "job-123"
     assert output["summary"]["output_collection"]["job_id"] == "job-123"
     assert captured["job_id"] == "job-123"
-    assert any("generic-dhis2-datavalue-preview/items?filter=" in link["href"] for link in output["links"])
+    assert any("generic-dhis2-datavalue-preview/items?job_id=job-123" in link["href"] for link in output["links"])

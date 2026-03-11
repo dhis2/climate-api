@@ -38,6 +38,27 @@ class PreviewDataValuesProvider(BaseProvider):
                 normalized[key] = value
         return normalized
 
+    def _extract_job_id_filter(
+        self,
+        *,
+        kwargs: dict[str, Any],
+        property_filters: dict[str, str],
+    ) -> str | None:
+        value = kwargs.get("job_id")
+        if isinstance(value, str) and value:
+            return value
+        from_properties = property_filters.get("job_id")
+        if isinstance(from_properties, str) and from_properties:
+            return from_properties
+        return None
+
+    def _is_true(self, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return False
+
     def get_fields(self) -> dict[str, dict[str, str]]:
         """Return a best-effort schema from feature properties."""
         if self._fields:
@@ -69,13 +90,36 @@ class PreviewDataValuesProvider(BaseProvider):
     ) -> dict[str, Any]:
         """Return preview feature collection matching query parameters."""
         del resulttype, bbox, datetime_, sortby, select_properties, skip_geometry
-        job_id = kwargs.get("job_id")
-        features = preview_store.load_preview_features(job_id=job_id if isinstance(job_id, str) and job_id else None)
-
-        if isinstance(job_id, str) and job_id:
-            features = [f for f in features if str((f.get("properties") or {}).get("job_id")) == job_id]
-
         property_filters = self._normalize_properties_filter(properties)
+        normalized_job_id = self._extract_job_id_filter(kwargs=kwargs, property_filters=property_filters)
+        if normalized_job_id:
+            property_filters.pop("job_id", None)
+        period_value = kwargs.get("period")
+        if isinstance(period_value, str) and period_value.strip():
+            property_filters["period"] = period_value.strip()
+        all_jobs = self._is_true(kwargs.get("all_jobs"))
+        if normalized_job_id is None and not all_jobs:
+            normalized_job_id = preview_store.get_latest_preview_job_id()
+        has_advanced_filters = bool(property_filters or filterq)
+
+        if not has_advanced_filters:
+            paged = preview_store.query_preview_features(
+                job_id=normalized_job_id,
+                offset=offset,
+                limit=limit,
+            )
+            return {
+                "type": "FeatureCollection",
+                "features": paged["features"],
+                "numberMatched": paged["numberMatched"],
+                "numberReturned": paged["numberReturned"],
+            }
+
+        features = preview_store.load_preview_features(job_id=normalized_job_id)
+
+        if isinstance(normalized_job_id, str) and normalized_job_id:
+            features = [f for f in features if str((f.get("properties") or {}).get("job_id")) == normalized_job_id]
+
         if property_filters:
             filtered = []
             for feature in features:
