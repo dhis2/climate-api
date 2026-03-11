@@ -72,10 +72,26 @@ class CollectionDescriptor(BaseModel):
     type: str = "application/json"
     path: str | None = None
     exposed: bool = True
+    metadata_template: "CollectionMetadataTemplate | None" = None
 
     def href(self) -> str:
         """Build the OGC collection URL path."""
         return self.path or f"/ogcapi/collections/{self.id}"
+
+
+class CollectionMetadataTemplate(BaseModel):
+    """Machine-readable metadata template for collection discoverability."""
+
+    dataset_id: str
+    data_kind: Literal["feature", "coverage", "edr", "tiles", "derived-feature"]
+    provider_name: str
+    temporal_resolution: str | None = None
+    temporal_extent: list[str] = Field(default_factory=list)
+    spatial_resolution: str | None = None
+    output_formats: list[str] = Field(default_factory=list)
+    parameter_options: dict[str, list[str]] = Field(default_factory=dict)
+    query_patterns: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
 
 
 class DatasetCollections(BaseModel):
@@ -121,6 +137,9 @@ def build_generic_workflow_capabilities_document() -> dict[str, Any]:
                     "description": descriptor.description,
                     "href": descriptor.href(),
                     "exposed": descriptor.exposed,
+                    "metadata_template": (
+                        descriptor.metadata_template.model_dump() if descriptor.metadata_template else None
+                    ),
                 },
             )
     return {

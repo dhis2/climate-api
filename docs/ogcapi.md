@@ -238,6 +238,16 @@ Generic workflow discoverability endpoint:
 | ------ | -------------------------------------------------------- | --------------------------------------------------------------------- |
 | GET    | `/ogcapi/processes/generic-dhis2-workflow/capabilities` | Dataset/service capabilities (provider vs integration) + stage bindings |
 
+The capabilities response also exposes per-collection `metadata_template` blocks for discoverability, including:
+
+- `data_kind` (for example `edr`, `coverage`, `derived-feature`)
+- `temporal_resolution` / `temporal_extent`
+- `spatial_resolution`
+- `output_formats`
+- `parameter_options` (for example CHIRPS3 `stage` and `flavor`)
+- `query_patterns`
+- `constraints`
+
 ### Canonical OGC access pattern
 
 - Feature selection and org unit geometry retrieval:

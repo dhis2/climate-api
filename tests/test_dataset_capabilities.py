@@ -14,6 +14,11 @@ def test_dataset_capability_catalog_loads_expected_datasets() -> None:
     assert "zarr" not in catalog.datasets["chirps3"].integration_capabilities.supported_output_formats
     assert "geotiff" in catalog.datasets["worldpop"].provider_capabilities.supported_output_formats
     assert "geotiff" not in catalog.datasets["worldpop"].integration_capabilities.supported_output_formats
+    chirps_source = catalog.datasets["chirps3"].collections.source[0]
+    assert chirps_source.metadata_template is not None
+    assert chirps_source.metadata_template.data_kind == "edr"
+    assert chirps_source.metadata_template.parameter_options["flavor"] == ["rnl", "sat"]
+    assert "position" in chirps_source.metadata_template.query_patterns
 
 
 def test_supported_dataset_list_matches_generic_process_enum() -> None:
@@ -31,9 +36,15 @@ def test_generic_capabilities_document_has_datasets_components_and_workflows() -
     assert "integration_capabilities" in doc["datasets"]["chirps3"]
     assert "collections" in doc["datasets"]["chirps3"]
     assert doc["datasets"]["chirps3"]["collections"]["source"][0]["id"] == "generic-chirps3-source"
+    assert doc["datasets"]["chirps3"]["collections"]["source"][0]["metadata_template"]["provider_name"] == "dhis2eo"
+    assert doc["datasets"]["chirps3"]["collections"]["source"][0]["metadata_template"]["parameter_options"][
+        "flavor"
+    ] == ["rnl", "sat"]
     assert "collections" in doc
     assert any(item["id"] == "generic-chirps3-source" for item in doc["collections"])
     assert any(item["id"] == "generic-dhis2-datavalue-preview" and item["exposed"] for item in doc["collections"])
+    chirps_collection = next(item for item in doc["collections"] if item["id"] == "generic-chirps3-source")
+    assert chirps_collection["metadata_template"]["dataset_id"] == "chirps3"
     assert "dataset_capabilities" not in doc["workflowDefinitions"]
     assert any(item["id"] == "workflow.features" for item in doc["components"])
     assert "chirps3-dhis2-template" in doc["workflowDefinitions"]
