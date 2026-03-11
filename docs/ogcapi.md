@@ -564,6 +564,13 @@ To use PostgreSQL/PostGIS instead, set:
 
 When `EO_API_PG_DSN` is set, generic workflow preview writes and collection reads use PostgreSQL.
 
+Retention is automatic and startup-driven:
+
+- `EO_API_PREVIEW_TTL_DAYS` (default: `90`)
+- `EO_API_PREVIEW_CLEANUP_ON_STARTUP` (default: `true`)
+
+At API startup, rows older than `EO_API_PREVIEW_TTL_DAYS` are deleted from the active preview backend.
+
 ### Listing all jobs
 
 ```bash

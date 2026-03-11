@@ -1,3 +1,5 @@
+import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -40,3 +42,43 @@ def test_publish_preview_rows_uses_postgres_backend_when_pg_dsn_set(monkeypatch:
     )
     assert result["backend"] == "postgresql"
     assert result["job_id"] == "job-pg"
+
+
+def test_cleanup_preview_store_file_removes_expired_rows(monkeypatch: Any, tmp_path: Path) -> None:
+    monkeypatch.delenv("EO_API_PG_DSN", raising=False)
+    target = tmp_path / "preview.geojson"
+    now = datetime.now(UTC)
+    payload = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "old-1",
+                "geometry": None,
+                "properties": {
+                    "job_id": "a",
+                    "dataset_type": "chirps3",
+                    "published_at": (now - timedelta(days=120)).isoformat(),
+                },
+            },
+            {
+                "type": "Feature",
+                "id": "new-1",
+                "geometry": None,
+                "properties": {
+                    "job_id": "b",
+                    "dataset_type": "chirps3",
+                    "published_at": (now - timedelta(days=10)).isoformat(),
+                },
+            },
+        ],
+    }
+    target.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = preview_store.cleanup_preview_store(ttl_days=90, file_path=target)
+    assert result["backend"] == "file"
+    assert result["deleted_count"] == 1
+
+    updated = json.loads(target.read_text(encoding="utf-8"))
+    assert len(updated["features"]) == 1
+    assert updated["features"][0]["id"] == "new-1"

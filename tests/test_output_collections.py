@@ -2,7 +2,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eo_api.integrations.orchestration import output_collections as module
+
+
+@pytest.fixture(autouse=True)
+def _force_file_backend(monkeypatch: Any) -> None:
+    monkeypatch.delenv("EO_API_PG_DSN", raising=False)
 
 
 def test_ensure_output_collections_seeded_creates_file(monkeypatch: Any, tmp_path: Path) -> None:
@@ -16,6 +23,23 @@ def test_ensure_output_collections_seeded_creates_file(monkeypatch: Any, tmp_pat
     payload = json.loads(target.read_text(encoding="utf-8"))
     assert payload["type"] == "FeatureCollection"
     assert payload["features"] == []
+
+
+def test_ensure_output_collections_seeded_runs_startup_cleanup(monkeypatch: Any, tmp_path: Path) -> None:
+    target = tmp_path / "preview.geojson"
+    monkeypatch.setattr(module, "_PREVIEW_COLLECTION_PATH", target)
+    calls: dict[str, int] = {"count": 0}
+
+    def _fake_cleanup(*, file_path: Path | None = None) -> dict[str, object]:
+        calls["count"] += 1
+        assert file_path == target
+        return {"backend": "file", "deleted_count": 0, "ttl_days": 90}
+
+    monkeypatch.setattr(module.preview_store, "cleanup_preview_store", _fake_cleanup)
+    monkeypatch.setattr(module.preview_store, "_cleanup_on_startup_enabled", lambda: True)
+
+    module.ensure_output_collections_seeded()
+    assert calls["count"] == 1
 
 
 def test_publish_dhis2_datavalue_preview_writes_rows(monkeypatch: Any, tmp_path: Path) -> None:

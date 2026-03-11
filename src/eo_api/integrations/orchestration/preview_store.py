@@ -9,7 +9,7 @@ import os
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -43,6 +43,20 @@ def _validate_table_name(table_name: str) -> str:
 
 def _pg_dsn() -> str:
     return os.getenv("EO_API_PG_DSN", "").strip()
+
+
+def _preview_ttl_days() -> int:
+    raw = os.getenv("EO_API_PREVIEW_TTL_DAYS", "90").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 90
+    return value if value > 0 else 90
+
+
+def _cleanup_on_startup_enabled() -> bool:
+    raw = os.getenv("EO_API_PREVIEW_CLEANUP_ON_STARTUP", "true").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _as_feature(feature_id: str, properties: dict[str, Any], geometry: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -126,6 +140,16 @@ def infer_preview_fields() -> dict[str, dict[str, str]]:
             ftype = "string"
         fields[str(key)] = {"type": ftype}
     return fields
+
+
+def cleanup_preview_store(*, ttl_days: int | None = None, file_path: Path | None = None) -> dict[str, Any]:
+    """Delete expired preview records older than configured retention window."""
+    effective_ttl_days = ttl_days if ttl_days is not None else _preview_ttl_days()
+    if _use_postgres_backend():
+        deleted = _run_async(_cleanup_preview_store_postgres(ttl_days=effective_ttl_days))
+        return {"backend": "postgresql", "deleted_count": int(deleted), "ttl_days": effective_ttl_days}
+    deleted = _cleanup_preview_store_file(ttl_days=effective_ttl_days, file_path=file_path)
+    return {"backend": "file", "deleted_count": deleted, "ttl_days": effective_ttl_days}
 
 
 def _publish_preview_rows_file(
@@ -218,6 +242,55 @@ async def _ensure_postgres_store_seeded() -> None:
         )
     finally:
         await conn.close()
+
+
+def _cleanup_preview_store_file(*, ttl_days: int, file_path: Path | None = None) -> int:
+    path = file_path or _PREVIEW_COLLECTION_PATH
+    if not path.exists():
+        return 0
+
+    cutoff = datetime.now(UTC) - timedelta(days=ttl_days)
+    deleted_count = 0
+
+    with path.open("r+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            payload = json.load(handle)
+            features = payload.get("features", [])
+            if not isinstance(features, list):
+                features = []
+            kept: list[dict[str, Any]] = []
+            for feature in features:
+                properties = feature.get("properties")
+                if not isinstance(properties, dict):
+                    kept.append(feature)
+                    continue
+                published_at_raw = properties.get("published_at")
+                if not isinstance(published_at_raw, str):
+                    kept.append(feature)
+                    continue
+                parsed: datetime | None = None
+                try:
+                    parsed = datetime.fromisoformat(published_at_raw.replace("Z", "+00:00"))
+                except ValueError:
+                    parsed = None
+                if parsed is None:
+                    kept.append(feature)
+                    continue
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                if parsed < cutoff:
+                    deleted_count += 1
+                else:
+                    kept.append(feature)
+            payload = {"type": "FeatureCollection", "features": kept}
+            handle.seek(0)
+            json.dump(payload, handle)
+            handle.truncate()
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    return deleted_count
 
 
 async def _publish_preview_rows_postgres(
@@ -341,3 +414,18 @@ async def _get_preview_feature_postgres(identifier: str) -> dict[str, Any] | Non
     props = dict(row["properties"]) if isinstance(row["properties"], dict) else {}
     geom = dict(row["geometry"]) if isinstance(row["geometry"], dict) else None
     return _as_feature(str(row["feature_id"]), props, geom)
+
+
+async def _cleanup_preview_store_postgres(*, ttl_days: int) -> int:
+    asyncpg = _asyncpg_module()
+    table_name = _validate_table_name(_PREVIEW_PG_TABLE)
+    await _ensure_postgres_store_seeded()
+    conn = await asyncpg.connect(_pg_dsn())
+    try:
+        deleted = await conn.fetchval(
+            f"DELETE FROM {table_name} WHERE published_at < (NOW() - make_interval(days => $1));",
+            ttl_days,
+        )
+    finally:
+        await conn.close()
+    return int(deleted or 0)

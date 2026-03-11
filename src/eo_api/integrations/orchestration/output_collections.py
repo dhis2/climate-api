@@ -13,6 +13,8 @@ _PREVIEW_COLLECTION_PATH = preview_store._PREVIEW_COLLECTION_PATH
 def ensure_output_collections_seeded() -> Path:
     """Ensure configured output collection backend is initialized."""
     backend_path = preview_store.ensure_preview_store_seeded(file_path=_PREVIEW_COLLECTION_PATH)
+    if preview_store._cleanup_on_startup_enabled():
+        preview_store.cleanup_preview_store(file_path=_PREVIEW_COLLECTION_PATH)
     # PostgreSQL seeding returns a table name; preserve Path return contract for callers.
     if "/" not in backend_path and "\\" not in backend_path:
         return _PREVIEW_COLLECTION_PATH

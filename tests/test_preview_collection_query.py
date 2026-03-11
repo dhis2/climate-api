@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _force_file_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EO_API_PG_DSN", raising=False)
 
 
 def test_preview_collection_items_filter_by_job_id(client: TestClient) -> None:
