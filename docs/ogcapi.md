@@ -552,6 +552,41 @@ Generic workflow results include links to preview rows filtered by `job_id`. You
 curl "http://localhost:8000/ogcapi/collections/generic-dhis2-datavalue-preview/items?job_id={jobId}"
 ```
 
+### Process results vs Collections (implementation choice)
+
+OGC API - Processes does **not** require process outputs to be persisted as an OGC API - Features collection.
+
+In this project we intentionally add a bridge:
+
+- process execution remains the source of truth for computation (`/processes/.../execution`, `/jobs/{id}/results`)
+- tabular/geospatial preview rows are also published to one Features collection (`generic-dhis2-datavalue-preview`)
+- rows are scoped by `job_id` so different executions do not overwrite each other
+
+Why we do this:
+
+- keeps strict OGC Processes behavior for execution and job lifecycle
+- adds OGC Features discoverability and map browsing for outputs
+- enables deterministic replay: pick a job, then inspect exactly that job's rows
+
+This is not a spec requirement, but it is OGC-compatible and practical for workflow UX.
+
+### Collection preview browsing flow
+
+Recommended operator flow for preview collection:
+
+1. Open collection: `/ogcapi/collections/generic-dhis2-datavalue-preview`
+2. Click browse items (opens job picker modal when `job_id` is not provided)
+3. Select `process` and optional `dataset`, then choose a `job_id`
+4. Browse map + table at `/items?job_id={jobId}`
+5. Optionally filter by period: `/items?job_id={jobId}&period={YYYY|YYYYMM}`
+
+UI details implemented:
+
+- dataset-aware title: `Generic DHIS2 dataValue preview - {dataset}`
+- period filter widget in items view
+- org unit code + org unit name shown together
+- table vertical scrolling and sticky headers for large result sets
+
 ### Preview storage backend
 
 By default, preview rows are appended to file-backed GeoJSON:

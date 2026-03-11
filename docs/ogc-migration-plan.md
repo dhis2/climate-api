@@ -146,3 +146,39 @@ Exit criteria:
 3. Design EDR MVP for point/area extraction backed by existing datasets.
 4. Draft TiTiler integration contract for generated rasters/COGs.
 5. Implement async job pilot for `generic-dhis2-workflow` and validate job/result lifecycle.
+
+## Phase status update (March 11, 2026)
+
+Phase 1 is now substantially complete:
+
+- async-first execution validated (`Prefer: respond-async`) with stable `jobUrl` and `resultsUrl`
+- job listing supports process filtering (`/ogcapi/jobs?process_id=...`)
+- generic preview publication is job-scoped (`job_id`) to prevent cross-run overwrite
+- preview backend supports PostgreSQL/PostGIS via `EO_API_PG_DSN`
+- startup retention policy enforced via TTL cleanup
+- collection UX bridge implemented:
+  - in-flow job picker (modal),
+  - dataset/process selectors,
+  - map + table browsing by selected job,
+  - period filtering and org unit naming in preview rows
+
+## Recommended next phase (start now): Phase 2
+
+Focus: stronger discoverability and standards-facing metadata.
+
+1. Add machine-readable links in process results for:
+   - preview collection,
+   - job-scoped items endpoint,
+   - (later) tiles/assets where available.
+2. Publish per-dataset collection metadata templates:
+   - source/provider capabilities,
+   - temporal resolution,
+   - spatial resolution,
+   - known constraints.
+3. Add EDR MVP for high-value queries (start with position and area):
+   - direct extraction against discovered collections,
+   - link EDR endpoints from process and collection metadata.
+4. Define minimal conformance checks in CI for:
+   - process execute/status/results,
+   - job filtering behavior,
+   - preview collection browsing by `job_id`.
