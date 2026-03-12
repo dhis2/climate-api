@@ -18,7 +18,6 @@ from ..workflows.schemas import (
 )
 from ..workflows.services.datavalueset import build_data_value_set
 from ..workflows.services.features import resolve_features
-from ..workflows.services.preflight import check_upstream_connectivity
 from ..workflows.services.spatial import aggregate_to_features
 from ..workflows.services.temporal import aggregate_temporal
 from .schemas import ComponentDefinition

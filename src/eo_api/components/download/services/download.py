@@ -167,7 +167,6 @@ def download_dataset_component(
     bbox: list[float],
 ) -> None:
     """Run connectivity preflight and download dataset files."""
-    check_upstream_connectivity(dataset)
     downloader.download_dataset(
         dataset=dataset,
         start=start,
