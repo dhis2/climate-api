@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from ...data_registry.services.datasets import get_dataset
 from ..schemas import (
+    AggregationMethod,
     Dhis2DataValueSetConfig,
     FeatureSourceConfig,
     FeatureSourceType,
@@ -62,6 +63,10 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
     else:
         raise HTTPException(status_code=422, detail="Provide org_unit_level or org_unit_ids")
 
+    reducer_alias = AggregationMethod(inputs.reducer.lower()) if inputs.reducer else None
+    spatial_method = reducer_alias or inputs.spatial_reducer
+    temporal_method = reducer_alias or inputs.temporal_reducer
+
     normalized = WorkflowExecuteRequest(
         dataset_id=dataset_id,
         start=start,
@@ -71,9 +76,9 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
         feature_source=feature_source,
         temporal_aggregation=TemporalAggregationConfig(
             target_period_type=inputs.temporal_resolution,
-            method=inputs.temporal_reducer,
+            method=temporal_method,
         ),
-        spatial_aggregation=SpatialAggregationConfig(method=inputs.spatial_reducer),
+        spatial_aggregation=SpatialAggregationConfig(method=spatial_method),
         dhis2=Dhis2DataValueSetConfig(data_element_uid=inputs.data_element),
     )
 

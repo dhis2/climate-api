@@ -161,6 +161,7 @@ class WorkflowRequest(BaseModel):
     flavor: str | None = None
     country_code: str | None = None
     output_format: str | None = None
+    reducer: str | None = None
     include_component_run_details: bool = False
 
     @model_validator(mode="after")
