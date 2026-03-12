@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Any
+
+import numpy as np
+from fastapi import APIRouter, Query
 
 from ..data_manager.services.constants import BBOX
 from . import services
@@ -23,10 +26,24 @@ from .schemas import (
 router = APIRouter()
 
 
-@router.get("/components", response_model=ComponentCatalogResponse)
-def list_components() -> ComponentCatalogResponse:
+def _to_jsonable_scalar(value: Any) -> Any:
+    """Convert numpy scalars/datetimes to JSON-safe native values."""
+    if isinstance(value, np.datetime64):
+        return np.datetime_as_string(value, unit="s")
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _json_safe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ensure record rows are JSON-serializable."""
+    return [{key: _to_jsonable_scalar(value) for key, value in record.items()} for record in records]
+
+
+@router.get("/components", response_model=ComponentCatalogResponse, response_model_exclude_none=True)
+def list_components(include_internal: bool = Query(default=False)) -> ComponentCatalogResponse:
     """List all discoverable reusable components."""
-    return ComponentCatalogResponse(components=services.component_catalog())
+    return ComponentCatalogResponse(components=services.component_catalog(include_internal=include_internal))
 
 
 @router.post("/components/feature-source", response_model=FeatureSourceRunResponse)
@@ -94,10 +111,12 @@ def run_spatial_aggregation(payload: SpatialAggregationRunRequest) -> SpatialAgg
         method=payload.method,
         feature_id_property=payload.feature_id_property,
     )
+    json_records = _json_safe_records(records)
     return SpatialAggregationRunResponse(
         dataset_id=payload.dataset_id,
-        record_count=len(records),
-        preview=records[: payload.max_preview_rows],
+        record_count=len(json_records),
+        preview=json_records[: payload.max_preview_rows],
+        records=json_records if payload.include_records else None,
     )
 
 

@@ -20,7 +20,7 @@ The current implementation provides:
 
 1. One canonical workflow execution endpoint:
    - `POST /workflows/dhis2-datavalue-set`
-2. One public flat request payload contract (`WorkflowRequest`).
+2. One public wrapped request payload contract (`{"request": WorkflowRequest}`).
 3. Internal normalization into a canonical execution model (`WorkflowExecuteRequest`).
 4. A fixed generic orchestration chain with exactly 5 components:
    - `feature_source`
@@ -45,6 +45,8 @@ The current implementation provides:
 ### Primary Workflow Endpoint
 
 - `POST /workflows/dhis2-datavalue-set`
+- `POST /workflows/execute` (inline assembly execution: post `workflow.steps` + `request` payload)
+- `POST /workflows/validate` (validate discovered/inline workflow + request compatibility without execution)
 
 ### Workflow Discovery Endpoint
 
@@ -52,7 +54,8 @@ The current implementation provides:
 
 ### Component Discovery/Execution Endpoints
 
-- `GET /components`
+- `GET /components` (public catalog; hides internal orchestration-only config schema)
+- `GET /components?include_internal=true` (internal/debug catalog including component config schema)
 - `POST /components/feature-source`
 - `POST /components/download-dataset`
 - `POST /components/temporal-aggregation`
@@ -65,20 +68,22 @@ The current implementation provides:
 
 ## Public Workflow Request Contract
 
-The workflow endpoint accepts one flat payload shape:
+The workflow endpoint accepts one wrapped payload shape:
 
 ```json
 {
-  "workflow_id": "dhis2_datavalue_set_v1",
-  "dataset_id": "chirps3_precipitation_daily",
-  "start_date": "2024-01-01",
-  "end_date": "2024-05-31",
-  "org_unit_level": 2,
-  "data_element": "DE_UID",
-  "temporal_resolution": "monthly",
-  "temporal_reducer": "sum",
-  "spatial_reducer": "mean",
-  "include_component_run_details": false
+  "request": {
+    "workflow_id": "dhis2_datavalue_set_v1",
+    "dataset_id": "chirps3_precipitation_daily",
+    "start_date": "2024-01-01",
+    "end_date": "2024-05-31",
+    "org_unit_level": 2,
+    "data_element": "DE_UID",
+    "temporal_resolution": "monthly",
+    "temporal_reducer": "sum",
+    "spatial_reducer": "mean",
+    "include_component_run_details": false
+  }
 }
 ```
 
@@ -106,7 +111,7 @@ Notes:
 
 File: `src/eo_api/workflows/services/simple_mapper.py`
 
-Public flat payload is normalized to internal `WorkflowExecuteRequest` with component-ready nested configs:
+Public wrapped payload (`request`) is normalized to internal `WorkflowExecuteRequest` with component-ready nested configs:
 
 1. `feature_source` config:
    - `org_unit_level` -> `source_type=dhis2_level`
@@ -250,6 +255,50 @@ Workflow step schema now supports:
 1. `component`
 2. `version` (default `v1`)
 3. `config` (default `{}`)
+
+### Remote Component Execution
+
+All five components support either local (default) or remote API execution.
+
+Common step config options:
+
+1. `execution_mode`: `local` or `remote` (default `local`)
+2. `remote_url`: required when `execution_mode=remote` (expects component-compatible POST endpoint)
+3. `remote_timeout_sec`: request timeout (default `30`)
+4. `remote_retries`: number of attempts (default `1`)
+5. `remote_retry_delay_sec`: delay between attempts in seconds (default `1`)
+6. Component-specific options remain available (for example `overwrite`, `country_code`, `method`, `period_type`)
+
+Example:
+
+```yaml
+steps:
+  - component: feature_source
+    version: v1
+    config:
+      execution_mode: remote
+      remote_url: "http://component-host/components/feature-source"
+  - component: download_dataset
+    version: v1
+    config:
+      execution_mode: remote
+      remote_url: "http://component-host/components/download-dataset"
+  - component: temporal_aggregation
+    version: v1
+    config:
+      execution_mode: remote
+      remote_url: "http://component-host/components/temporal-aggregation"
+  - component: spatial_aggregation
+    version: v1
+    config:
+      execution_mode: remote
+      remote_url: "http://component-host/components/spatial-aggregation"
+  - component: build_datavalueset
+    version: v1
+    config:
+      execution_mode: remote
+      remote_url: "http://component-host/components/build-datavalue-set"
+```
 
 The default YAML remains the same 5-step sequence, but the engine reads it declaratively and dispatches components through a registry map.
 
@@ -446,16 +495,18 @@ curl -s http://127.0.0.1:8000/workflows | jq
 curl -s -X POST "http://127.0.0.1:8000/workflows/dhis2-datavalue-set" \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow_id": "dhis2_datavalue_set_v1",
-    "dataset_id": "chirps3_precipitation_daily",
-    "start_date": "2024-01-01",
-    "end_date": "2024-02-29",
-    "org_unit_level": 2,
-    "data_element": "DE_UID",
-    "temporal_resolution": "monthly",
-    "temporal_reducer": "sum",
-    "spatial_reducer": "mean",
-    "include_component_run_details": true
+    "request": {
+      "workflow_id": "dhis2_datavalue_set_v1",
+      "dataset_id": "chirps3_precipitation_daily",
+      "start_date": "2024-01-01",
+      "end_date": "2024-02-29",
+      "org_unit_level": 2,
+      "data_element": "DE_UID",
+      "temporal_resolution": "monthly",
+      "temporal_reducer": "sum",
+      "spatial_reducer": "mean",
+      "include_component_run_details": true
+    }
   }' | jq
 ```
 
@@ -473,14 +524,16 @@ Expected component order:
 curl -s -X POST "http://127.0.0.1:8000/workflows/dhis2-datavalue-set" \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow_id": "dhis2_datavalue_set_without_temporal_aggregation_v1",
-    "dataset_id": "chirps3_precipitation_daily",
-    "start_date": "2024-01-01",
-    "end_date": "2024-02-29",
-    "org_unit_level": 2,
-    "data_element": "DE_UID",
-    "spatial_reducer": "mean",
-    "include_component_run_details": true
+    "request": {
+      "workflow_id": "dhis2_datavalue_set_without_temporal_aggregation_v1",
+      "dataset_id": "chirps3_precipitation_daily",
+      "start_date": "2024-01-01",
+      "end_date": "2024-02-29",
+      "org_unit_level": 2,
+      "data_element": "DE_UID",
+      "spatial_reducer": "mean",
+      "include_component_run_details": true
+    }
   }' | jq
 ```
 
@@ -497,19 +550,60 @@ Expected component order:
 curl -s -X POST "http://127.0.0.1:8000/workflows/dhis2-datavalue-set" \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow_id": "does_not_exist",
-    "dataset_id": "chirps3_precipitation_daily",
-    "start_date": "2024-01-01",
-    "end_date": "2024-01-31",
-    "org_unit_level": 2,
-    "data_element": "DE_UID"
+    "request": {
+      "workflow_id": "does_not_exist",
+      "dataset_id": "chirps3_precipitation_daily",
+      "start_date": "2024-01-01",
+      "end_date": "2024-01-31",
+      "org_unit_level": 2,
+      "data_element": "DE_UID"
+    }
   }' | jq
 ```
 
 Expected result: `422` with allowed/discovered `workflow_id` values in error detail.
 
+6. Validate inline assembly (no execution):
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/workflows/validate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow": {
+      "workflow_id": "adhoc_validate_v1",
+      "version": 1,
+      "steps": [
+        {"component": "feature_source", "version": "v1", "config": {}},
+        {"component": "download_dataset", "version": "v1", "config": {}},
+        {"component": "spatial_aggregation", "version": "v1", "config": {}},
+        {"component": "build_datavalueset", "version": "v1", "config": {}}
+      ]
+    },
+    "request": {
+      "workflow_id": "adhoc_validate_v1",
+      "dataset_id": "chirps3_precipitation_daily",
+      "start_date": "2024-01-01",
+      "end_date": "2024-01-31",
+      "org_unit_level": 2,
+      "data_element": "DE_UID"
+    }
+  }' | jq
+```
+
+Expected result: `200` with `valid: true`, resolved step configs, and no execution side effects.
+
 ---
 
 ## Next Technical Step
 
-Add a workflow governance model for multi-user environments: workflow metadata (owner/status), promotion states (draft/staging/prod), and optional signature/checksum validation before a discovered YAML can execute.
+Prioritize orchestration-tool readiness (Prefect/Airflow wrappers over the current workflow service) before any OGC-first migration.
+
+Rationale:
+
+1. Delivers immediate operational value (scheduling, retries, long-running reliability) with minimal API churn.
+2. Reuses existing componentization, dispatcher, and run metadata.
+3. Avoids a high-risk architecture pivot while the current workflow contract is stabilizing.
+
+For detailed option synthesis and implementation scope, see:
+
+- `docs/internal/roadmap_v2.md` (Post-V2 Decision Synthesis)

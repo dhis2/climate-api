@@ -46,10 +46,17 @@ def aggregate_to_features(
         for t, value in zip(reduced[time_dim].values, reduced.values, strict=True):
             if np.isnan(value):
                 continue
+            # Keep component outputs JSON-safe for direct API exposure and remote execution.
+            if isinstance(t, np.datetime64):
+                time_value: Any = np.datetime_as_string(t, unit="s")
+            elif isinstance(t, np.generic):
+                time_value = t.item()
+            else:
+                time_value = t
             output.append(
                 {
                     "org_unit": org_unit,
-                    "time": t,
+                    "time": time_value,
                     "value": float(value),
                 }
             )

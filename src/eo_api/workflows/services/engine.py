@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...components import services as component_services
 from ...data_registry.services.datasets import get_dataset
-from ..schemas import AggregationMethod, PeriodType, WorkflowExecuteRequest, WorkflowExecuteResponse
+from ..schemas import WorkflowExecuteRequest, WorkflowExecuteResponse
 from .definitions import WorkflowDefinition, load_workflow_definition
 from .run_logs import persist_run_log
 from .runtime import WorkflowRuntime
@@ -39,6 +41,7 @@ def execute_workflow(
     request: WorkflowExecuteRequest,
     *,
     workflow_id: str = "dhis2_datavalue_set_v1",
+    workflow_definition: WorkflowDefinition | None = None,
     request_params: dict[str, Any] | None = None,
     include_component_run_details: bool = False,
 ) -> WorkflowExecuteResponse:
@@ -52,10 +55,13 @@ def execute_workflow(
     context: dict[str, Any] = {}
 
     try:
-        try:
-            workflow = load_workflow_definition(workflow_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if workflow_definition is not None:
+            workflow = workflow_definition
+        else:
+            try:
+                workflow = load_workflow_definition(workflow_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         _execute_workflow_steps(
             workflow=workflow,
             runtime=runtime,
@@ -229,6 +235,31 @@ def _execute_workflow_steps(
         context.update(updates)
 
 
+def validate_workflow_steps(
+    *,
+    workflow: WorkflowDefinition,
+    request_params: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Resolve and validate step configs without executing components."""
+    resolved_steps: list[dict[str, Any]] = []
+    params = request_params or {}
+    for index, step in enumerate(workflow.steps):
+        try:
+            resolved_config = _resolve_step_config(step.config, params)
+            _validate_step_config(step.component, step.version, resolved_config)
+        except ValueError as exc:
+            raise ValueError(f"Step {index + 1} ({step.component}@{step.version}) validation failed: {exc}") from exc
+        resolved_steps.append(
+            {
+                "index": index + 1,
+                "component": step.component,
+                "version": step.version,
+                "resolved_config": resolved_config,
+            }
+        )
+    return resolved_steps
+
+
 type StepExecutor = Callable[..., dict[str, Any]]
 
 
@@ -240,12 +271,24 @@ def _run_feature_source(
     context: dict[str, Any],
     step_config: dict[str, Any],
 ) -> dict[str, Any]:
-    del dataset, context, step_config
-    features, bbox = runtime.run(
-        "feature_source",
-        component_services.feature_source_component,
-        config=request.feature_source,
-    )
+    del dataset, context
+    execution_mode = str(step_config.get("execution_mode", "local")).lower()
+    if execution_mode == "remote":
+        features, bbox = runtime.run(
+            "feature_source",
+            _invoke_remote_feature_source_component,
+            remote_url=str(step_config["remote_url"]),
+            feature_source=request.feature_source.model_dump(mode="json"),
+            timeout_sec=float(step_config.get("remote_timeout_sec", 30.0)),
+            retries=int(step_config.get("remote_retries", 1)),
+            retry_delay_sec=float(step_config.get("remote_retry_delay_sec", 1.0)),
+        )
+    else:
+        features, bbox = runtime.run(
+            "feature_source",
+            component_services.feature_source_component,
+            config=request.feature_source,
+        )
     return {"features": features, "bbox": bbox}
 
 
@@ -257,18 +300,45 @@ def _run_download_dataset(
     context: dict[str, Any],
     step_config: dict[str, Any],
 ) -> dict[str, Any]:
-    overwrite = bool(step_config.get("overwrite", request.overwrite))
-    country_code = step_config.get("country_code", request.country_code)
-    runtime.run(
-        "download_dataset",
-        component_services.download_dataset_component,
-        dataset=dataset,
-        start=request.start,
-        end=request.end,
-        overwrite=overwrite,
-        country_code=country_code,
-        bbox=_require_context(context, "bbox"),
-    )
+    execution_mode = str(step_config.get("execution_mode", "local")).lower()
+    if execution_mode not in {"local", "remote"}:
+        raise ValueError("download_dataset.execution_mode must be 'local' or 'remote'")
+
+    overwrite = request.overwrite
+    country_code = request.country_code
+    bbox = _require_context(context, "bbox")
+    if execution_mode == "remote":
+        remote_url = step_config.get("remote_url")
+        if not isinstance(remote_url, str) or not remote_url:
+            raise ValueError("download_dataset remote mode requires non-empty 'remote_url'")
+        remote_timeout = float(step_config.get("remote_timeout_sec", 30.0))
+        remote_retries = int(step_config.get("remote_retries", 1))
+        remote_retry_delay_sec = float(step_config.get("remote_retry_delay_sec", 1.0))
+        runtime.run(
+            "download_dataset",
+            _invoke_remote_download_component,
+            remote_url=remote_url,
+            dataset_id=request.dataset_id,
+            start=request.start,
+            end=request.end,
+            overwrite=overwrite,
+            country_code=country_code,
+            bbox=bbox,
+            timeout_sec=remote_timeout,
+            retries=remote_retries,
+            retry_delay_sec=remote_retry_delay_sec,
+        )
+    else:
+        runtime.run(
+            "download_dataset",
+            component_services.download_dataset_component,
+            dataset=dataset,
+            start=request.start,
+            end=request.end,
+            overwrite=overwrite,
+            country_code=country_code,
+            bbox=bbox,
+        )
     return {}
 
 
@@ -280,20 +350,35 @@ def _run_temporal_aggregation(
     context: dict[str, Any],
     step_config: dict[str, Any],
 ) -> dict[str, Any]:
-    target_period_type = PeriodType(
-        str(step_config.get("target_period_type", request.temporal_aggregation.target_period_type))
-    )
-    method = AggregationMethod(str(step_config.get("method", request.temporal_aggregation.method)))
-    temporal_ds = runtime.run(
-        "temporal_aggregation",
-        component_services.temporal_aggregation_component,
-        dataset=dataset,
-        start=request.start,
-        end=request.end,
-        bbox=_require_context(context, "bbox"),
-        target_period_type=target_period_type,
-        method=method,
-    )
+    target_period_type = request.temporal_aggregation.target_period_type
+    method = request.temporal_aggregation.method
+    execution_mode = str(step_config.get("execution_mode", "local")).lower()
+    if execution_mode == "remote":
+        temporal_ds = runtime.run(
+            "temporal_aggregation",
+            _invoke_remote_temporal_aggregation_component,
+            remote_url=str(step_config["remote_url"]),
+            dataset_id=request.dataset_id,
+            start=request.start,
+            end=request.end,
+            bbox=_require_context(context, "bbox"),
+            target_period_type=target_period_type.value,
+            method=method.value,
+            timeout_sec=float(step_config.get("remote_timeout_sec", 30.0)),
+            retries=int(step_config.get("remote_retries", 1)),
+            retry_delay_sec=float(step_config.get("remote_retry_delay_sec", 1.0)),
+        )
+    else:
+        temporal_ds = runtime.run(
+            "temporal_aggregation",
+            component_services.temporal_aggregation_component,
+            dataset=dataset,
+            start=request.start,
+            end=request.end,
+            bbox=_require_context(context, "bbox"),
+            target_period_type=target_period_type,
+            method=method,
+        )
     return {"temporal_dataset": temporal_ds}
 
 
@@ -305,19 +390,37 @@ def _run_spatial_aggregation(
     context: dict[str, Any],
     step_config: dict[str, Any],
 ) -> dict[str, Any]:
-    method = AggregationMethod(str(step_config.get("method", request.spatial_aggregation.method)))
-    feature_id_property = str(step_config.get("feature_id_property", request.dhis2.org_unit_property))
-    records = runtime.run(
-        "spatial_aggregation",
-        component_services.spatial_aggregation_component,
-        dataset=dataset,
-        start=request.start,
-        end=request.end,
-        bbox=_require_context(context, "bbox"),
-        features=_require_context(context, "features"),
-        method=method,
-        feature_id_property=feature_id_property,
-    )
+    method = request.spatial_aggregation.method
+    feature_id_property = request.dhis2.org_unit_property
+    execution_mode = str(step_config.get("execution_mode", "local")).lower()
+    if execution_mode == "remote":
+        records = runtime.run(
+            "spatial_aggregation",
+            _invoke_remote_spatial_aggregation_component,
+            remote_url=str(step_config["remote_url"]),
+            dataset_id=request.dataset_id,
+            start=request.start,
+            end=request.end,
+            bbox=_require_context(context, "bbox"),
+            feature_source=request.feature_source.model_dump(mode="json"),
+            method=method.value,
+            feature_id_property=feature_id_property,
+            timeout_sec=float(step_config.get("remote_timeout_sec", 30.0)),
+            retries=int(step_config.get("remote_retries", 1)),
+            retry_delay_sec=float(step_config.get("remote_retry_delay_sec", 1.0)),
+        )
+    else:
+        records = runtime.run(
+            "spatial_aggregation",
+            component_services.spatial_aggregation_component,
+            dataset=dataset,
+            start=request.start,
+            end=request.end,
+            bbox=_require_context(context, "bbox"),
+            features=_require_context(context, "features"),
+            method=method,
+            feature_id_property=feature_id_property,
+        )
     return {"records": records}
 
 
@@ -330,15 +433,30 @@ def _run_build_datavalueset(
     step_config: dict[str, Any],
 ) -> dict[str, Any]:
     del dataset
-    period_type = PeriodType(str(step_config.get("period_type", request.temporal_aggregation.target_period_type)))
-    data_value_set, output_file = runtime.run(
-        "build_datavalueset",
-        component_services.build_datavalueset_component,
-        records=_require_context(context, "records"),
-        dataset_id=request.dataset_id,
-        period_type=period_type,
-        dhis2=request.dhis2,
-    )
+    period_type = request.temporal_aggregation.target_period_type
+    execution_mode = str(step_config.get("execution_mode", "local")).lower()
+    if execution_mode == "remote":
+        data_value_set, output_file = runtime.run(
+            "build_datavalueset",
+            _invoke_remote_build_datavalueset_component,
+            remote_url=str(step_config["remote_url"]),
+            dataset_id=request.dataset_id,
+            period_type=period_type.value,
+            records=_require_context(context, "records"),
+            dhis2=request.dhis2.model_dump(mode="json"),
+            timeout_sec=float(step_config.get("remote_timeout_sec", 30.0)),
+            retries=int(step_config.get("remote_retries", 1)),
+            retry_delay_sec=float(step_config.get("remote_retry_delay_sec", 1.0)),
+        )
+    else:
+        data_value_set, output_file = runtime.run(
+            "build_datavalueset",
+            component_services.build_datavalueset_component,
+            records=_require_context(context, "records"),
+            dataset_id=request.dataset_id,
+            period_type=period_type,
+            dhis2=request.dhis2,
+        )
     return {"data_value_set": data_value_set, "output_file": output_file}
 
 
@@ -374,32 +492,51 @@ def _resolve_value(value: Any, request_params: dict[str, Any]) -> Any:
 class _FeatureSourceStepConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    execution_mode: str = "local"
+    remote_url: str | None = None
+    remote_timeout_sec: float = 30.0
+    remote_retries: int = 1
+    remote_retry_delay_sec: float = 1.0
+
 
 class _DownloadDatasetStepConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    overwrite: bool | None = None
-    country_code: str | None = None
+    execution_mode: str = "local"
+    remote_url: str | None = None
+    remote_timeout_sec: float = 30.0
+    remote_retries: int = 1
+    remote_retry_delay_sec: float = 1.0
 
 
 class _TemporalAggregationStepConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    target_period_type: PeriodType | None = None
-    method: AggregationMethod | None = None
+    execution_mode: str = "local"
+    remote_url: str | None = None
+    remote_timeout_sec: float = 30.0
+    remote_retries: int = 1
+    remote_retry_delay_sec: float = 1.0
 
 
 class _SpatialAggregationStepConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    method: AggregationMethod | None = None
-    feature_id_property: str | None = None
+    execution_mode: str = "local"
+    remote_url: str | None = None
+    remote_timeout_sec: float = 30.0
+    remote_retries: int = 1
+    remote_retry_delay_sec: float = 1.0
 
 
 class _BuildDataValueSetStepConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    period_type: PeriodType | None = None
+    execution_mode: str = "local"
+    remote_url: str | None = None
+    remote_timeout_sec: float = 30.0
+    remote_retries: int = 1
+    remote_retry_delay_sec: float = 1.0
 
 
 _STEP_CONFIG_MODELS: dict[str, type[BaseModel]] = {
@@ -419,6 +556,229 @@ def _validate_step_config(component: str, version: str, config: dict[str, Any]) 
     if model is None:
         raise ValueError(f"No config schema registered for component '{component}'")
     try:
-        model.model_validate(config)
+        validated = model.model_validate(config)
     except ValidationError as exc:
         raise ValueError(f"Invalid config for component '{component}@{version}': {exc}") from exc
+    mode = str(getattr(validated, "execution_mode", "local")).lower()
+    if mode not in {"local", "remote"}:
+        raise ValueError(
+            f"Invalid config for component '{component}@{version}': execution_mode must be local or remote"
+        )
+    remote_url = getattr(validated, "remote_url", None)
+    remote_timeout_sec = getattr(validated, "remote_timeout_sec", 30.0)
+    remote_retries = getattr(validated, "remote_retries", 1)
+    remote_retry_delay_sec = getattr(validated, "remote_retry_delay_sec", 1.0)
+
+    has_remote_config = bool(
+        (isinstance(remote_url, str) and remote_url.strip())
+        or float(remote_timeout_sec) != 30.0
+        or int(remote_retries) != 1
+        or float(remote_retry_delay_sec) != 1.0
+    )
+
+    if mode == "local" and has_remote_config:
+        raise ValueError(
+            f"Invalid config for component '{component}@{version}': "
+            "remote_url/remote_timeout_sec/remote_retries/remote_retry_delay_sec are only allowed in remote mode"
+        )
+    if mode == "remote":
+        if not isinstance(remote_url, str) or not remote_url.strip():
+            raise ValueError(
+                f"Invalid config for component '{component}@{version}': remote_url is required for remote mode"
+            )
+
+
+def _invoke_remote_download_component(
+    *,
+    remote_url: str,
+    dataset_id: str,
+    start: str,
+    end: str,
+    overwrite: bool,
+    country_code: str | None,
+    bbox: list[float],
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> None:
+    """Invoke remote download component endpoint with retry/timeout."""
+    payload = {
+        "dataset_id": dataset_id,
+        "start": start,
+        "end": end,
+        "overwrite": overwrite,
+        "country_code": country_code,
+        "bbox": bbox,
+    }
+    attempts = max(1, retries)
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with httpx.Client(timeout=timeout_sec) as client:
+                response = client.post(remote_url, json=payload)
+                response.raise_for_status()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt < attempts:
+                time.sleep(max(0.0, retry_delay_sec))
+    if last_exc is None:
+        raise RuntimeError("Remote download invocation failed without exception context")
+    raise last_exc
+
+
+def _invoke_remote_feature_source_component(
+    *,
+    remote_url: str,
+    feature_source: dict[str, Any],
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> tuple[dict[str, Any], list[float]]:
+    """Invoke remote feature-source component endpoint."""
+    payload = {
+        "feature_source": feature_source,
+        "include_features": True,
+    }
+    result = _post_remote_json(
+        remote_url=remote_url,
+        payload=payload,
+        timeout_sec=timeout_sec,
+        retries=retries,
+        retry_delay_sec=retry_delay_sec,
+    )
+    features = result.get("features")
+    bbox = result.get("bbox")
+    if not isinstance(features, dict) or not isinstance(bbox, list):
+        raise RuntimeError("Remote feature_source response missing features/bbox")
+    return features, [float(x) for x in bbox]
+
+
+def _invoke_remote_temporal_aggregation_component(
+    *,
+    remote_url: str,
+    dataset_id: str,
+    start: str,
+    end: str,
+    bbox: list[float],
+    target_period_type: str,
+    method: str,
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> dict[str, Any]:
+    """Invoke remote temporal-aggregation component endpoint."""
+    payload = {
+        "dataset_id": dataset_id,
+        "start": start,
+        "end": end,
+        "bbox": bbox,
+        "target_period_type": target_period_type,
+        "method": method,
+    }
+    return _post_remote_json(
+        remote_url=remote_url,
+        payload=payload,
+        timeout_sec=timeout_sec,
+        retries=retries,
+        retry_delay_sec=retry_delay_sec,
+    )
+
+
+def _invoke_remote_spatial_aggregation_component(
+    *,
+    remote_url: str,
+    dataset_id: str,
+    start: str,
+    end: str,
+    bbox: list[float],
+    feature_source: dict[str, Any],
+    method: str,
+    feature_id_property: str,
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> list[dict[str, Any]]:
+    """Invoke remote spatial-aggregation component endpoint."""
+    payload = {
+        "dataset_id": dataset_id,
+        "start": start,
+        "end": end,
+        "feature_source": feature_source,
+        "method": method,
+        "bbox": bbox,
+        "feature_id_property": feature_id_property,
+        "include_records": True,
+    }
+    result = _post_remote_json(
+        remote_url=remote_url,
+        payload=payload,
+        timeout_sec=timeout_sec,
+        retries=retries,
+        retry_delay_sec=retry_delay_sec,
+    )
+    records = result.get("records")
+    if not isinstance(records, list):
+        raise RuntimeError("Remote spatial_aggregation response missing records")
+    return records
+
+
+def _invoke_remote_build_datavalueset_component(
+    *,
+    remote_url: str,
+    dataset_id: str,
+    period_type: str,
+    records: list[dict[str, Any]],
+    dhis2: dict[str, Any],
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> tuple[dict[str, Any], str]:
+    """Invoke remote build-datavalue-set component endpoint."""
+    payload = {
+        "dataset_id": dataset_id,
+        "period_type": period_type,
+        "records": records,
+        "dhis2": dhis2,
+    }
+    result = _post_remote_json(
+        remote_url=remote_url,
+        payload=payload,
+        timeout_sec=timeout_sec,
+        retries=retries,
+        retry_delay_sec=retry_delay_sec,
+    )
+    data_value_set = result.get("data_value_set")
+    output_file = result.get("output_file")
+    if not isinstance(data_value_set, dict) or not isinstance(output_file, str):
+        raise RuntimeError("Remote build_datavalueset response missing data_value_set/output_file")
+    return data_value_set, output_file
+
+
+def _post_remote_json(
+    *,
+    remote_url: str,
+    payload: dict[str, Any],
+    timeout_sec: float,
+    retries: int,
+    retry_delay_sec: float,
+) -> dict[str, Any]:
+    """POST JSON to remote component endpoint with retry and return JSON body."""
+    attempts = max(1, retries)
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with httpx.Client(timeout=timeout_sec) as client:
+                response = client.post(remote_url, json=payload)
+                response.raise_for_status()
+                body = response.json()
+                if not isinstance(body, dict):
+                    raise RuntimeError("Remote component returned non-object JSON response")
+                return body
+        except Exception as exc:
+            last_exc = exc
+            if attempt < attempts:
+                time.sleep(max(0.0, retry_delay_sec))
+    if last_exc is None:
+        raise RuntimeError("Remote component invocation failed without exception context")
+    raise last_exc

@@ -21,7 +21,7 @@ from ..workflows.services.features import resolve_features
 from ..workflows.services.preflight import check_upstream_connectivity
 from ..workflows.services.spatial import aggregate_to_features
 from ..workflows.services.temporal import aggregate_temporal
-from .schemas import ComponentDefinition
+from .schemas import ComponentDefinition, ComponentEndpoint
 
 _ERROR_CODES_V1: Final[list[str]] = [
     "INPUT_VALIDATION_FAILED",
@@ -43,7 +43,17 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
             "properties": {"feature_source": {"type": "object"}},
             "required": ["feature_source"],
         },
-        config_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        config_schema={
+            "type": "object",
+            "properties": {
+                "execution_mode": {"type": "string", "enum": ["local", "remote"]},
+                "remote_url": {"type": ["string", "null"]},
+                "remote_timeout_sec": {"type": "number"},
+                "remote_retries": {"type": "integer"},
+                "remote_retry_delay_sec": {"type": "number"},
+            },
+            "additionalProperties": False,
+        },
         output_schema={
             "type": "object",
             "properties": {
@@ -53,6 +63,7 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
             "required": ["features", "bbox"],
         },
         error_codes=_ERROR_CODES_V1,
+        endpoint=ComponentEndpoint(path="/components/feature-source", method="POST"),
     ),
     "download_dataset@v1": ComponentDefinition(
         name="download_dataset",
@@ -75,13 +86,17 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
         config_schema={
             "type": "object",
             "properties": {
-                "overwrite": {"type": "boolean"},
-                "country_code": {"type": ["string", "null"]},
+                "execution_mode": {"type": "string", "enum": ["local", "remote"]},
+                "remote_url": {"type": ["string", "null"]},
+                "remote_timeout_sec": {"type": "number"},
+                "remote_retries": {"type": "integer"},
+                "remote_retry_delay_sec": {"type": "number"},
             },
             "additionalProperties": False,
         },
         output_schema={"type": "object", "properties": {"status": {"type": "string"}}},
         error_codes=_ERROR_CODES_V1,
+        endpoint=ComponentEndpoint(path="/components/download-dataset", method="POST"),
     ),
     "temporal_aggregation@v1": ComponentDefinition(
         name="temporal_aggregation",
@@ -104,13 +119,17 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
         config_schema={
             "type": "object",
             "properties": {
-                "target_period_type": {"type": "string"},
-                "method": {"type": "string"},
+                "execution_mode": {"type": "string", "enum": ["local", "remote"]},
+                "remote_url": {"type": ["string", "null"]},
+                "remote_timeout_sec": {"type": "number"},
+                "remote_retries": {"type": "integer"},
+                "remote_retry_delay_sec": {"type": "number"},
             },
             "additionalProperties": False,
         },
         output_schema={"type": "object", "properties": {"dataset": {"type": "object"}}},
         error_codes=_ERROR_CODES_V1,
+        endpoint=ComponentEndpoint(path="/components/temporal-aggregation", method="POST"),
     ),
     "spatial_aggregation@v1": ComponentDefinition(
         name="spatial_aggregation",
@@ -132,13 +151,17 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
         config_schema={
             "type": "object",
             "properties": {
-                "method": {"type": "string"},
-                "feature_id_property": {"type": "string"},
+                "execution_mode": {"type": "string", "enum": ["local", "remote"]},
+                "remote_url": {"type": ["string", "null"]},
+                "remote_timeout_sec": {"type": "number"},
+                "remote_retries": {"type": "integer"},
+                "remote_retry_delay_sec": {"type": "number"},
             },
             "additionalProperties": False,
         },
         output_schema={"type": "object", "properties": {"records": {"type": "array"}}},
         error_codes=_ERROR_CODES_V1,
+        endpoint=ComponentEndpoint(path="/components/spatial-aggregation", method="POST"),
     ),
     "build_datavalueset@v1": ComponentDefinition(
         name="build_datavalueset",
@@ -159,7 +182,11 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
         config_schema={
             "type": "object",
             "properties": {
-                "period_type": {"type": "string"},
+                "execution_mode": {"type": "string", "enum": ["local", "remote"]},
+                "remote_url": {"type": ["string", "null"]},
+                "remote_timeout_sec": {"type": "number"},
+                "remote_retries": {"type": "integer"},
+                "remote_retry_delay_sec": {"type": "number"},
             },
             "additionalProperties": False,
         },
@@ -169,13 +196,20 @@ _COMPONENT_REGISTRY: Final[dict[str, ComponentDefinition]] = {
             "required": ["data_value_set", "output_file"],
         },
         error_codes=_ERROR_CODES_V1,
+        endpoint=ComponentEndpoint(path="/components/build-datavalue-set", method="POST"),
     ),
 }
 
 
-def component_catalog() -> list[ComponentDefinition]:
-    """Return all discoverable component definitions."""
-    return list(_COMPONENT_REGISTRY.values())
+def component_catalog(*, include_internal: bool = False) -> list[ComponentDefinition]:
+    """Return discoverable component definitions.
+
+    By default, internal orchestration-only metadata (config_schema) is hidden.
+    """
+    components = list(_COMPONENT_REGISTRY.values())
+    if include_internal:
+        return components
+    return [component.model_copy(update={"config_schema": None}) for component in components]
 
 
 def component_registry() -> dict[str, ComponentDefinition]:

@@ -14,6 +14,13 @@ from ..workflows.schemas import (
 )
 
 
+class ComponentEndpoint(BaseModel):
+    """HTTP endpoint metadata for a component."""
+
+    path: str
+    method: str
+
+
 class ComponentDefinition(BaseModel):
     """Component metadata for discovery."""
 
@@ -23,9 +30,10 @@ class ComponentDefinition(BaseModel):
     inputs: list[str]
     outputs: list[str]
     input_schema: dict[str, Any] = Field(default_factory=dict)
-    config_schema: dict[str, Any] = Field(default_factory=dict)
+    config_schema: dict[str, Any] | None = None
     output_schema: dict[str, Any] = Field(default_factory=dict)
     error_codes: list[str] = Field(default_factory=list)
+    endpoint: ComponentEndpoint
 
 
 class ComponentCatalogResponse(BaseModel):
@@ -98,6 +106,7 @@ class SpatialAggregationRunRequest(BaseModel):
     method: AggregationMethod = AggregationMethod.MEAN
     bbox: list[float] | None = None
     feature_id_property: str = "id"
+    include_records: bool = False
     max_preview_rows: int = 20
 
 
@@ -107,6 +116,7 @@ class SpatialAggregationRunResponse(BaseModel):
     dataset_id: str
     record_count: int
     preview: list[dict[str, Any]]
+    records: list[dict[str, Any]] | None = None
 
 
 class BuildDataValueSetRunRequest(BaseModel):

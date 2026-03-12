@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from .services.definitions import WorkflowDefinition
+
 
 class FeatureSourceType(StrEnum):
     """Supported feature source backends."""
@@ -173,3 +175,55 @@ class WorkflowRequest(BaseModel):
         if self.org_unit_level is None and not self.org_unit_ids:
             raise ValueError("Provide org_unit_level or org_unit_ids")
         return self
+
+
+class WorkflowExecuteEnvelopeRequest(BaseModel):
+    """Envelope for workflow execution input payload."""
+
+    request: WorkflowRequest
+
+
+class WorkflowAssemblyExecuteRequest(BaseModel):
+    """Inline workflow assembly + wrapped public workflow input."""
+
+    request: WorkflowRequest
+    workflow: WorkflowDefinition
+
+
+class WorkflowValidateRequest(BaseModel):
+    """Validation request for discovered or inline workflow assembly."""
+
+    workflow_id: str | None = None
+    workflow: WorkflowDefinition | None = None
+    request: WorkflowRequest | None = None
+
+    @model_validator(mode="after")
+    def validate_workflow_source(self) -> "WorkflowValidateRequest":
+        """Require exactly one workflow source."""
+        if (self.workflow_id is None and self.workflow is None) or (
+            self.workflow_id is not None and self.workflow is not None
+        ):
+            raise ValueError("Provide exactly one of workflow_id or workflow")
+        return self
+
+
+class WorkflowValidateStep(BaseModel):
+    """Resolved workflow step metadata from validation."""
+
+    index: int
+    component: str
+    version: str
+    resolved_config: dict[str, Any]
+
+
+class WorkflowValidateResponse(BaseModel):
+    """Validation result for a workflow assembly."""
+
+    valid: bool
+    workflow_id: str
+    workflow_version: int
+    step_count: int
+    components: list[str]
+    resolved_steps: list[WorkflowValidateStep] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
