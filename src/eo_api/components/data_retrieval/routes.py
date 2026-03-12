@@ -4,14 +4,14 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from ..data_registry.routes import _get_dataset_or_404
+from ..data_registry.routes import require_dataset
 from .services.accessor import cleanup_file, get_data, xarray_to_temporary_netcdf
 
 router = APIRouter()
 
 
 @router.get("/{dataset_id}")
-def get_file(
+def extract_data(
     dataset_id: str,
     start: str,
     end: str,
@@ -21,8 +21,8 @@ def get_file(
     ymax: float | None = None,
     format: str = "netcdf",
 ) -> FileResponse:
-    """Get a dataset filtered to a timeperiod and bbox as a downloadable raster file."""
-    dataset = _get_dataset_or_404(dataset_id)
+    """Extract data for a timeperiod and bbox and return as a downloadable raster file."""
+    dataset = require_dataset(dataset_id)
 
     # get filtered data
     bbox: list[float] | None

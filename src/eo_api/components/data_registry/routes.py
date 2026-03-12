@@ -15,7 +15,7 @@ def list_datasets() -> list[dict[str, Any]]:
     return datasets.list_datasets()
 
 
-def _get_dataset_or_404(dataset_id: str) -> dict[str, Any]:
+def require_dataset(dataset_id: str) -> dict[str, Any]:
     """Look up a dataset by ID or raise 404."""
     dataset = datasets.get_dataset(dataset_id)
     if not dataset:
@@ -27,9 +27,9 @@ def _get_dataset_or_404(dataset_id: str) -> dict[str, Any]:
 def get_dataset(dataset_id: str) -> dict[str, Any]:
     """Get a single dataset by ID."""
     # Note: have to import inside function to avoid circular import
-    from ..data_accessor.services.accessor import get_data_coverage
+    from ..data_retrieval.services.accessor import get_data_coverage
 
-    dataset = _get_dataset_or_404(dataset_id)
+    dataset = require_dataset(dataset_id)
     coverage = get_data_coverage(dataset)
     dataset.update(coverage)
     return dataset

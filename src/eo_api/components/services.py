@@ -7,19 +7,6 @@ from typing import Any, Final
 import xarray as xr
 from fastapi import HTTPException
 
-from ..data_accessor.services.accessor import get_data
-from ..data_manager.services import downloader
-from ..data_registry.services.datasets import get_dataset
-from ..workflows.schemas import (
-    AggregationMethod,
-    Dhis2DataValueSetConfig,
-    FeatureSourceConfig,
-    PeriodType,
-)
-from ..workflows.services.datavalueset import build_data_value_set
-from ..workflows.services.features import resolve_features
-from ..workflows.services.spatial import aggregate_to_features
-from ..workflows.services.temporal import aggregate_temporal
 from .schemas import ComponentDefinition
 
 _ERROR_CODES_V1: Final[list[str]] = [

@@ -6,13 +6,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ..workflows.schemas import (
-    AggregationMethod,
-    Dhis2DataValueSetConfig,
-    FeatureSourceConfig,
-    PeriodType,
-)
-
 
 class ComponentDefinition(BaseModel):
     """Component metadata for discovery."""
