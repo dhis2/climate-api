@@ -9,3 +9,10 @@ class Dhis2DataValueSetConfig(BaseModel):
     data_set_uid: str | None = None
     org_unit_property: str = "id"
     stored_by: str | None = None
+
+
+class _BuildDataValueSetStepConfig(BaseModel):
+    # from workflows folder
+    model_config = ConfigDict(extra="forbid")
+
+    period_type: PeriodType | None = None

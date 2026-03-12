@@ -40,50 +40,6 @@ WORKFLOWS_DIR = SCRIPT_DIR.parent.parent.parent.parent / "data" / "workflows"
 DEFAULT_WORKFLOW_ID = "dhis2_datavalue_set_v1"
 
 
-class WorkflowStep(BaseModel):
-    """One component step in a declarative workflow definition."""
-
-    component: ComponentName
-    version: str = "v1"
-    config: dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def validate_component_version(self) -> "WorkflowStep":
-        """Ensure component@version exists in the registered component catalog."""
-        supported_versions = SUPPORTED_COMPONENT_VERSIONS.get(self.component, set())
-        if self.version not in supported_versions:
-            known = ", ".join(sorted(supported_versions)) or "<none>"
-            raise ValueError(
-                f"Unsupported component version '{self.component}@{self.version}'. Supported versions: {known}"
-            )
-        return self
-
-
-class WorkflowDefinition(BaseModel):
-    """Declarative workflow definition."""
-
-    workflow_id: str
-    version: int = 1
-    steps: list[WorkflowStep]
-
-    @model_validator(mode="after")
-    def validate_steps(self) -> "WorkflowDefinition":
-        """Require terminal DataValueSet step and validate component compatibility."""
-        if not self.steps:
-            raise ValueError("Workflow steps cannot be empty")
-        if self.steps[-1].component != "build_datavalueset":
-            raise ValueError("The last workflow step must be 'build_datavalueset'")
-        available_context: set[str] = set()
-        for step in self.steps:
-            required_inputs = COMPONENT_INPUTS[step.component]
-            missing_inputs = required_inputs - available_context
-            if missing_inputs:
-                missing = ", ".join(sorted(missing_inputs))
-                raise ValueError(f"Component '{step.component}' is missing required upstream outputs: {missing}")
-            available_context.update(COMPONENT_OUTPUTS[step.component])
-        return self
-
-
 def load_workflow_definition(
     workflow_id: str = DEFAULT_WORKFLOW_ID,
     *,

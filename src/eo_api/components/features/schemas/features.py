@@ -29,3 +29,8 @@ class FeatureSourceConfig(BaseModel):
         if self.source_type == FeatureSourceType.DHIS2_IDS and not self.dhis2_ids:
             raise ValueError("dhis2_ids is required when source_type='dhis2_ids'")
         return self
+
+
+class _FeatureSourceStepConfig(BaseModel):
+    # from workflows folder
+    model_config = ConfigDict(extra="forbid")

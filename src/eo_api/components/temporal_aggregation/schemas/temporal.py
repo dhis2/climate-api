@@ -24,3 +24,11 @@ class TemporalAggregationConfig(BaseModel):
 
     target_period_type: PeriodType
     method: AggregationMethod = AggregationMethod.SUM
+
+
+class _TemporalAggregationStepConfig(BaseModel):
+    # from workflows folder
+    model_config = ConfigDict(extra="forbid")
+
+    target_period_type: PeriodType | None = None
+    method: AggregationMethod | None = None

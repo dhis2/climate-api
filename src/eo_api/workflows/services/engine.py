@@ -371,44 +371,13 @@ def _resolve_value(value: Any, request_params: dict[str, Any]) -> Any:
     return value
 
 
-class _FeatureSourceStepConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class _DownloadDatasetStepConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    overwrite: bool | None = None
-    country_code: str | None = None
-
-
-class _TemporalAggregationStepConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    target_period_type: PeriodType | None = None
-    method: AggregationMethod | None = None
-
-
-class _SpatialAggregationStepConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    method: AggregationMethod | None = None
-    feature_id_property: str | None = None
-
-
-class _BuildDataValueSetStepConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    period_type: PeriodType | None = None
-
-
-_STEP_CONFIG_MODELS: dict[str, type[BaseModel]] = {
-    "feature_source": _FeatureSourceStepConfig,
-    "download_dataset": _DownloadDatasetStepConfig,
-    "temporal_aggregation": _TemporalAggregationStepConfig,
-    "spatial_aggregation": _SpatialAggregationStepConfig,
-    "build_datavalueset": _BuildDataValueSetStepConfig,
-}
+# _STEP_CONFIG_MODELS: dict[str, type[BaseModel]] = {
+#     "feature_source": _FeatureSourceStepConfig,
+#     "download_dataset": _DownloadDatasetStepConfig,
+#     "temporal_aggregation": _TemporalAggregationStepConfig,
+#     "spatial_aggregation": _SpatialAggregationStepConfig,
+#     "build_datavalueset": _BuildDataValueSetStepConfig,
+# }
 
 
 def _validate_step_config(component: str, version: str, config: dict[str, Any]) -> None:

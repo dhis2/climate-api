@@ -14,3 +14,11 @@ class SpatialAggregationConfig(BaseModel):
     """Spatial aggregation config."""
 
     method: AggregationMethod = AggregationMethod.MEAN
+
+
+class _SpatialAggregationStepConfig(BaseModel):
+    # from workflows folder
+    model_config = ConfigDict(extra="forbid")
+
+    method: AggregationMethod | None = None
+    feature_id_property: str | None = None
