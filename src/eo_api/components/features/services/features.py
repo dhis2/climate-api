@@ -67,3 +67,8 @@ def _bbox_from_feature_collection(collection: dict[str, Any]) -> list[float]:
         raise ValueError("Feature collection is empty")
     bounds = gpd.read_file(json.dumps(collection)).total_bounds
     return [float(v) for v in bounds]
+
+
+def feature_source_component(config: FeatureSourceConfig) -> tuple[dict[str, Any], list[float]]:
+    """Run feature source component."""
+    return resolve_features(config)

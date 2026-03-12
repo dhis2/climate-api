@@ -155,3 +155,25 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     function_name = parts[-1]
     module = importlib.import_module(module_path)
     return getattr(module, function_name)  # type: ignore[no-any-return]
+
+
+def download_dataset_component(
+    *,
+    dataset: dict[str, Any],
+    start: str,
+    end: str,
+    overwrite: bool,
+    country_code: str | None,
+    bbox: list[float],
+) -> None:
+    """Run connectivity preflight and download dataset files."""
+    check_upstream_connectivity(dataset)
+    downloader.download_dataset(
+        dataset=dataset,
+        start=start,
+        end=end,
+        overwrite=overwrite,
+        background_tasks=None,
+        country_code=country_code,
+        bbox=bbox,
+    )

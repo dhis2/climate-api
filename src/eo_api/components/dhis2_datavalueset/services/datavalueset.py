@@ -63,3 +63,14 @@ def _format_period(time_value: Any, period_type: PeriodType) -> str:
     if period_type == PeriodType.YEARLY:
         return year
     return s.replace("-", "")
+
+
+def build_datavalueset_component(
+    *,
+    dataset_id: str,
+    period_type: PeriodType,
+    records: list[dict[str, Any]],
+    dhis2: Dhis2DataValueSetConfig,
+) -> tuple[dict[str, Any], str]:
+    """Build and serialize DHIS2 DataValueSet from records."""
+    return build_data_value_set(records=records, dataset_id=dataset_id, period_type=period_type, config=dhis2)

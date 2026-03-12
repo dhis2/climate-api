@@ -23,3 +23,17 @@ def aggregate_temporal(ds: xr.Dataset, *, period_type: PeriodType, method: Aggre
     freq = _PERIOD_TO_FREQ[period_type]
     resampled = ds.resample({time_dim: freq})
     return cast(xr.Dataset, getattr(resampled, method.value)(keep_attrs=True))
+
+
+def temporal_aggregation_component(
+    *,
+    dataset: dict[str, Any],
+    start: str,
+    end: str,
+    bbox: list[float] | None,
+    target_period_type: PeriodType,
+    method: AggregationMethod,
+) -> xr.Dataset:
+    """Load dataset and aggregate over time."""
+    ds = get_data(dataset=dataset, start=start, end=end, bbox=bbox)
+    return aggregate_temporal(ds=ds, period_type=target_period_type, method=method)

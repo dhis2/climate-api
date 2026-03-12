@@ -54,3 +54,24 @@ def aggregate_to_features(
                 }
             )
     return output
+
+
+def spatial_aggregation_component(
+    *,
+    dataset: dict[str, Any],
+    start: str,
+    end: str,
+    bbox: list[float] | None,
+    features: dict[str, Any],
+    method: AggregationMethod,
+    feature_id_property: str,
+) -> list[dict[str, Any]]:
+    """Load dataset and aggregate spatially to provided features."""
+    ds = get_data(dataset=dataset, start=start, end=end, bbox=bbox)
+    return aggregate_to_features(
+        ds=ds,
+        variable=dataset["variable"],
+        features=features,
+        method=method.value,
+        feature_id_property=feature_id_property,
+    )
