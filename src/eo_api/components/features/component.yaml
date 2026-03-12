@@ -1,0 +1,28 @@
+name: "feature_source"
+version: "v1"
+description: "Resolve feature source and compute bbox."
+input_schema:
+  type: "object"
+  properties:
+    feature_source:
+      type: "object"
+  required:
+    - "feature_source"
+config_schema:
+  type: "object"
+  properties: {}
+  additionalProperties: false
+output_schema:
+  type: "object"
+  properties:
+    features:
+      type: "object"
+    bbox:
+      type: "array"
+      items:
+        type: "number"
+      minItems: 4
+      maxItems: 4
+  required:
+    - "features"
+    - "bbox"

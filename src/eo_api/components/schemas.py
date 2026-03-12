@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conlist
 
 
 class ComponentDefinition(BaseModel):
@@ -14,12 +14,9 @@ class ComponentDefinition(BaseModel):
     name: str
     version: str = "v1"
     description: str
-    inputs: list[str]
-    outputs: list[str]
     input_schema: dict[str, Any] = Field(default_factory=dict)
     config_schema: dict[str, Any] = Field(default_factory=dict)
     output_schema: dict[str, Any] = Field(default_factory=dict)
-    error_codes: list[str] = Field(default_factory=list)
 
 
 class ComponentCatalogResponse(BaseModel):

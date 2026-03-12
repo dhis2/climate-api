@@ -1,0 +1,35 @@
+name: "build_datavalueset"
+version: "v1"
+description: "Build and serialize DHIS2 DataValueSet JSON."
+input_schema:
+  type: "object"
+  properties:
+    dataset_id:
+      type: "string"
+    period_type:
+      type: "string"
+    records:
+      type: "array"
+    dhis2:
+      type: "object"
+  required:
+    - "dataset_id"
+    - "period_type"
+    - "records"
+    - "dhis2"
+config_schema:
+  type: "object"
+  properties:
+    period_type:
+      type: "string"
+  additionalProperties: false
+output_schema:
+  type: "object"
+  properties:
+    data_value_set:
+      type: "object"
+    output_file:
+      type: "string"
+  required:
+    - "data_value_set"
+    - "output_file"

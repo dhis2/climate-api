@@ -1,0 +1,41 @@
+name: "temporal_aggregation"
+version: "v1"
+description: "Aggregate dataset over time dimension."
+input_schema:
+  type: "object"
+  properties:
+    dataset_id:
+      type: "string"
+    start:
+      type: "string"
+    end:
+      type: "string"
+    target_period_type:
+      type: "string"
+    method:
+      type: "string"
+    bbox:
+      type:
+        - "array"
+        - "null"
+      items:
+        type: "number"
+  required:
+    - "dataset_id"
+    - "start"
+    - "end"
+    - "target_period_type"
+    - "method"
+config_schema:
+  type: "object"
+  properties:
+    target_period_type:
+      type: "string"
+    method:
+      type: "string"
+  additionalProperties: false
+output_schema:
+  type: "object"
+  properties:
+    dataset:
+      type: "object"
