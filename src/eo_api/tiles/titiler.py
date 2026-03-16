@@ -1,3 +1,5 @@
+ """Xarray-backed TiTiler router configuration for EO-API tile endpoints."""
+
 from titiler.xarray.factory import TilerFactory
 from titiler.xarray.io import Reader 
 from titiler.xarray.extensions import VariablesExtension
