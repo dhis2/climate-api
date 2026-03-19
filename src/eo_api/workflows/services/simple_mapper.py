@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
-
 from ...data_registry.services.datasets import get_dataset
+from ...shared.api_errors import raise_api_error
 from ..schemas import (
     Dhis2DataValueSetConfig,
     FeatureSourceConfig,
@@ -23,6 +22,9 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
     inputs = payload
     dataset_id = inputs.dataset_id
     dataset = get_dataset(dataset_id)
+    start: str
+    end: str
+    feature_source: FeatureSourceConfig
 
     period_type = str(dataset.get("period_type", "")).lower() if dataset else ""
 
@@ -45,7 +47,12 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
             start = f"{inputs.start_year}-01-01"
             end = f"{inputs.end_year}-12-31"
     else:
-        raise HTTPException(status_code=422, detail="Provide either start_date/end_date or start_year/end_year")
+        raise_api_error(
+            422,
+            error="workflow_request_invalid",
+            error_code="REQUEST_VALIDATION_FAILED",
+            message="Provide either start_date/end_date or start_year/end_year",
+        )
 
     if inputs.org_unit_level is not None:
         feature_source = FeatureSourceConfig(
@@ -60,7 +67,12 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
             feature_id_property=inputs.feature_id_property,
         )
     else:
-        raise HTTPException(status_code=422, detail="Provide org_unit_level or org_unit_ids")
+        raise_api_error(
+            422,
+            error="workflow_request_invalid",
+            error_code="REQUEST_VALIDATION_FAILED",
+            message="Provide org_unit_level or org_unit_ids",
+        )
 
     normalized = WorkflowExecuteRequest(
         dataset_id=dataset_id,

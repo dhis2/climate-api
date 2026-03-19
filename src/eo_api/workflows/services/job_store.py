@@ -208,7 +208,7 @@ def delete_job(job_id: str) -> dict[str, Any] | None:
         "deleted_publication": publication.resource_id if publication is not None else None,
         "materialized_config_path": str(config_path),
         "materialized_openapi_path": str(openapi_path),
-        "pygeoapi_runtime_reload_required": True,
+        "pygeoapi_runtime_reload_required": False,
     }
 
 

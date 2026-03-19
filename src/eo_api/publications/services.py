@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,7 +27,11 @@ def ensure_source_dataset_publications() -> list[PublishedResource]:
             resource_class=PublishedResourceClass.SOURCE,
             kind=PublishedResourceKind.COVERAGE,
             title=str(dataset.get("name") or dataset["id"]),
-            description=f"Source dataset: {dataset.get('source') or dataset['id']}",
+            description=(
+                f"Source dataset from {dataset.get('source') or dataset['id']}"
+                f" for {dataset.get('variable') or dataset['id']}"
+                f" with {dataset.get('period_type') or 'native'} cadence."
+            ),
             dataset_id=str(dataset["id"]),
             path=None,
             ogc_path=f"/ogcapi/collections/{dataset['id']}",
@@ -66,17 +71,29 @@ def register_workflow_output_publication(
     resource_id = f"workflow-output-{response.run_id}"
     existing = get_published_resource(resource_id)
     timestamp = _utc_now()
+    publication_path = published_path or response.output_file
+    analytics_metadata = _analytics_metadata_for_published_asset(publication_path)
+    links = [
+        {"rel": "job", "href": f"/workflows/jobs/{response.run_id}"},
+        {"rel": "job-result", "href": f"/workflows/jobs/{response.run_id}/result"},
+        {"rel": "collection", "href": f"/ogcapi/collections/{resource_id}"},
+    ]
+    if analytics_metadata["eligible"]:
+        links.append({"rel": "analytics", "href": f"/analytics/publications/{resource_id}/viewer"})
     record = PublishedResource(
         resource_id=resource_id,
         resource_class=PublishedResourceClass.DERIVED,
         kind=PublishedResourceKind.FEATURE_COLLECTION,
         title=f"{response.workflow_id} output for {response.dataset_id}",
-        description="Derived workflow output registered for OGC publication.",
+        description=(
+            f"Derived workflow output from {response.workflow_id} for {response.dataset_id} "
+            f"({response.feature_count} features, {response.value_count} values)."
+        ),
         dataset_id=response.dataset_id,
         workflow_id=response.workflow_id,
         job_id=response.run_id,
         run_id=response.run_id,
-        path=published_path or response.output_file,
+        path=publication_path,
         ogc_path=f"/ogcapi/collections/{resource_id}",
         asset_format=asset_format or "datavalueset-json",
         exposure=exposure,
@@ -90,13 +107,11 @@ def register_workflow_output_publication(
             "value_count": response.value_count,
             "bbox": response.bbox,
             "native_output_file": response.output_file,
+            "period_count": analytics_metadata["period_count"],
+            "has_period_field": analytics_metadata["has_period_field"],
+            "analytics_eligible": analytics_metadata["eligible"],
         },
-        links=[
-            {"rel": "job", "href": f"/workflows/jobs/{response.run_id}"},
-            {"rel": "job-result", "href": f"/workflows/jobs/{response.run_id}/result"},
-            {"rel": "collection", "href": f"/ogcapi/collections/{resource_id}"},
-            {"rel": "analytics", "href": f"/analytics/publications/{resource_id}/viewer"},
-        ],
+        links=links,
     )
     _write_resource(record)
     return record
@@ -179,3 +194,41 @@ def _collection_id_for_resource(resource: PublishedResource) -> str:
     if resource.resource_class == PublishedResourceClass.SOURCE and resource.dataset_id is not None:
         return resource.dataset_id
     return resource.resource_id
+
+
+def _analytics_metadata_for_published_asset(path_value: str | None) -> dict[str, bool | int]:
+    if path_value is None:
+        return {"eligible": False, "period_count": 0, "has_period_field": False}
+
+    path = Path(path_value)
+    if path.suffix.lower() != ".geojson" or not path.exists():
+        return {"eligible": False, "period_count": 0, "has_period_field": False}
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"eligible": False, "period_count": 0, "has_period_field": False}
+
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return {"eligible": False, "period_count": 0, "has_period_field": False}
+
+    periods: set[str] = set()
+    has_period_field = False
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties", {})
+        if not isinstance(properties, dict):
+            continue
+        if "period" in properties:
+            has_period_field = True
+            value = properties.get("period")
+            if value is not None:
+                periods.add(str(value))
+
+    return {
+        "eligible": has_period_field and len(periods) > 1,
+        "period_count": len(periods),
+        "has_period_field": has_period_field,
+    }

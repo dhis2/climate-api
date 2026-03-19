@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from ...components import services as component_services
 from ...data_registry.services.datasets import get_dataset
 from ...publications.services import register_workflow_output_publication
+from ...shared.api_errors import api_error
 from ..schemas import WorkflowExecuteRequest, WorkflowExecuteResponse, WorkflowJobStatus
 from .definitions import WorkflowDefinition, WorkflowPublicationPolicy, load_workflow_definition
 from .job_store import initialize_job, mark_job_failed, mark_job_running, mark_job_success
@@ -96,7 +97,15 @@ def execute_workflow(
 
     dataset = get_dataset(request.dataset_id)
     if dataset is None:
-        raise HTTPException(status_code=404, detail=f"Dataset '{request.dataset_id}' not found")
+        raise HTTPException(
+            status_code=404,
+            detail=api_error(
+                error="dataset_not_found",
+                error_code="DATASET_NOT_FOUND",
+                message=f"Dataset '{request.dataset_id}' not found",
+                resource_id=request.dataset_id,
+            ),
+        )
 
     artifacts = WorkflowArtifacts()
 
@@ -107,7 +116,14 @@ def execute_workflow(
             try:
                 workflow = load_workflow_definition(workflow_id)
             except ValueError as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
+                raise HTTPException(
+                    status_code=422,
+                    detail=api_error(
+                        error="workflow_definition_invalid",
+                        error_code="WORKFLOW_DEFINITION_INVALID",
+                        message=str(exc),
+                    ),
+                ) from exc
 
         initialize_job(
             job_id=runtime.run_id,
@@ -198,14 +214,14 @@ def execute_workflow(
         error = "upstream_unreachable" if exc.error_code == "UPSTREAM_UNREACHABLE" else "workflow_execution_failed"
         raise HTTPException(
             status_code=exc.status_code,
-            detail={
-                "error": error,
-                "error_code": exc.error_code,
-                "message": str(exc),
-                "failed_component": exc.component,
-                "failed_component_version": exc.component_version,
-                "run_id": runtime.run_id,
-            },
+            detail=api_error(
+                error=error,
+                error_code=exc.error_code,
+                message=str(exc),
+                run_id=runtime.run_id,
+                failed_component=exc.component,
+                failed_component_version=exc.component_version,
+            ),
         ) from exc
     except HTTPException:
         run_log_file = persist_run_log(
@@ -237,14 +253,14 @@ def execute_workflow(
         last_component = runtime.component_runs[-1].component if runtime.component_runs else "unknown"
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "workflow_execution_failed",
-                "error_code": "EXECUTION_FAILED",
-                "message": str(exc),
-                "failed_component": last_component,
-                "failed_component_version": "unknown",
-                "run_id": runtime.run_id,
-            },
+            detail=api_error(
+                error="workflow_execution_failed",
+                error_code="EXECUTION_FAILED",
+                message=str(exc),
+                run_id=runtime.run_id,
+                failed_component=last_component,
+                failed_component_version="unknown",
+            ),
         ) from exc
 
 

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 
 from ..publications import services as publication_services
 from ..publications.schemas import PublishedResourceKind
+from ..shared.api_errors import api_error
 
 router = APIRouter()
 
@@ -20,11 +21,24 @@ def get_publication_analytics_config(resource_id: str) -> dict[str, Any]:
     """Return viewer configuration for one published resource."""
     resource = publication_services.get_published_resource(resource_id)
     if resource is None:
-        raise HTTPException(status_code=404, detail=f"Unknown resource_id '{resource_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=api_error(
+                error="published_resource_not_found",
+                error_code="PUBLISHED_RESOURCE_NOT_FOUND",
+                message=f"Unknown resource_id '{resource_id}'",
+                resource_id=resource_id,
+            ),
+        )
     if resource.kind != PublishedResourceKind.FEATURE_COLLECTION or resource.path is None:
         raise HTTPException(
             status_code=409,
-            detail=f"Resource '{resource_id}' is not a feature collection viewer target",
+            detail=api_error(
+                error="analytics_target_invalid",
+                error_code="ANALYTICS_TARGET_INVALID",
+                message=f"Resource '{resource_id}' is not a feature collection viewer target",
+                resource_id=resource_id,
+            ),
         )
 
     data_url = _data_url_for_path(resource.path)
@@ -38,6 +52,7 @@ def get_publication_analytics_config(resource_id: str) -> dict[str, Any]:
         "data_url": data_url,
         "ogc_items_url": f"/ogcapi/collections/{resource.resource_id}/items",
         "links": {
+            "ogc_home": "/ogcapi",
             "publication": f"/publications/{resource.resource_id}",
             "collection": f"/ogcapi/collections/{resource.resource_id}",
             "items": f"/ogcapi/collections/{resource.resource_id}/items",
@@ -56,7 +71,14 @@ def _data_url_for_path(path_value: str) -> str:
     path = Path(path_value).resolve()
     downloads_root = publication_services.DOWNLOAD_DIR.resolve()
     if downloads_root not in path.parents:
-        raise HTTPException(status_code=409, detail="Published resource path is outside mounted download storage")
+        raise HTTPException(
+            status_code=409,
+            detail=api_error(
+                error="published_asset_invalid",
+                error_code="PUBLISHED_ASSET_INVALID",
+                message="Published resource path is outside mounted download storage",
+            ),
+        )
     relative_path = path.relative_to(downloads_root).as_posix()
     return f"/data/{relative_path}"
 
@@ -79,6 +101,12 @@ def _render_viewer_html(config: dict[str, Any], *, embed: bool = False) -> str:
         ""
         if embed
         else f"""
+      <nav class="topnav" aria-label="Viewer navigation">
+        <a href="{config["links"]["ogc_home"]}">OGC Home</a>
+        <a href="{config["links"]["collection"]}">Collection</a>
+        <a href="{config["links"]["items"]}">Items</a>
+        <a href="{config["links"]["publication"]}">Publication</a>
+      </nav>
       <div class="eyebrow">Analytics Viewer</div>
       <h1>{config["title"]}</h1>
       <p class="subhead">
@@ -138,6 +166,24 @@ def _render_viewer_html(config: dict[str, Any], *, embed: bool = False) -> str:
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
+      }}
+      .topnav {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }}
+      .topnav a {{
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid var(--line);
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 0.92rem;
+        font-weight: 600;
       }}
       h1 {{
         margin: 14px 0 8px;

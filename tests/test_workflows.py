@@ -77,6 +77,41 @@ def _patch_successful_execution(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _patch_successful_execution_multi_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    ds = xr.Dataset(
+        {"precip": (("time", "lat", "lon"), [[[1.0]], [[2.0]]])},
+        coords={"time": ["2024-01-01", "2024-02-01"], "lat": [0], "lon": [0]},
+    )
+    monkeypatch.setattr(
+        engine,
+        "get_dataset",
+        lambda dataset_id: {"id": dataset_id, "variable": "precip"},
+    )
+    monkeypatch.setattr(
+        engine.component_services,
+        "feature_source_component",
+        lambda config: (
+            {"type": "FeatureCollection", "features": [{"id": "OU_1", "properties": {"id": "OU_1"}}]},
+            [0.0, 0.0, 1.0, 1.0],
+        ),
+    )
+    monkeypatch.setattr(engine.component_services, "download_dataset_component", lambda **kwargs: None)
+    monkeypatch.setattr(engine.component_services, "temporal_aggregation_component", lambda **kwargs: ds)
+    monkeypatch.setattr(
+        engine.component_services,
+        "spatial_aggregation_component",
+        lambda **kwargs: [
+            {"org_unit": "OU_1", "time": "2024-01-01", "value": 10.0},
+            {"org_unit": "OU_1", "time": "2024-02-01", "value": 12.0},
+        ],
+    )
+    monkeypatch.setattr(
+        engine.component_services,
+        "build_datavalueset_component",
+        lambda **kwargs: ({"dataValues": [{"value": "10.0"}, {"value": "12.0"}]}, "/tmp/data/out.json"),
+    )
+
+
 def test_workflow_endpoint_exists_once() -> None:
     workflow_routes = {
         route.path
@@ -95,9 +130,7 @@ def test_ogc_process_routes_exist() -> None:
     ogc_routes = {
         route.path for route in app.routes if isinstance(route, APIRoute) and route.path.startswith("/ogcapi")
     }
-    assert "/ogcapi/collections" in ogc_routes
-    assert "/ogcapi/collections/{collection_id}" in ogc_routes
-    assert "/ogcapi/collections/{collection_id}/items" in ogc_routes
+    assert "/ogcapi" in ogc_routes
     assert "/ogcapi/processes" in ogc_routes
     assert "/ogcapi/processes/{process_id}" in ogc_routes
     assert "/ogcapi/processes/{process_id}/execution" in ogc_routes
@@ -141,6 +174,50 @@ def test_pygeoapi_mount_serves_landing_page(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["title"] == "DHIS2 EO API"
+    rels = {link["rel"] for link in body["links"]}
+    assert {"self", "alternate", "data", "processes", "jobs"} <= rels
+
+
+def test_publication_endpoint_missing_uses_typed_error_envelope(client: TestClient) -> None:
+    response = client.get("/publications/does-not-exist")
+    assert response.status_code == 404
+    body = response.json()["detail"]
+    assert body["error"] == "published_resource_not_found"
+    assert body["error_code"] == "PUBLISHED_RESOURCE_NOT_FOUND"
+    assert body["resource_id"] == "does-not-exist"
+
+
+def test_analytics_endpoint_missing_uses_typed_error_envelope(client: TestClient) -> None:
+    response = client.get("/analytics/publications/does-not-exist")
+    assert response.status_code == 404
+    body = response.json()["detail"]
+    assert body["error"] == "published_resource_not_found"
+    assert body["error_code"] == "PUBLISHED_RESOURCE_NOT_FOUND"
+    assert body["resource_id"] == "does-not-exist"
+
+
+def test_mapper_validation_uses_typed_error_envelope() -> None:
+    payload = WorkflowRequest.model_construct(  # type: ignore[call-arg]
+        workflow_id="dhis2_datavalue_set_v1",
+        dataset_id="chirps3_precipitation_daily",
+        org_unit_level=3,
+        data_element="DE_UID",
+        temporal_resolution=PeriodType.MONTHLY,
+        temporal_reducer=AggregationMethod.SUM,
+        spatial_reducer=AggregationMethod.MEAN,
+        overwrite=False,
+        dry_run=True,
+        feature_id_property="id",
+        include_component_run_details=False,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        normalize_simple_request(payload)
+
+    assert exc_info.value.status_code == 422
+    detail = cast(dict[str, Any], exc_info.value.detail)
+    assert detail["error"] == "workflow_request_invalid"
+    assert detail["error_code"] == "REQUEST_VALIDATION_FAILED"
 
 
 def test_workflow_catalog_endpoint_returns_allowlisted_workflow(client: TestClient) -> None:
@@ -282,13 +359,9 @@ def test_workflow_job_result_missing_uses_typed_error_envelope(client: TestClien
     assert body["job_id"] == "does-not-exist"
 
 
-def test_ogc_collection_missing_uses_typed_error_envelope(client: TestClient) -> None:
+def test_pygeoapi_collection_missing_returns_not_found(client: TestClient) -> None:
     response = client.get("/ogcapi/collections/does-not-exist", params={"f": "json"})
     assert response.status_code == 404
-    body = response.json()["detail"]
-    assert body["error"] == "collection_not_found"
-    assert body["error_code"] == "COLLECTION_NOT_FOUND"
-    assert body["resource_id"] == "does-not-exist"
 
 
 def test_ogc_job_results_unavailable_uses_typed_error_envelope(
@@ -563,7 +636,7 @@ def test_workflow_job_endpoints_return_persisted_result(
     assert links["result"].endswith(f"/workflows/jobs/{run_id}/result")
     assert links["trace"].endswith(f"/workflows/jobs/{run_id}/trace")
     assert links["collection"].endswith(f"/ogcapi/collections/workflow-output-{run_id}")
-    assert links["analytics"].endswith(f"/analytics/publications/workflow-output-{run_id}/viewer")
+    assert "analytics" not in links
     assert "result" not in job_body
 
     results_response = client.get(f"/workflows/jobs/{run_id}/result")
@@ -624,7 +697,7 @@ def test_delete_workflow_job_cascades_derived_artifacts(
     assert delete_body["job_id"] == run_id
     assert delete_body["deleted"] is True
     assert delete_body["deleted_publication"] == f"workflow-output-{run_id}"
-    assert delete_body["pygeoapi_runtime_reload_required"] is True
+    assert delete_body["pygeoapi_runtime_reload_required"] is False
 
     assert not job_file.exists()
     assert not run_log_file.exists()
@@ -795,8 +868,9 @@ def test_workflow_success_registers_derived_publication(
     assert derived["asset_format"] == "geojson"
     assert derived["path"].endswith(".geojson")
     assert derived["metadata"]["native_output_file"].endswith(".json")
-    analytics_link = next(link for link in derived["links"] if link["rel"] == "analytics")
-    assert analytics_link["href"] == f"/analytics/publications/workflow-output-{run_id}/viewer"
+    assert derived["metadata"]["period_count"] == 1
+    assert derived["metadata"]["analytics_eligible"] is False
+    assert not any(link["rel"] == "analytics" for link in derived["links"])
     geojson = Path(derived["path"]).read_text(encoding="utf-8")
     assert '"org_unit_name"' in geojson
     assert '"period": "2024-01"' in geojson
@@ -826,7 +900,7 @@ def test_dynamic_ogc_collection_routes_reflect_new_publication_without_restart(
     detail = detail_response.json()
     detail_links = {link["rel"]: link["href"] for link in detail["links"]}
     assert detail["id"] == collection_id
-    assert detail_links["analytics"].endswith(f"/analytics/publications/{collection_id}/viewer")
+    assert "analytics" not in detail_links
 
     items_response = client.get(f"/ogcapi/collections/{collection_id}/items", params={"f": "json", "limit": 5})
     assert items_response.status_code == 200
@@ -880,6 +954,44 @@ def test_analytics_viewer_config_and_html_for_publication(
     assert viewer_response.status_code == 200
     assert "Time-aware choropleth view" in viewer_response.text
     assert resource_id in viewer_response.text
+
+
+def test_multi_period_publication_adds_analytics_link(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(run_logs, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(job_store, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(publication_services, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(publication_pygeoapi, "DOWNLOAD_DIR", tmp_path)
+    _patch_successful_execution_multi_period(monkeypatch)
+
+    response = client.post("/workflows/dhis2-datavalue-set", json=_valid_public_payload())
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+    resource_id = f"workflow-output-{run_id}"
+
+    publication_response = client.get(f"/publications/{resource_id}")
+    assert publication_response.status_code == 200
+    publication = publication_response.json()
+    assert publication["metadata"]["period_count"] == 2
+    assert publication["metadata"]["analytics_eligible"] is True
+    analytics_link = next(link for link in publication["links"] if link["rel"] == "analytics")
+    assert analytics_link["href"] == f"/analytics/publications/{resource_id}/viewer"
+
+    job_response = client.get(f"/workflows/jobs/{run_id}")
+    assert job_response.status_code == 200
+    job_links = {item["rel"]: item["href"] for item in job_response.json()["links"]}
+    assert job_links["analytics"].endswith(f"/analytics/publications/{resource_id}/viewer")
+
+    config_response = client.get("/publications/pygeoapi/config")
+    assert config_response.status_code == 200
+    derived = config_response.json()["resources"][resource_id]
+    analytics_link = next(link for link in derived["links"] if link["rel"] == "analytics")
+    assert analytics_link["type"] == "text/html"
+    assert analytics_link["title"] == "Analytics Viewer"
+    assert analytics_link["href"].endswith(f"/analytics/publications/{resource_id}/viewer")
 
 
 def test_workflow_with_publication_disabled_does_not_register_derived_publication(
@@ -1084,10 +1196,7 @@ def test_generated_pygeoapi_config_includes_geojson_derived_resource(
     assert derived["providers"][0]["name"] == "GeoJSON"
     assert derived["providers"][0]["type"] == "feature"
     assert derived["providers"][0]["data"].endswith(".geojson")
-    analytics_link = next(link for link in derived["links"] if link["rel"] == "analytics")
-    assert analytics_link["type"] == "text/html"
-    assert analytics_link["title"] == "Analytics Viewer"
-    assert analytics_link["href"].endswith(f"/analytics/publications/workflow-output-{run_id}/viewer")
+    assert not any(link["rel"] == "analytics" for link in derived["links"])
 
 
 def test_materialize_generated_pygeoapi_documents_writes_files(

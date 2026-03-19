@@ -210,18 +210,6 @@ class WorkflowJobCleanupResponse(BaseModel):
     deleted_job_ids: list[str]
 
 
-class ApiErrorResponse(BaseModel):
-    """Stable API error envelope."""
-
-    error: str
-    error_code: str
-    message: str
-    resource_id: str | None = None
-    process_id: str | None = None
-    job_id: str | None = None
-    status: str | None = None
-
-
 class WorkflowCatalogItem(BaseModel):
     """Discoverable workflow definition summary."""
 

@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..publications.schemas import PublishedResourceExposure
 from ..publications.services import collection_id_for_resource, get_published_resource
+from ..shared.api_errors import api_error
 from .schemas import (
-    ApiErrorResponse,
     WorkflowAssemblyExecuteRequest,
     WorkflowCatalogItem,
     WorkflowCatalogResponse,
@@ -29,27 +29,6 @@ from .services.simple_mapper import normalize_simple_request
 router = APIRouter()
 
 
-def _api_error(
-    *,
-    error: str,
-    error_code: str,
-    message: str,
-    resource_id: str | None = None,
-    process_id: str | None = None,
-    job_id: str | None = None,
-    status: str | None = None,
-) -> dict[str, str]:
-    return ApiErrorResponse(
-        error=error,
-        error_code=error_code,
-        message=message,
-        resource_id=resource_id,
-        process_id=process_id,
-        job_id=job_id,
-        status=status,
-    ).model_dump(exclude_none=True)
-
-
 @router.get("", response_model=WorkflowCatalogResponse)
 def list_workflows() -> WorkflowCatalogResponse:
     """List all allowlisted workflow definitions."""
@@ -58,7 +37,7 @@ def list_workflows() -> WorkflowCatalogResponse:
     except ValueError as exc:
         raise HTTPException(
             status_code=500,
-            detail=_api_error(
+            detail=api_error(
                 error="workflow_catalog_unavailable",
                 error_code="CATALOG_UNAVAILABLE",
                 message=str(exc),
@@ -98,7 +77,7 @@ def get_workflow_job(job_id: str, request: Request) -> WorkflowJobRecord:
     if job is None:
         raise HTTPException(
             status_code=404,
-            detail=_api_error(
+            detail=api_error(
                 error="job_not_found",
                 error_code="JOB_NOT_FOUND",
                 message=f"Unknown job_id '{job_id}'",
@@ -119,12 +98,14 @@ def get_workflow_job(job_id: str, request: Request) -> WorkflowJobRecord:
                 "href": f"{str(request.base_url).rstrip('/')}/ogcapi/collections/{collection_id}",
             }
         )
-        links.append(
-            {
-                "rel": "analytics",
-                "href": f"{str(request.base_url).rstrip('/')}/analytics/publications/{publication.resource_id}/viewer",
-            }
-        )
+        analytics_link = next((link for link in publication.links if link.get("rel") == "analytics"), None)
+        if analytics_link is not None:
+            links.append(
+                {
+                    "rel": "analytics",
+                    "href": f"{str(request.base_url).rstrip('/')}{analytics_link['href']}",
+                }
+            )
     return job.model_copy(update={"links": links})
 
 
@@ -135,7 +116,7 @@ def get_workflow_job_result(job_id: str) -> dict[str, Any]:
     if job is None:
         raise HTTPException(
             status_code=404,
-            detail=_api_error(
+            detail=api_error(
                 error="job_not_found",
                 error_code="JOB_NOT_FOUND",
                 message=f"Unknown job_id '{job_id}'",
@@ -146,7 +127,7 @@ def get_workflow_job_result(job_id: str) -> dict[str, Any]:
     if result is None:
         raise HTTPException(
             status_code=409,
-            detail=_api_error(
+            detail=api_error(
                 error="job_result_unavailable",
                 error_code="JOB_RESULT_UNAVAILABLE",
                 message=f"Result is not available for job '{job_id}'",
@@ -164,7 +145,7 @@ def get_workflow_job_trace(job_id: str) -> dict[str, Any]:
     if job is None:
         raise HTTPException(
             status_code=404,
-            detail=_api_error(
+            detail=api_error(
                 error="job_not_found",
                 error_code="JOB_NOT_FOUND",
                 message=f"Unknown job_id '{job_id}'",
@@ -175,7 +156,7 @@ def get_workflow_job_trace(job_id: str) -> dict[str, Any]:
     if trace is None:
         raise HTTPException(
             status_code=409,
-            detail=_api_error(
+            detail=api_error(
                 error="job_trace_unavailable",
                 error_code="JOB_TRACE_UNAVAILABLE",
                 message=f"Trace is not available for job '{job_id}'",
@@ -193,7 +174,7 @@ def delete_workflow_job(job_id: str) -> dict[str, Any]:
     if deleted is None:
         raise HTTPException(
             status_code=404,
-            detail=_api_error(
+            detail=api_error(
                 error="job_not_found",
                 error_code="JOB_NOT_FOUND",
                 message=f"Unknown job_id '{job_id}'",
@@ -219,7 +200,7 @@ def cleanup_workflow_jobs(
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
-            detail=_api_error(
+            detail=api_error(
                 error="cleanup_policy_invalid",
                 error_code="CLEANUP_POLICY_INVALID",
                 message=str(exc),

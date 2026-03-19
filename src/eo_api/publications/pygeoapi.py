@@ -9,10 +9,16 @@ import yaml
 
 from ..data_manager.services.downloader import DOWNLOAD_DIR, get_zarr_path
 from ..data_registry.services.datasets import get_dataset
-from .schemas import PublishedResource, PublishedResourceExposure, PublishedResourceKind
+from .schemas import (
+    PublishedResource,
+    PublishedResourceClass,
+    PublishedResourceExposure,
+    PublishedResourceKind,
+)
 from .services import collection_id_for_resource, ensure_source_dataset_publications, list_published_resources
 
 _DEFAULT_SERVER_URL = "http://127.0.0.1:8000/ogcapi"
+_TEMPLATES_DIR = Path(__file__).resolve().parent / "pygeoapi_templates"
 
 
 def build_pygeoapi_config(*, server_url: str = _DEFAULT_SERVER_URL) -> dict[str, Any]:
@@ -25,6 +31,7 @@ def build_pygeoapi_config(*, server_url: str = _DEFAULT_SERVER_URL) -> dict[str,
             "url": server_url,
             "mimetype": "application/json; charset=UTF-8",
             "encoding": "utf-8",
+            "templates": {"path": str(_TEMPLATES_DIR)},
             "languages": ["en-US"],
             "limits": {"default_items": 20, "max_items": 50},
             "map": {
@@ -110,7 +117,7 @@ def _build_pygeoapi_resource(resource: PublishedResource) -> dict[str, Any]:
     return {
         "type": "collection",
         "title": {"en": resource.title},
-        "description": {"en": resource.description},
+        "description": {"en": _description_for_resource(resource)},
         "keywords": _keywords_for_resource(resource),
         "links": _pygeoapi_links(resource),
         "extents": {
@@ -160,6 +167,47 @@ def _keywords_for_resource(resource: PublishedResource) -> list[str]:
     if resource.workflow_id is not None:
         keywords.append(resource.workflow_id)
     return keywords
+
+
+def _description_for_resource(resource: PublishedResource) -> str:
+    metadata = resource.metadata
+
+    if resource.resource_class == PublishedResourceClass.SOURCE:
+        source = metadata.get("source")
+        variable = metadata.get("variable")
+        period_type = metadata.get("period_type")
+        parts = ["Source dataset"]
+        if source:
+            parts.append(f"from {source}")
+        if variable:
+            parts.append(f"for {variable}")
+        if period_type:
+            parts.append(f"with {period_type} cadence")
+        return " ".join(parts) + "."
+
+    if resource.resource_class == PublishedResourceClass.DERIVED:
+        dataset_id = resource.dataset_id or metadata.get("dataset_id")
+        workflow_id = resource.workflow_id or metadata.get("workflow_id")
+        feature_count = metadata.get("feature_count")
+        value_count = metadata.get("value_count")
+
+        parts = ["Derived workflow output"]
+        if workflow_id:
+            parts.append(f"from {workflow_id}")
+        if dataset_id:
+            parts.append(f"for {dataset_id}")
+
+        details: list[str] = []
+        if feature_count is not None:
+            details.append(f"{feature_count} features")
+        if value_count is not None:
+            details.append(f"{value_count} values")
+        if details:
+            parts.append(f"({', '.join(details)})")
+
+        return " ".join(parts) + "."
+
+    return resource.description
 
 
 def _build_provider(resource: PublishedResource) -> dict[str, Any]:

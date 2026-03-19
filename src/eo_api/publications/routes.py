@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
+from ..shared.api_errors import api_error
 from .schemas import PublishedResource, PublishedResourceClass, PublishedResourceExposure, PublishedResourceListResponse
 from .services import ensure_source_dataset_publications, get_published_resource, list_published_resources
 
@@ -33,5 +34,13 @@ def get_publication(resource_id: str) -> PublishedResource:
     ensure_source_dataset_publications()
     resource = get_published_resource(resource_id)
     if resource is None:
-        raise HTTPException(status_code=404, detail=f"Unknown resource_id '{resource_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=api_error(
+                error="published_resource_not_found",
+                error_code="PUBLISHED_RESOURCE_NOT_FOUND",
+                message=f"Unknown resource_id '{resource_id}'",
+                resource_id=resource_id,
+            ),
+        )
     return resource
