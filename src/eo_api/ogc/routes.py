@@ -329,33 +329,29 @@ def _wants_html(request: Request, f: str | None) -> bool:
 
 
 def _render_ogc_root_html(body: dict[str, Any]) -> str:
+    # Map icon SVGs to navigation items by title
+    icons_map = {
+        "Browse Collections": '<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="12" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>',
+        "List Processes": '<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle><path d="M12 2v20M2 12h20"></path></svg>',
+        "List Jobs": '<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path><path d="M12 12v6M12 12h3M12 12H9"></path></svg>',
+        "Conformance": '<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4"></path><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    }
+    
     nav_cards = "".join(
         (
             '<a class="nav-card" href="{href}">'
-            '<div class="nav-card__kicker">Open</div>'
-            '<strong>{title}</strong>'
-            '<span>{description}</span>'
-            '<div class="nav-card__cta">Go</div>'
+            '<div class="card-icon-wrapper">{icon}</div>'
+            '<strong class="card-title">{title}</strong>'
+            '<span class="card-desc">{description}</span>'
+            '<div class="card-arrow">→</div>'
             "</a>"
         ).format(
             href=escape(item["href"]),
             title=escape(item["title"]),
             description=escape(item["description"]),
+            icon=icons_map.get(item["title"], '<svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>'),
         )
         for item in body.get("navigation", [])
-    )
-    link_items = "".join(
-        (
-            '<a class="link-row" href="{href}">'
-            '<strong>{rel}</strong>'
-            '<span>{type}</span>'
-            "</a>"
-        ).format(
-            href=escape(link["href"]),
-            rel=escape(link["rel"]),
-            type=escape(link["type"]),
-        )
-        for link in body["links"]
     )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -365,148 +361,196 @@ def _render_ogc_root_html(body: dict[str, Any]) -> str:
     <title>{escape(body["title"])}</title>
     <style>
       :root {{
-        --bg: #f6f2e9;
-        --panel: rgba(255, 255, 255, 0.88);
-        --ink: #142033;
-        --muted: #5d6a7a;
-        --accent: #9f4d1d;
-        --line: rgba(20, 32, 51, 0.12);
+        --primary: #1976d2;
+        --primary-light: #42a5f5;
+        --primary-dark: #1565c0;
+        --accent: #f57c00;
+        --success: #388e3c;
+        --bg-light: #fafbfc;
+        --bg: #f1f3f5;
+        --fg: #ffffff;
+        --text: #1a202c;
+        --text-muted: #718096;
+        --border: #e2e8f0;
+        --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.1);
+        --shadow-md: 0 10px 15px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 20px 25px rgba(0, 0, 0, 0.1);
       }}
+      
       * {{ box-sizing: border-box; }}
+      
       body {{
         margin: 0;
-        font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
-        color: var(--ink);
-        background:
-          radial-gradient(circle at top left, rgba(200, 120, 58, 0.18), transparent 28%),
-          linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        color: var(--text);
+        background: linear-gradient(135deg, var(--bg-light) 0%, var(--bg) 100%);
+        min-height: 100vh;
       }}
+      
       main {{
-        max-width: 1040px;
+        max-width: 1200px;
         margin: 0 auto;
-        padding: 36px 22px 56px;
+        padding: 60px 24px;
       }}
+      
       .eyebrow {{
         display: inline-block;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(159, 77, 29, 0.08);
-        color: var(--accent);
-        font-size: 12px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(79, 195, 247, 0.05) 100%);
+        color: var(--primary-dark);
+        font-size: 11px;
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
+        margin-bottom: 16px;
       }}
+      
       h1 {{
-        margin: 16px 0 8px;
-        font-size: clamp(2.2rem, 5vw, 4.4rem);
-        line-height: 0.98;
-        letter-spacing: -0.05em;
+        margin: 0 0 12px;
+        font-size: clamp(2.4rem, 6vw, 3.6rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }}
-      p {{
-        max-width: 760px;
-        color: var(--muted);
-        font-size: 1.05rem;
+      
+      .subtitle {{
+        max-width: 720px;
+        margin: 0 0 48px;
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        line-height: 1.6;
+        font-weight: 400;
       }}
-      .panel {{
-        margin-top: 28px;
-        padding: 22px 24px;
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        background: var(--panel);
-        box-shadow: 0 22px 60px rgba(20, 32, 51, 0.08);
-      }}
+      
+      /* Navigation Grid */
       .nav-grid {{
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
-        margin-top: 28px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+        margin-bottom: 56px;
       }}
+      
       .nav-card {{
-        display: block;
-        min-height: 132px;
-        padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 20px;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(246, 242, 233, 0.9) 100%);
-        box-shadow: 0 16px 34px rgba(20, 32, 51, 0.05);
-        transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
-      }}
-      .nav-card:hover {{
-        transform: translateY(-1px);
-        border-color: rgba(159, 77, 29, 0.28);
-        box-shadow: 0 20px 40px rgba(20, 32, 51, 0.08);
-      }}
-      .nav-card__kicker {{
-        color: var(--accent);
-        font-size: 0.74rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 10px;
-      }}
-      .nav-card strong {{
-        display: block;
-        margin-bottom: 8px;
-        font-size: 1.08rem;
-        line-height: 1.15;
-      }}
-      .nav-card span {{
-        display: block;
-        padding-right: 18px;
-      }}
-      .nav-card__cta {{
-        margin-top: 18px;
-        color: var(--accent);
-        font-weight: 700;
-      }}
-      .section-title {{
-        margin: 0 0 14px;
-        font-size: 0.95rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .link-list {{
-        display: grid;
-        gap: 10px;
-      }}
-      a {{
-        color: var(--ink);
-        font-weight: 700;
-        text-decoration: none;
-      }}
-      span {{
-        color: var(--muted);
-        font-size: 0.95rem;
-      }}
-      .link-row {{
+        position: relative;
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.68);
-        border: 1px solid rgba(20, 32, 51, 0.08);
+        flex-direction: column;
+        padding: 28px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--fg);
+        box-shadow: var(--shadow-sm);
+        transition: all 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        text-decoration: none;
+        color: inherit;
+        overflow: hidden;
       }}
-      .link-row strong {{
-        font-size: 0.98rem;
+      
+      .nav-card::before {{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 280ms ease;
       }}
-      .link-row span {{
-        white-space: nowrap;
-        text-align: right;
+      
+      .nav-card:hover {{
+        border-color: var(--primary);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-6px);
       }}
-      @media (max-width: 720px) {{
-        .link-row {{
-          flex-direction: column;
-          align-items: flex-start;
+      
+      .nav-card:hover::before {{
+        transform: scaleX(1);
+      }}
+      
+      .nav-card:hover .card-icon {{
+        color: var(--primary);
+        transform: scale(1.1) rotate(5deg);
+      }}
+      
+      .nav-card:hover .card-arrow {{
+        transform: translateX(4px);
+      }}
+      
+      .card-icon-wrapper {{
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(79, 195, 247, 0.05) 100%);
+      }}
+      
+      .card-icon {{
+        width: 28px;
+        height: 28px;
+        color: var(--primary);
+        flex-shrink: 0;
+        transition: all 280ms ease;
+      }}
+      
+      .card-title {{
+        margin: 0 0 8px;
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1.3;
+      }}
+      
+      .card-desc {{
+        flex-grow: 1;
+        margin: 0 0 16px;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }}
+      
+      .card-arrow {{
+        color: var(--primary);
+        font-weight: 700;
+        font-size: 1.25rem;
+        transition: transform 280ms ease;
+        margin-top: auto;
+      }}
+      
+      /* Responsive */
+      @media (max-width: 768px) {{
+        main {{
+          padding: 40px 16px;
         }}
-        .link-row span {{
-          white-space: normal;
-          text-align: left;
+        
+        h1 {{
+          font-size: clamp(2rem, 5vw, 2.8rem);
+        }}
+        
+        .nav-grid {{
+          grid-template-columns: 1fr;
+        }}
+      }}
+      
+      /* Print styles */
+      @media print {{
+        body {{
+          background: white;
+        }}
+        
+        .nav-card, .link-row {{
+          box-shadow: none;
         }}
       }}
     </style>
@@ -515,12 +559,15 @@ def _render_ogc_root_html(body: dict[str, Any]) -> str:
     <main>
       <div class="eyebrow">OGC API</div>
       <h1>{escape(body["title"])}</h1>
-      <p>{escape(body["description"])}</p>
-      <section class="nav-grid">{nav_cards}</section>
-      <section class="panel">
-        <h2 class="section-title">API Links</h2>
-        <div class="link-list">{link_items}</div>
+      <p class="subtitle">{escape(body["description"])}</p>
+      
+      <section class="nav-grid">
+        {nav_cards}
       </section>
+      
+      <footer>
+        <p>🌍 DHIS2 Earth Observation API • <a href="https://github.com/dhis2/eo-api">GitHub</a></p>
+      </footer>
     </main>
   </body>
 </html>"""
