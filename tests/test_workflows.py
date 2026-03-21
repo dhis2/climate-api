@@ -162,12 +162,15 @@ def test_ogc_process_routes_exist() -> None:
         route.path for route in app.routes if isinstance(route, APIRoute) and route.path.startswith("/ogcapi")
     }
     assert "/ogcapi" in ogc_routes
+    assert "/ogcapi/conformance" in ogc_routes
+    assert "/ogcapi/openapi" in ogc_routes
     assert "/ogcapi/processes" in ogc_routes
     assert "/ogcapi/processes/{process_id}" in ogc_routes
     assert "/ogcapi/processes/{process_id}/execution" in ogc_routes
     assert "/ogcapi/jobs" in ogc_routes
     assert "/ogcapi/jobs/{job_id}" in ogc_routes
     assert "/ogcapi/jobs/{job_id}/results" in ogc_routes
+    assert "/ogcapi/jobs/{job_id}/download" in ogc_routes
 
 
 def test_publication_generated_pygeoapi_routes_exist() -> None:
@@ -207,6 +210,35 @@ def test_pygeoapi_mount_serves_landing_page(client: TestClient) -> None:
     assert body["title"] == "DHIS2 EO API"
     rels = {link["rel"] for link in body["links"]}
     assert {"self", "alternate", "data", "processes", "jobs"} <= rels
+
+
+def test_native_ogc_conformance_exists(client: TestClient) -> None:
+    response = client.get("/ogcapi/conformance")
+    assert response.status_code == 200
+    body = response.json()
+    conforms_to = set(body["conformsTo"])
+    assert "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/core" in conforms_to
+    assert "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/job-list" in conforms_to
+
+
+def test_native_ogc_openapi_exists(client: TestClient) -> None:
+    response = client.get("/ogcapi/openapi")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["openapi"] == "3.0.2"
+    assert "/jobs/{job_id}/results" in body["paths"]
+    assert "/processes/{process_id}/execution" in body["paths"]
+
+
+def test_native_ogc_process_description_exposes_inputs_and_outputs(client: TestClient) -> None:
+    response = client.get("/ogcapi/processes/generic-dhis2-workflow")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "generic-dhis2-workflow"
+    assert "request" in body["inputs"]
+    assert "schema" in body["inputs"]["request"]
+    assert "outputs" in body["outputs"]
+    assert "schema" in body["outputs"]["outputs"]
 
 
 def test_publication_endpoint_missing_uses_typed_error_envelope(client: TestClient) -> None:
@@ -962,9 +994,17 @@ def test_ogc_async_execution_creates_job_and_results(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr("eo_api.ogc.routes.DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(run_logs, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(job_store, "DOWNLOAD_DIR", tmp_path)
     _patch_successful_execution(monkeypatch)
+    artifact_path = tmp_path / "out.json"
+    artifact_path.write_text('{"dataValues":[{"value":"10.0"}]}', encoding="utf-8")
+    monkeypatch.setattr(
+        engine.component_services,
+        "build_datavalueset_component",
+        lambda **kwargs: ({"dataValues": [{"value": "10.0"}]}, str(artifact_path)),
+    )
 
     response = client.post(
         "/ogcapi/processes/generic-dhis2-workflow/execution",
@@ -982,7 +1022,73 @@ def test_ogc_async_execution_creates_job_and_results(
 
     results_response = client.get(f"/ogcapi/jobs/{job_id}/results")
     assert results_response.status_code == 200
-    assert results_response.json()["run_id"] == job_id
+    body = results_response.json()
+    assert "outputs" in body
+    assert isinstance(body["outputs"], list)
+    output_ids = {item["id"] for item in body["outputs"]}
+    assert "data_value_set" in output_ids
+    assert "output_file" in output_ids
+
+
+def test_ogc_job_results_extended_exposes_native_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("eo_api.ogc.routes.DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(run_logs, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(job_store, "DOWNLOAD_DIR", tmp_path)
+    _patch_successful_execution(monkeypatch)
+    artifact_path = tmp_path / "out.json"
+    artifact_path.write_text('{"dataValues":[{"value":"10.0"}]}', encoding="utf-8")
+    monkeypatch.setattr(
+        engine.component_services,
+        "build_datavalueset_component",
+        lambda **kwargs: ({"dataValues": [{"value": "10.0"}]}, str(artifact_path)),
+    )
+
+    response = client.post(
+        "/ogcapi/processes/generic-dhis2-workflow/execution",
+        headers={"Prefer": "respond-async"},
+        json=_valid_public_payload(),
+    )
+    assert response.status_code == 202
+    job_id = response.json()["jobID"]
+
+    results_response = client.get(f"/ogcapi/jobs/{job_id}/results", params={"extended": "true"})
+    assert results_response.status_code == 200
+    body = results_response.json()
+    assert body["metadata"]["job_id"] == job_id
+    assert body["metadata"]["workflow_id"] == "dhis2_datavalue_set_v1"
+
+
+def test_ogc_job_download_serves_native_output(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("eo_api.ogc.routes.DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(run_logs, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(job_store, "DOWNLOAD_DIR", tmp_path)
+    _patch_successful_execution(monkeypatch)
+    artifact_path = tmp_path / "out.json"
+    artifact_path.write_text('{"dataValues":[{"value":"10.0"}]}', encoding="utf-8")
+    monkeypatch.setattr(
+        engine.component_services,
+        "build_datavalueset_component",
+        lambda **kwargs: ({"dataValues": [{"value": "10.0"}]}, str(artifact_path)),
+    )
+
+    response = client.post(
+        "/ogcapi/processes/generic-dhis2-workflow/execution",
+        headers={"Prefer": "respond-async"},
+        json=_valid_public_payload(),
+    )
+    assert response.status_code == 202
+    job_id = response.json()["jobID"]
+
+    download_response = client.get(f"/ogcapi/jobs/{job_id}/download")
+    assert download_response.status_code == 200
 
 
 def test_publications_endpoint_seeds_source_datasets(
