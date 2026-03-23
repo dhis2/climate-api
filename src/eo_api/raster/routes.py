@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import attr
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from rio_tiler.colormap import cmap
 from rio_tiler.io.xarray import XarrayReader
 from titiler.core.dependencies import ImageRenderingParams
@@ -160,7 +160,7 @@ class RasterReaderParams(XarrayParams):
 class RasterImageRenderingParams(ImageRenderingParams):
     """Image rendering params with dataset-aware default rescaling."""
 
-    resource_id: str = Query()
+    resource_id: str = Path()
     aggregation: str | None = Query(default=None)
 
     def __post_init__(self) -> None:
