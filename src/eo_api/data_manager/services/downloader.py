@@ -3,7 +3,9 @@
 import datetime
 import importlib
 import inspect
+import json
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -11,13 +13,14 @@ from typing import Any
 import xarray as xr
 from fastapi import BackgroundTasks
 
-from .constants import BBOX, CACHE_OVERRIDE, COUNTRY_CODE
+from ...shared.dhis2_adapter import create_client, get_org_units_geojson
 from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-_download_dir = SCRIPT_DIR.parent.parent.parent.parent / 'data' / 'downloads'
+_download_dir = SCRIPT_DIR.parent.parent.parent.parent / "data" / "downloads"
+CACHE_OVERRIDE = os.getenv("CACHE_OVERRIDE")
 if CACHE_OVERRIDE:
     _download_dir = Path(CACHE_OVERRIDE)
 DOWNLOAD_DIR = _download_dir
@@ -27,6 +30,8 @@ def download_dataset(
     dataset: dict[str, Any],
     start: str,
     end: str | None,
+    bbox: list[float] | None,
+    country_code: str | None,
     overwrite: bool,
     background_tasks: BackgroundTasks | None,
 ) -> None:
@@ -48,15 +53,19 @@ def download_dataset(
 
     sig = inspect.signature(eo_download_func)
     if "bbox" in sig.parameters:
-        params["bbox"] = BBOX
-    elif "country_code" in sig.parameters:
-        if COUNTRY_CODE:
-            params["country_code"] = COUNTRY_CODE
+        params["bbox"] = _resolve_bbox(bbox=bbox)
+    if "country_code" in sig.parameters:
+        resolved_country_code = country_code or os.getenv("COUNTRY_CODE")
+        if resolved_country_code:
+            params["country_code"] = resolved_country_code
         else:
-            raise Exception('Downloading WorldPop data requires COUNTRY_CODE environment variable')
+            raise Exception("Downloading WorldPop data requires COUNTRY_CODE environment variable")
 
     if background_tasks is not None:
         background_tasks.add_task(eo_download_func, **params)
+        return
+
+    eo_download_func(**params)
 
 
 def build_dataset_zarr(dataset: dict[str, Any]) -> None:
@@ -146,3 +155,41 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     function_name = parts[-1]
     module = importlib.import_module(module_path)
     return getattr(module, function_name)  # type: ignore[no-any-return]
+
+
+def _get_default_bbox() -> list[float]:
+    """Compute the default download bbox from DHIS2 org units when needed."""
+    import geopandas as gpd
+
+    client = create_client()
+    org_units_geojson = get_org_units_geojson(client, level=2)
+    return list(map(float, gpd.read_file(json.dumps(org_units_geojson)).total_bounds))
+
+
+def _resolve_bbox(*, bbox: list[float] | None) -> list[float]:
+    """Resolve bbox from request, env, or DHIS2-derived defaults."""
+    if bbox is not None:
+        return bbox
+
+    env_bbox = _bbox_from_env()
+    if env_bbox is not None:
+        return env_bbox
+
+    try:
+        return _get_default_bbox()
+    except Exception as exc:
+        raise ValueError(
+            "A bbox is required for this dataset. Provide it in the request or set DOWNLOAD_BBOX in the environment."
+        ) from exc
+
+
+def _bbox_from_env() -> list[float] | None:
+    """Parse a default bbox from environment if configured."""
+    raw_bbox = os.getenv("DOWNLOAD_BBOX") or os.getenv("DEFAULT_DOWNLOAD_BBOX")
+    if not raw_bbox:
+        return None
+
+    parts = [part.strip() for part in raw_bbox.split(",")]
+    if len(parts) != 4:
+        raise ValueError("DOWNLOAD_BBOX must contain four comma-separated numbers: xmin,ymin,xmax,ymax")
+    return [float(part) for part in parts]
