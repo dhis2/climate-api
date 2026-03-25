@@ -40,6 +40,7 @@ def _valid_public_payload() -> dict[str, Any]:
             "temporal_resolution": "monthly",
             "temporal_reducer": "sum",
             "spatial_reducer": "mean",
+            "publish": True,
             "dry_run": True,
             "include_component_run_details": False,
         }
@@ -1544,6 +1545,33 @@ def test_generated_pygeoapi_config_reflects_publication_registry(
     assert chirps["type"] == "collection"
     assert chirps["providers"][0]["type"] == "coverage"
     assert chirps["metadata"]["dataset_id"] == "chirps3_precipitation_daily"
+
+
+def test_publishable_workflow_requires_request_publish_flag(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(run_logs, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(job_store, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(publication_services, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(publication_pygeoapi, "DOWNLOAD_DIR", tmp_path)
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+    zarr_path.mkdir(parents=True)
+    monkeypatch.setattr(publication_pygeoapi, "get_zarr_path", lambda dataset: zarr_path)
+    _patch_successful_execution(monkeypatch)
+
+    payload = _valid_public_payload()
+    payload["request"]["publish"] = False
+
+    workflow_response = client.post("/workflows/dhis2-datavalue-set", json=payload)
+    assert workflow_response.status_code == 200
+    run_id = workflow_response.json()["run_id"]
+
+    publications_response = client.get("/publications", params={"workflow_id": "dhis2_datavalue_set_v1"})
+    assert publications_response.status_code == 200
+    resources = publications_response.json()["resources"]
+    assert all(item["resource_id"] != f"workflow-output-{run_id}" for item in resources)
 
 
 def test_generated_pygeoapi_openapi_includes_derived_collection(

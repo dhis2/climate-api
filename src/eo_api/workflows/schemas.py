@@ -86,6 +86,7 @@ class WorkflowExecuteRequest(BaseModel):
     dataset_id: str
     start: str
     end: str
+    publish: bool = False
     overwrite: bool = False
     country_code: str | None = None
     feature_source: FeatureSourceConfig
@@ -257,6 +258,7 @@ class WorkflowRequest(BaseModel):
     temporal_resolution: PeriodType = PeriodType.MONTHLY
     temporal_reducer: AggregationMethod = AggregationMethod.SUM
     spatial_reducer: AggregationMethod = AggregationMethod.MEAN
+    publish: bool = False
     overwrite: bool = False
     dry_run: bool = True
     feature_id_property: str = "id"

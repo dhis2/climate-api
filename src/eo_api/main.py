@@ -49,7 +49,7 @@ app.include_router(workflows.routes.router, prefix="/workflows", tags=["Workflow
 app.include_router(publication_routes.router, prefix="/publications", tags=["Publications"])
 app.include_router(publication_generated_routes.router, prefix="/publications", tags=["Publications"])
 app.include_router(analytics_viewer.routes.router, prefix="/analytics", tags=["Analytics"])
-app.include_router(components.routes.router, tags=["Components"])
+app.include_router(components.routes.router, prefix="/components", tags=["Components"])
 app.include_router(ogc_routes.router, prefix="/ogcapi", tags=["OGC API"])
 app.mount("/data", StaticFiles(directory="data/downloads"), name="Data")
 app.mount("/pygeoapi", ogc_api_app)

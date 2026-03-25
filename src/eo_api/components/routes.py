@@ -40,13 +40,13 @@ def _json_safe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{key: _to_jsonable_scalar(value) for key, value in record.items()} for record in records]
 
 
-@router.get("/components", response_model=ComponentCatalogResponse, response_model_exclude_none=True)
+@router.get("", response_model=ComponentCatalogResponse, response_model_exclude_none=True)
 def list_components(include_internal: bool = Query(default=False)) -> ComponentCatalogResponse:
     """List all discoverable reusable components."""
     return ComponentCatalogResponse(components=services.component_catalog(include_internal=include_internal))
 
 
-@router.post("/components/feature-source", response_model=FeatureSourceRunResponse)
+@router.post("/feature-source", response_model=FeatureSourceRunResponse)
 def run_feature_source(payload: FeatureSourceRunRequest) -> FeatureSourceRunResponse:
     """Resolve feature source to features and bbox."""
     features, bbox = services.feature_source_component(payload.feature_source)
@@ -57,7 +57,7 @@ def run_feature_source(payload: FeatureSourceRunRequest) -> FeatureSourceRunResp
     )
 
 
-@router.post("/components/download-dataset", response_model=DownloadDatasetRunResponse)
+@router.post("/download-dataset", response_model=DownloadDatasetRunResponse)
 def run_download_dataset(payload: DownloadDatasetRunRequest) -> DownloadDatasetRunResponse:
     """Download dataset files for the selected period/scope."""
     dataset = services.require_dataset(payload.dataset_id)
@@ -78,7 +78,7 @@ def run_download_dataset(payload: DownloadDatasetRunRequest) -> DownloadDatasetR
     )
 
 
-@router.post("/components/temporal-aggregation", response_model=TemporalAggregationRunResponse)
+@router.post("/temporal-aggregation", response_model=TemporalAggregationRunResponse)
 def run_temporal_aggregation(payload: TemporalAggregationRunRequest) -> TemporalAggregationRunResponse:
     """Aggregate a dataset temporally."""
     dataset = services.require_dataset(payload.dataset_id)
@@ -97,7 +97,7 @@ def run_temporal_aggregation(payload: TemporalAggregationRunRequest) -> Temporal
     )
 
 
-@router.post("/components/spatial-aggregation", response_model=SpatialAggregationRunResponse)
+@router.post("/spatial-aggregation", response_model=SpatialAggregationRunResponse)
 def run_spatial_aggregation(payload: SpatialAggregationRunRequest) -> SpatialAggregationRunResponse:
     """Aggregate a dataset spatially to features."""
     dataset = services.require_dataset(payload.dataset_id)
@@ -120,7 +120,7 @@ def run_spatial_aggregation(payload: SpatialAggregationRunRequest) -> SpatialAgg
     )
 
 
-@router.post("/components/build-datavalue-set", response_model=BuildDataValueSetRunResponse)
+@router.post("/build-datavalue-set", response_model=BuildDataValueSetRunResponse)
 def run_build_datavalueset(payload: BuildDataValueSetRunRequest) -> BuildDataValueSetRunResponse:
     """Build and serialize a DHIS2 DataValueSet from records."""
     data_value_set, output_file = services.build_datavalueset_component(

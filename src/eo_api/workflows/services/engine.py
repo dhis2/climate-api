@@ -168,6 +168,7 @@ def execute_workflow(
         )
         mark_job_success(job_id=runtime.run_id, response=response)
         if _should_publish_workflow_output(
+            request=request,
             response=response,
             publication=workflow.publication,
             workflow_definition_source=workflow_definition_source,
@@ -262,11 +263,14 @@ def execute_workflow(
 
 def _should_publish_workflow_output(
     *,
+    request: WorkflowExecuteRequest,
     response: WorkflowExecuteResponse,
     publication: WorkflowPublicationPolicy,
     workflow_definition_source: Literal["catalog", "inline"],
 ) -> bool:
     """Apply workflow-level publication policy to a concrete workflow output."""
+    if not request.publish:
+        return False
     if not publication.publishable:
         return False
     if publication.strategy != "on_success":

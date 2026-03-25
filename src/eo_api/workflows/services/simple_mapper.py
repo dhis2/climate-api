@@ -78,6 +78,7 @@ def normalize_simple_request(payload: WorkflowRequest) -> tuple[WorkflowExecuteR
         dataset_id=dataset_id,
         start=start,
         end=end,
+        publish=inputs.publish,
         overwrite=inputs.overwrite,
         country_code=inputs.country_code,
         feature_source=feature_source,
