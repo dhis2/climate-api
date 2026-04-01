@@ -1,19 +1,80 @@
-## Ingestion Artifact API Guide
+# EO API Ingestion and Dataset Guide
 
-This guide covers the native FastAPI surface for `ingestions`, `artifacts`, and `collections`, and shows how that native API connects to the standards-facing `/ogcapi` publication layer. It is intended as a practical walkthrough of the current branch behavior: 
+This guide describes the current native FastAPI surface for EO API and how it relates to the standards-facing `pygeoapi` publication layer.
 
-- ingest data from upstream sources, 
-- persist managed artifacts locally as Zarr when possible, with NetCDF fallback, 
-- expose native artifact and collection state, 
-- and browse published gridded data through OGC API Coverages.
+The current public story is:
 
-## Sample Requests And Expected Formats
+- ingest a managed dataset with `POST /ingestions`
+- discover configured extents with `/extents`
+- discover managed datasets with `/datasets`
+- access raw Zarr data with `/zarr/{dataset_id}`
+- access standards-facing publication with `/ogcapi/...`
 
-This section gives concrete example payloads and quick checks that can be run manually.
+Internal artifacts still exist as a storage and provenance model, but they are not part of the public API contract.
 
-### 1. Ingest CHIRPS3 by bbox
+## Main Public Endpoints
 
-Request:
+- `POST /ingestions`
+- `GET /ingestions/{ingestion_id}`
+- `GET /extents`
+- `GET /extents/{extent_id}`
+- `GET /datasets`
+- `GET /datasets/{dataset_id}`
+- `GET /datasets/{dataset_id}/download`
+- `GET /zarr/{dataset_id}`
+- `GET /zarr/{dataset_id}/{relative_path}`
+- `POST /sync/{dataset_id}`
+- `GET /ogcapi/collections`
+- `GET /ogcapi/collections/{dataset_id}`
+- `GET /ogcapi/collections/{dataset_id}/coverage`
+
+## 1. Discover configured extents
+
+Configured extents are setup-time EO API configuration. They are read-only at runtime and are identified by `extent_id`.
+
+Example:
+
+```bash
+curl -s http://127.0.0.1:8000/extents | jq
+```
+
+Example response:
+
+```json
+{
+  "kind": "ExtentList",
+  "items": [
+    {
+      "extent_id": "sle",
+      "name": "Sierra Leone",
+      "description": "National extent for Sierra Leone.",
+      "bbox": [-13.5, 6.9, -10.1, 10.0]
+    }
+  ]
+}
+```
+
+What this means:
+
+- `extent_id` is the public EO API handle for a configured spatial extent
+- `bbox` is the resolved spatial extent exposed publicly
+- provider-specific hints may exist internally in extent config, but they are not part of the public extent response
+
+## 2. Ingest a dataset
+
+The public ingestion contract now takes:
+
+- `dataset_id`
+- `start`
+- optional `end`
+- optional `extent_id`
+- `overwrite`
+- `prefer_zarr`
+- `publish`
+
+Raw `bbox` and `country_code` are no longer part of the public ingestion payload.
+
+### Example: CHIRPS3
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/ingestions \
@@ -22,60 +83,14 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "chirps3_precipitation_daily",
     "start": "2024-01-01",
     "end": "2024-01-31",
-    "bbox": [-13.5, 6.9, -10.1, 10.0],
+    "extent_id": "sle",
+    "overwrite": false,
     "prefer_zarr": true,
     "publish": true
   }' | jq
 ```
 
-Expected request format:
-
-- HTTP method: `POST`
-- content type: `application/json`
-- body: JSON object
-
-Expected response format:
-
-- content type: JSON
-- shape:
-
-```json
-{
-  "ingestion_id": "uuid",
-  "status": "completed",
-  "artifact": {
-    "artifact_id": "uuid",
-    "dataset_id": "chirps3_precipitation_daily",
-    "format": "zarr",
-    "request_scope": {
-      "start": "2024-01-01",
-      "end": "2024-01-31",
-      "bbox": [-13.5, 6.9, -10.1, 10.0],
-      "country_code": null
-    },
-    "publication": {
-      "status": "published",
-      "collection_id": "chirps3_precipitation_daily-bbox-9aa80782",
-      "pygeoapi_path": "/ogcapi/collections/chirps3_precipitation_daily-bbox-9aa80782"
-    }
-  }
-}
-```
-
-What this means:
-
-- `ingestion_id` currently matches the created artifact identity and is the handle a client can use to look the result up again later.
-- `status = "completed"` means this branch is treating the request as a synchronous create call, not as a queued long-running job.
-- `artifact.format = "zarr"` tells the client that the canonical stored result is a Zarr store rather than a single NetCDF file.
-- `request_scope` is the logical definition of what was requested. It is more important than the artifact path because it explains why this artifact exists.
-- `request_scope.bbox` tells us this artifact represents a geographic subset, not a whole-dataset global publication.
-- `publication.status = "published"` means the artifact is already exposed through the standards-facing `/ogcapi` layer.
-- `publication.collection_id` is the stable public identity for the published dataset slice. It is the name downstream OGC clients should care about.
-- `publication.pygeoapi_path` is the standards-facing route, which matters more for interoperable client access than the native FastAPI bookkeeping routes.
-
-### 2. Ingest WorldPop by country
-
-Request:
+### Example: WorldPop
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/ingestions \
@@ -84,71 +99,159 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "worldpop_population_yearly",
     "start": "2020",
     "end": "2020",
-    "country_code": "SLE",
+    "extent_id": "sle",
+    "overwrite": false,
     "prefer_zarr": true,
     "publish": true
   }' | jq
 ```
 
-Expected request format:
-
-- HTTP method: `POST`
-- content type: `application/json`
-- body: JSON object
-
-Expected response format:
-
-- content type: JSON
-- shape similar to CHIRPS3, but with:
-  - `dataset_id = "worldpop_population_yearly"`
-  - `request_scope.country_code = "SLE"`
-  - stable collection id like `worldpop_population_yearly-country-sle`
-
-What this means:
-
-- `country_code = "SLE"` expresses a semantic scope, not just a geometry clip. It says this artifact is the Sierra Leone slice by country identity.
-- a country-based scope is useful because it is easier to reproduce and reason about than an arbitrary bbox supplied by a client.
-- the stable collection id derived from the country code is important because it creates a durable publication identity that can be reused across repeated refreshes.
-- for products like population, this kind of scope is likely closer to how downstream DHIS2 users think about the data than a raw bounding box.
-
-### 3. List artifacts
-
-Request:
-
-```bash
-curl -s http://127.0.0.1:8000/artifacts | jq
-```
-
-Expected response format:
-
-- content type: JSON
-- shape:
+Example response:
 
 ```json
 {
+  "ingestion_id": "a7e06c93-ba78-4c74-b772-160927fdb463",
+  "status": "completed",
+  "dataset": {
+    "dataset_id": "chirps3_precipitation_daily-extent-sle",
+    "source_dataset_id": "chirps3_precipitation_daily",
+    "dataset_name": "Total precipitation (CHIRPS3)",
+    "short_name": "Total precipitation",
+    "variable": "precip",
+    "period_type": "daily",
+    "units": "mm",
+    "resolution": "5 km x 5 km",
+    "source": "CHIRPS v3",
+    "source_url": "https://www.chc.ucsb.edu/data/chirps3",
+    "extent": {
+      "spatial": {
+        "xmin": -13.52499751932919,
+        "ymin": 6.92499920912087,
+        "xmax": -10.124997468665242,
+        "ymax": 10.02499925531447
+      },
+      "temporal": {
+        "start": "2024-01-01",
+        "end": "2024-01-31"
+      }
+    },
+    "last_updated": "2026-04-01T09:03:28.691120Z",
+    "links": [
+      {
+        "href": "/datasets/chirps3_precipitation_daily-extent-sle",
+        "rel": "self",
+        "title": "Dataset detail"
+      },
+      {
+        "href": "/zarr/chirps3_precipitation_daily-extent-sle",
+        "rel": "zarr",
+        "title": "Zarr store"
+      },
+      {
+        "href": "/ogcapi/collections/chirps3_precipitation_daily-extent-sle",
+        "rel": "ogc-collection",
+        "title": "OGC collection"
+      }
+    ],
+    "publication": {
+      "status": "published",
+      "published_at": "2026-04-01T09:03:28.692230Z"
+    }
+  }
+}
+```
+
+What this means:
+
+- `ingestion_id` is the handle for the ingestion event lookup route
+- `status = "completed"` means this branch still treats ingestion synchronously
+- `dataset` is a public managed dataset summary, not an internal artifact record
+- `extent` is realized data coverage, not just the configured bbox
+- `links` point to the native dataset metadata, native Zarr access, and standards-facing OGC collection
+
+## 3. Ingestion failure behavior
+
+Ingestion should fail gracefully with a structured API error, not a raw 500 stack trace.
+
+Current behavior:
+
+- invalid or missing spatial/config inputs return `400`
+- dataset/provider execution failures return `502`
+
+Example cases:
+
+- a provider requires a country code and the resolved extent config does not provide one
+- a dataset requires a bbox and no bbox can be resolved
+- the upstream provider fails at download time
+
+Example error response:
+
+```json
+{
+  "detail": "Upstream dataset download failed: provider timeout"
+}
+```
+
+## 4. Discover managed datasets
+
+`GET /datasets` is the native managed-data catalog.
+
+Example:
+
+```bash
+curl -s http://127.0.0.1:8000/datasets | jq
+```
+
+Example response:
+
+```json
+{
+  "kind": "DatasetList",
   "items": [
     {
-      "artifact_id": "uuid",
-      "dataset_id": "chirps3_precipitation_daily",
-      "format": "zarr",
-      "path": "/abs/path/to/store.zarr",
-      "request_scope": {
-        "start": "2024-01-01",
-        "end": "2024-01-31",
-        "bbox": [-13.5, 6.9, -10.1, 10.0],
-        "country_code": null
-      },
-      "coverage": {
+      "dataset_id": "chirps3_precipitation_daily-extent-sle",
+      "source_dataset_id": "chirps3_precipitation_daily",
+      "dataset_name": "Total precipitation (CHIRPS3)",
+      "short_name": "Total precipitation",
+      "variable": "precip",
+      "period_type": "daily",
+      "units": "mm",
+      "resolution": "5 km x 5 km",
+      "source": "CHIRPS v3",
+      "source_url": "https://www.chc.ucsb.edu/data/chirps3",
+      "extent": {
         "spatial": {
-          "xmin": -13.52,
-          "ymin": 6.92,
-          "xmax": -10.12,
-          "ymax": 10.02
+          "xmin": -13.52499751932919,
+          "ymin": 6.92499920912087,
+          "xmax": -10.124997468665242,
+          "ymax": 10.02499925531447
         },
         "temporal": {
           "start": "2024-01-01",
           "end": "2024-01-31"
         }
+      },
+      "last_updated": "2026-04-01T09:03:28.691120Z",
+      "links": [
+        {
+          "href": "/datasets/chirps3_precipitation_daily-extent-sle",
+          "rel": "self",
+          "title": "Dataset detail"
+        },
+        {
+          "href": "/zarr/chirps3_precipitation_daily-extent-sle",
+          "rel": "zarr",
+          "title": "Zarr store"
+        },
+        {
+          "href": "/ogcapi/collections/chirps3_precipitation_daily-extent-sle",
+          "rel": "ogc-collection",
+          "title": "OGC collection"
+        }
+      ],
+      "publication": {
+        "status": "published",
+        "published_at": "2026-04-01T09:03:28.692230Z"
       }
     }
   ]
@@ -157,307 +260,122 @@ Expected response format:
 
 What this means:
 
-- `/artifacts` is the inventory of managed EO assets owned by this service.
-- `artifact_id` is the internal stable identifier for a stored result, regardless of whether it is published through OGC.
-- `path` points to the canonical on-disk representation. For Zarr, this is a store root, not a downloadable single file.
-- `request_scope` tells us the logical query that produced the artifact; it is the basis for idempotency and future deduplication decisions.
-- `coverage` describes what data actually exists in the artifact after processing, which may matter more than the original request if clipping or source constraints altered the realized extent.
-- `coverage.spatial` is the realized data footprint, useful for publication metadata, previews, and sanity checks.
-- `coverage.temporal` is the realized time span present in the stored artifact, which is especially important for time-series analytics and repeat imports.
+- `/datasets` is the public native catalog of managed datasets
+- `items` is wrapped in a `kind` envelope for consistency and self-description
+- dataset items contain public metadata and access links only
+- internal artifact ids, filesystem paths, and downloader implementation details are intentionally omitted
 
-### 4. List native collections
+## 5. Get dataset detail
 
-Request:
+`GET /datasets/{dataset_id}` returns the full managed dataset detail view.
+
+Example:
 
 ```bash
-curl -s http://127.0.0.1:8000/collections | jq
+curl -s http://127.0.0.1:8000/datasets/chirps3_precipitation_daily-extent-sle | jq
 ```
 
-Expected response format:
+What this adds beyond the list response:
 
-- content type: JSON
-- shape:
+- full dataset metadata
+- publication summary
+- slim `versions` history derived from internal records
 
-```json
-{
-  "items": [
-    {
-      "collection_id": "chirps3_precipitation_daily-bbox-9aa80782",
-      "dataset_id": "chirps3_precipitation_daily",
-      "latest_artifact_id": "uuid",
-      "artifact_count": 1,
-      "pygeoapi_path": "/ogcapi/collections/chirps3_precipitation_daily-bbox-9aa80782"
-    }
-  ]
-}
+The detailed dataset response is where version history belongs. The ingestion response stays as a summary.
+
+## 6. Access raw Zarr data
+
+If the latest managed dataset version is Zarr-backed, the canonical native raw-data route is `/zarr/{dataset_id}`.
+
+Examples:
+
+```bash
+curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily-extent-sle | jq
+curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily-extent-sle/zarr.json | jq
 ```
+
+The listing response exposes:
+
+- `kind`
+- `dataset_id`
+- `format`
+- `path`
+- `entries`
 
 What this means:
 
-- `/collections` is not the raw OGC endpoint; it is the native registry view of what EO API has published.
-- `collection_id` is the public logical dataset identity for a stable published scope.
-- `latest_artifact_id` tells us which artifact currently represents the freshest backing data for that collection.
-- `artifact_count` tells us whether the collection has publication history behind it or is currently backed by a single artifact only.
-- `pygeoapi_path` is the canonical standards-facing entrypoint for interoperable clients.
-- this endpoint is useful for management and debugging because it exposes the relation between internal artifact history and public collection identity.
+- `/zarr/{dataset_id}` is for raw native data access
+- dataset metadata remains under `/datasets`
+- entry links stay inside the canonical `/zarr/{dataset_id}/...` namespace
+- internal artifact ids and local filesystem roots are not exposed
 
-### 5. Get native collection detail
+## 7. Access published OGC collections
 
-Request:
+Published datasets are exposed only through `/ogcapi`.
 
-```bash
-curl -s http://127.0.0.1:8000/collections/chirps3_precipitation_daily-bbox-9aa80782 | jq
-```
-
-Expected response format:
-
-- content type: JSON
-- includes:
-  - collection summary
-  - `artifacts` array
-  - artifact history entries with `artifact_api_path`
-
-Shape:
-
-```json
-{
-  "collection_id": "chirps3_precipitation_daily-bbox-9aa80782",
-  "latest_artifact_id": "uuid",
-  "artifact_count": 1,
-  "artifacts": [
-    {
-      "artifact_id": "uuid",
-      "format": "zarr",
-      "request_scope": {
-        "start": "2024-01-01",
-        "end": "2024-01-31",
-        "bbox": [-13.5, 6.9, -10.1, 10.0],
-        "country_code": null
-      },
-      "artifact_api_path": "/artifacts/uuid"
-    }
-  ]
-}
-```
-
-What this means:
-
-- this endpoint explains the history behind a published collection, not just its current public face.
-- the top-level collection fields summarize the current effective publication.
-- the `artifacts` array shows which concrete stored artifacts have been associated with the same logical collection over time.
-- `artifact_api_path` is the bridge back from the public collection abstraction to the exact managed artifact record.
-- this is important for auditability: a client can tell not only what is published, but what stored artifact version currently stands behind that publication.
-
-### 6. List published OGC collections
-
-Request:
+Examples:
 
 ```bash
 curl -s "http://127.0.0.1:8000/ogcapi/collections?f=json" | jq
-```
-
-Expected response format:
-
-- content type: `application/json`
-- pygeoapi collection list document
-- includes collection `id`, `title`, `links`, and `extent`
-
-What this means:
-
-- this is the standards-facing collection inventory intended for generic OGC clients, not just EO API-specific tooling.
-- `id` is the public interoperable identifier a standards client uses in follow-up requests.
-- `links` tell a client what related resources are available next, such as collection metadata or coverage access.
-- `extent` tells a client the advertised spatial and temporal footprint of the published collection.
-- this endpoint is the one that matters for external interoperability; `/collections` is the native operational mirror.
-
-### 7. Inspect OGC collection metadata
-
-Request:
-
-```bash
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily-bbox-9aa80782?f=json" | jq
-```
-
-Expected response format:
-
-- content type: `application/json`
-- pygeoapi collection document
-- includes:
-  - OGC links
-  - coverage links
-  - extra native links back to:
-    - `/collections/{collection_id}`
-    - `/artifacts/{artifact_id}`
-
-What this means:
-
-- this is the public metadata document for one published collection.
-- OGC links describe the standards-defined navigation options available to clients.
-- coverage links tell us this collection is being served primarily as gridded coverage data rather than as a feature collection.
-- the extra native links are useful because they connect the public OGC view back to EO API's internal artifact and registry model.
-- this document is where a client learns both what the collection is and how to retrieve or inspect it further.
-
-### 8. Read coverage JSON
-
-Request:
-
-```bash
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily-bbox-9aa80782/coverage?f=json" | jq
-```
-
-Expected response format:
-
-- content type: `application/prs.coverage+json` or JSON-compatible response
-- OGC Coverage JSON document
-- for CHIRPS3:
-  - spatial axes `x` and `y`
-  - temporal axis `t`
-  - `ranges.precip`
-
-Representative shape:
-
-```json
-{
-  "type": "Coverage",
-  "domain": {
-    "type": "Domain",
-    "domainType": "Grid",
-    "axes": {
-      "x": {"start": -13.52, "stop": -10.12, "num": 69},
-      "y": {"start": 10.02, "stop": 6.92, "num": 63},
-      "t": {"values": ["2024-01-01T00:00:00.000000000", "..."]}
-    }
-  },
-  "ranges": {
-    "precip": {
-      "type": "NdArray"
-    }
-  }
-}
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily-extent-sle?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily-extent-sle/coverage?f=json" | jq
 ```
 
 What this means:
 
-- this is the actual gridded data view, not just collection metadata.
-- `domain.axes.x`, `domain.axes.y`, and `domain.axes.t` describe the coordinate system of the coverage payload.
-- `num` on spatial axes tells us grid size along each dimension, which gives a fast sense of the resolution and response weight.
-- `ranges.precip` tells us the measured variable being served and where the numeric array payload lives conceptually.
-- this response is the standards-aligned way to access published EO grid content without exposing the raw Zarr structure directly.
-- for downstream consumers, this is the important “data access” contract, while `/collections/{id}` is the “metadata and discovery” contract.
+- `/ogcapi` is the only public collection surface
+- native FastAPI no longer exposes `/collections`
+- dataset responses include links to `/ogcapi/collections/{dataset_id}`, but the collection resource itself lives only under `pygeoapi`
 
-### 9. Browse raw Zarr store
+## 8. `/sync`
 
-Request:
+`POST /sync/{dataset_id}` exists and is part of the intended public product shape, but its behavior is still the main refinement area.
 
-```bash
-curl -s http://127.0.0.1:8000/artifacts/<artifact_id>/zarr | jq
-```
+Current intent:
 
-Expected response format:
+- sync a managed dataset forward from its latest available period
+- preserve stable managed dataset identity
+- return the updated dataset view
 
-- content type: JSON
-- top-level Zarr directory listing
+This route should be treated as present but still under active behavioral design.
 
-Shape:
+## Manual Test Sequence
 
-```json
-{
-  "artifact_id": "uuid",
-  "dataset_id": "chirps3_precipitation_daily",
-  "format": "zarr",
-  "store_root": "/abs/path/to/store.zarr",
-  "entries": [
-    {"name": "precip", "kind": "directory", "href": "/artifacts/uuid/zarr/precip"},
-    {"name": "time", "kind": "directory", "href": "/artifacts/uuid/zarr/time"},
-    {"name": "x", "kind": "directory", "href": "/artifacts/uuid/zarr/x"},
-    {"name": "y", "kind": "directory", "href": "/artifacts/uuid/zarr/y"},
-    {"name": "zarr.json", "kind": "file", "href": "/artifacts/uuid/zarr/zarr.json"}
-  ]
-}
-```
+For a clean manual test, this is the best sequence to run:
 
-What this means:
+1. `GET /extents`
+2. `POST /ingestions` with CHIRPS3
+3. `GET /datasets`
+4. `GET /datasets/{dataset_id}`
+5. `GET /zarr/{dataset_id}`
+6. `GET /ogcapi/collections`
+7. `GET /ogcapi/collections/{dataset_id}`
+8. `GET /ogcapi/collections/{dataset_id}/coverage`
+9. `POST /ingestions` with WorldPop
 
-- this is the raw managed-artifact view of the Zarr store, not the OGC publication view.
-- `store_root` tells us where the canonical Zarr store exists on disk inside EO API-managed storage.
-- each `entries[].href` is part of the same Zarr namespace and can be followed to inspect deeper directories or fetch objects.
-- directory names like `precip`, `time`, `x`, and `y` reflect the Zarr structure of arrays and coordinates, which is useful for Zarr-aware tooling and debugging.
-- this endpoint is primarily about artifact transparency: it shows that the service is preserving Zarr as Zarr instead of hiding it behind a repackaged export.
+Good demo payloads:
 
-### 10. Inspect Zarr metadata conveniently
+- CHIRPS3:
+  - `dataset_id = "chirps3_precipitation_daily"`
+  - `extent_id = "sle"`
+  - `start = "2024-01-01"`
+  - `end = "2024-01-31"`
+- WorldPop:
+  - `dataset_id = "worldpop_population_yearly"`
+  - `extent_id = "sle"`
+  - `start = "2020"`
+  - `end = "2020"`
 
-Request:
+## Summary
 
-```bash
-curl -s http://127.0.0.1:8000/artifacts/<artifact_id>/zarr/precip/zarr.json | jq
-```
+The current branch is no longer an artifact-first API.
 
-Expected response format:
+The public contract is now:
 
-- content type: JSON
-- inline metadata JSON for the Zarr array or store
+- ingest with `/ingestions`
+- discover extents with `/extents`
+- discover managed datasets with `/datasets`
+- access raw native data with `/zarr/{dataset_id}`
+- access standards-facing publication with `/ogcapi`
 
-Use cases:
-
-- inspect store metadata without browser download behavior
-- browse directories such as:
-  - `/artifacts/<artifact_id>/zarr/precip`
-  - `/artifacts/<artifact_id>/zarr/time`
-
-What this means:
-
-- a metadata file like `zarr.json` explains how an array or group is organized internally.
-- these metadata documents tell us things like shape, chunking, codecs, attributes, and hierarchy, depending on what level is being inspected.
-- that information is important for debugging performance, validating publication assumptions, and confirming that the stored artifact matches what downstream Zarr-aware clients expect.
-- this is especially useful when the public OGC layer works, but we need to understand the actual underlying data-cube representation.
-
-### 11. Raw Zarr object access
-
-Request:
-
-```bash
-curl -i http://127.0.0.1:8000/artifacts/<artifact_id>/zarr/precip/zarr.json
-```
-
-Expected response format:
-
-- raw file access under the Zarr store
-- actual content type depends on the stored object and browser/client behavior
-- this route is the raw artifact contract, not the convenience inspection route
-
-What this means:
-
-- this is the lowest-level artifact-serving behavior in the branch.
-- the same namespace can expose both metadata objects and chunk/data objects because that matches how a Zarr store is actually organized.
-- clients that understand Zarr can treat EO API as a real store-backed source rather than as a system that only emits derived APIs.
-- this matters strategically because it keeps the artifact plane honest: the service is not only publishing OGC products, it is also preserving the native stored data form.
-
-## What Is Deferred For Team Discussion
-
-These are the main next-step questions to discuss with the team:
-
-1. For same dataset + same scope + extended time range:
-   - create a bigger replacement artifact?
-   - append to canonical scope store?
-   - keep artifact history as manifests over shared storage?
-
-2. For one collection with multiple artifacts behind it:
-   - always use latest artifact by default?
-   - allow historical selection by request?
-   - eventually resolve from multiple artifacts?
-
-3. When to add feature collections:
-   - after raw coverage path is fully stable
-   - likely as derived outputs, not as another encoding of the raw grid
-
-## Short Summary
-
-This branch now proves a real end-to-end slice:
-
-1. download EO grids
-2. store them locally as managed artifacts
-3. prefer Zarr where possible
-4. auto-publish them through `pygeoapi`
-5. browse them through `/ogcapi`
-6. inspect artifact and collection state through native FastAPI
-7. serve raw Zarr as Zarr
+Artifacts remain internal because EO API still needs storage and provenance records behind ingestion and publication, but those internals are no longer exposed as first-class public resources.

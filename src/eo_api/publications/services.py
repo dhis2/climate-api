@@ -12,8 +12,8 @@ from zlib import adler32
 import xarray as xr
 import yaml
 
-from eo_api.artifacts.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 from eo_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from eo_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config" / "pygeoapi"
@@ -35,9 +35,9 @@ def ensure_pygeoapi_base_config() -> Path:
 
 def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     """Mark an artifact as published and regenerate the pygeoapi config."""
-    from eo_api.artifacts.services import list_artifacts
+    from eo_api.ingestions.services import list_artifacts
 
-    collection_id = record.publication.collection_id or _collection_id_for(record)
+    collection_id = managed_dataset_id_for(record)
     published_record = record.model_copy(
         update={
             "publication": record.publication.model_copy(
@@ -119,14 +119,8 @@ def _build_collection_resource(record: ArtifactRecord) -> dict[str, Any]:
             {
                 "type": "application/json",
                 "rel": "alternate",
-                "title": "Native collection detail",
-                "href": f"http://127.0.0.1:8000/collections/{record.publication.collection_id}",
-            },
-            {
-                "type": "application/json",
-                "rel": "alternate",
-                "title": "Latest artifact metadata",
-                "href": f"http://127.0.0.1:8000/artifacts/{record.artifact_id}",
+                "title": "Native dataset detail",
+                "href": f"http://127.0.0.1:8000/datasets/{managed_dataset_id_for(record)}",
             },
         ],
         "extents": {
@@ -164,8 +158,8 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
 
 def _collection_id_for(record: ArtifactRecord) -> str:
     """Build a stable collection identifier for a logical dataset scope."""
-    if record.request_scope.country_code:
-        scope_key = f"country-{record.request_scope.country_code.lower()}"
+    if record.request_scope.extent_id:
+        scope_key = f"extent-{record.request_scope.extent_id}"
     elif record.request_scope.bbox:
         bbox = ",".join(f"{value:.6f}" for value in record.request_scope.bbox)
         scope_hash = f"{adler32(bbox.encode('utf-8')):08x}"
@@ -173,6 +167,11 @@ def _collection_id_for(record: ArtifactRecord) -> str:
     else:
         scope_key = "global"
     return f"{record.dataset_id}-{scope_key}"
+
+
+def managed_dataset_id_for(record: ArtifactRecord) -> str:
+    """Return the stable managed dataset id for a stored record."""
+    return record.publication.collection_id or _collection_id_for(record)
 
 
 def _load_base_config() -> dict[str, Any]:

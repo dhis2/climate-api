@@ -1,10 +1,10 @@
-"""Services for artifact creation, persistence, and publication metadata."""
+"""Services for ingestion, dataset persistence, and publication metadata."""
 
 from __future__ import annotations
 
 import json
 import mimetypes
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,24 +12,28 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
-from eo_api.artifacts.schemas import (
+from eo_api.data_accessor.services.accessor import get_data_coverage
+from eo_api.data_manager.services import downloader
+from eo_api.data_registry.services import datasets as registry_datasets
+from eo_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
     ArtifactListResponse,
     ArtifactPublication,
     ArtifactRecord,
     ArtifactRequestScope,
-    CollectionArtifactRecord,
-    CollectionDetailRecord,
-    CollectionListResponse,
-    CollectionRecord,
     CoverageSpatial,
     CoverageTemporal,
+    DatasetAccessLink,
+    DatasetDetailRecord,
+    DatasetListResponse,
+    DatasetPublication,
+    DatasetRecord,
+    DatasetVersionRecord,
     PublicationStatus,
+    SyncResponse,
 )
-from eo_api.data_accessor.services.accessor import get_data_coverage
-from eo_api.data_manager.services import downloader
-from eo_api.publications.services import publish_artifact
+from eo_api.publications.services import managed_dataset_id_for, publish_artifact
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
@@ -56,11 +60,53 @@ def get_artifact_or_404(artifact_id: str) -> ArtifactRecord:
     raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found")
 
 
+def get_dataset_for_artifact_or_404(artifact_id: str) -> DatasetDetailRecord:
+    """Return the managed dataset view corresponding to an internal artifact id."""
+    artifact = get_artifact_or_404(artifact_id)
+    return get_dataset_or_404(managed_dataset_id_for(artifact))
+
+
+def get_dataset_summary_for_artifact_or_404(artifact_id: str) -> DatasetRecord:
+    """Return the managed dataset summary corresponding to an internal artifact id."""
+    artifact = get_artifact_or_404(artifact_id)
+    dataset_id = managed_dataset_id_for(artifact)
+    artifacts = _group_datasets().get(dataset_id)
+    if artifacts is None:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
+    return _build_dataset_record(dataset_id, artifacts)
+
+
+def list_datasets() -> DatasetListResponse:
+    """Return managed datasets grouped by stable dataset id."""
+    grouped = _group_datasets()
+    items = [_build_dataset_record(dataset_id, artifacts) for dataset_id, artifacts in sorted(grouped.items())]
+    return DatasetListResponse(items=items)
+
+
+def get_dataset_or_404(dataset_id: str) -> DatasetDetailRecord:
+    """Return one managed dataset or raise 404."""
+    grouped = _group_datasets()
+    artifacts = grouped.get(dataset_id)
+    if artifacts is None:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
+    return _build_dataset_detail_record(dataset_id, artifacts)
+
+
+def get_latest_artifact_for_dataset_or_404(dataset_id: str) -> ArtifactRecord:
+    """Return the latest artifact backing a managed dataset."""
+    grouped = _group_datasets()
+    artifacts = grouped.get(dataset_id)
+    if artifacts is None:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
+    return max(artifacts, key=lambda artifact: artifact.created_at)
+
+
 def create_artifact(
     *,
     dataset: dict[str, object],
     start: str,
     end: str | None,
+    extent_id: str | None,
     bbox: list[float] | None,
     country_code: str | None,
     overwrite: bool,
@@ -71,8 +117,8 @@ def create_artifact(
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
+        extent_id=extent_id,
         bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
-        country_code=country_code,
     )
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
@@ -157,46 +203,72 @@ def publish_artifact_record(artifact_id: str) -> ArtifactRecord:
     raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found")
 
 
-def list_collections() -> CollectionListResponse:
-    """Return published collections as a native FastAPI registry view."""
-    grouped = _group_published_collections()
-    items = [_build_collection_record(collection_id, artifacts) for collection_id, artifacts in sorted(grouped.items())]
-    return CollectionListResponse(items=items)
+def sync_dataset(
+    *,
+    dataset_id: str,
+    end: str | None,
+    prefer_zarr: bool,
+    publish: bool,
+) -> SyncResponse:
+    """Sync a managed dataset by fetching data after its latest covered period."""
+    latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+    source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
+    if source_dataset is None:
+        raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+
+    resolved_end = end or date.today().isoformat()
+    next_start = _next_period_start(
+        latest_artifact.coverage.temporal.end,
+        period_type=str(source_dataset["period_type"]),
+    )
+
+    if next_start > resolved_end:
+        return SyncResponse(sync_id=None, status="up_to_date", dataset=get_dataset_or_404(dataset_id))
+
+    artifact = create_artifact(
+        dataset=source_dataset,
+        start=next_start,
+        end=resolved_end,
+        extent_id=latest_artifact.request_scope.extent_id,
+        bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=prefer_zarr,
+        publish=publish,
+    )
+    return SyncResponse(
+        sync_id=artifact.artifact_id,
+        status="completed",
+        dataset=get_dataset_or_404(managed_dataset_id_for(artifact)),
+    )
 
 
-def get_collection_or_404(collection_id: str) -> CollectionDetailRecord:
-    """Return a single native collection view or raise 404."""
-    grouped = _group_published_collections()
-    artifacts = grouped.get(collection_id)
-    if artifacts is not None:
-        return _build_collection_detail_record(collection_id, artifacts)
-    raise HTTPException(status_code=404, detail=f"Collection '{collection_id}' not found")
-
-
-def get_zarr_store_info_or_404(artifact_id: str) -> dict[str, object]:
-    """Return metadata for a Zarr store artifact."""
-    artifact = get_artifact_or_404(artifact_id)
+def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
+    """Return a public Zarr store listing for a managed dataset."""
+    artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     store_root = _get_zarr_root_or_409(artifact)
 
-    entries = _zarr_entries(artifact_id=artifact_id, store_root=store_root, directory=store_root)
+    entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
     return {
-        "artifact_id": artifact.artifact_id,
-        "dataset_id": artifact.dataset_id,
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
         "format": artifact.format,
-        "store_root": str(store_root),
+        "path": ".",
         "entries": entries,
     }
 
 
-def get_zarr_store_file_or_404(artifact_id: str, relative_path: str) -> FileResponse | Response | dict[str, object]:
-    """Serve a file, metadata document, or directory listing within a Zarr store."""
-    artifact = get_artifact_or_404(artifact_id)
+def get_dataset_zarr_store_file_or_404(
+    dataset_id: str, relative_path: str
+) -> FileResponse | Response | dict[str, object]:
+    """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
+    artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
         raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
     if target.is_dir():
-        return _zarr_directory_listing(artifact_id=artifact_id, store_root=store_root, directory=target)
+        return _zarr_directory_listing(dataset_id=dataset_id, store_root=store_root, directory=target)
     if target.name in {".zarray", ".zattrs", ".zgroup", "zarr.json"}:
         return JSONResponse(content=json.loads(target.read_text(encoding="utf-8")))
 
@@ -239,25 +311,25 @@ def _resolve_zarr_path(store_root: Path, relative_path: str) -> Path:
     return candidate
 
 
-def _zarr_directory_listing(*, artifact_id: str, store_root: Path, directory: Path) -> dict[str, object]:
+def _zarr_directory_listing(*, dataset_id: str, store_root: Path, directory: Path) -> dict[str, object]:
     """Return a browseable directory listing for a Zarr path."""
     relative_directory = "." if directory == store_root else directory.relative_to(store_root).as_posix()
-    entries = _zarr_entries(artifact_id=artifact_id, store_root=store_root, directory=directory)
+    entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=directory)
     return {
-        "artifact_id": artifact_id,
-        "store_root": str(store_root),
-        "directory": relative_directory,
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
+        "path": relative_directory,
         "entries": entries,
     }
 
 
-def _zarr_entries(*, artifact_id: str, store_root: Path, directory: Path) -> list[dict[str, str]]:
+def _zarr_entries(*, dataset_id: str, store_root: Path, directory: Path) -> list[dict[str, str]]:
     """Build directory entries for a Zarr store namespace."""
     return [
         {
             "name": child.name,
             "kind": "directory" if child.is_dir() else "file",
-            "href": f"/artifacts/{artifact_id}/zarr/{child.relative_to(store_root).as_posix()}",
+            "href": f"/zarr/{dataset_id}/{child.relative_to(store_root).as_posix()}",
         }
         for child in sorted(directory.iterdir(), key=lambda child: child.name)
     ]
@@ -281,52 +353,90 @@ def _find_existing_artifact(
     return None
 
 
-def _build_collection_record(collection_id: str, artifacts: list[ArtifactRecord]) -> CollectionRecord:
+def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:
     latest = max(artifacts, key=lambda artifact: artifact.created_at)
-    assert latest.publication.pygeoapi_path is not None
-    return CollectionRecord(
-        collection_id=collection_id,
-        dataset_id=latest.dataset_id,
+    source_dataset = registry_datasets.get_dataset(latest.dataset_id) or {}
+    return DatasetRecord(
+        dataset_id=dataset_id,
+        source_dataset_id=latest.dataset_id,
         dataset_name=latest.dataset_name,
+        short_name=_as_optional_str(source_dataset.get("short_name")),
         variable=latest.variable,
-        latest_artifact_id=latest.artifact_id,
-        artifact_count=len(artifacts),
-        coverage=latest.coverage,
-        latest_created_at=latest.created_at,
-        pygeoapi_path=latest.publication.pygeoapi_path,
+        period_type=_as_optional_str(source_dataset.get("period_type")) or "unknown",
+        units=_as_optional_str(source_dataset.get("units")),
+        resolution=_as_optional_str(source_dataset.get("resolution")),
+        source=_as_optional_str(source_dataset.get("source")),
+        source_url=_as_optional_str(source_dataset.get("source_url")),
+        extent=latest.coverage,
+        last_updated=latest.created_at,
+        links=_dataset_links(dataset_id, latest),
+        publication=DatasetPublication(
+            status=latest.publication.status,
+            published_at=latest.publication.published_at,
+        ),
     )
 
 
-def _build_collection_detail_record(collection_id: str, artifacts: list[ArtifactRecord]) -> CollectionDetailRecord:
-    base = _build_collection_record(collection_id, artifacts)
+def _build_dataset_detail_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetDetailRecord:
+    base = _build_dataset_record(dataset_id, artifacts)
     ordered_artifacts = sorted(artifacts, key=lambda artifact: artifact.created_at, reverse=True)
-    return CollectionDetailRecord(
+    return DatasetDetailRecord(
         **base.model_dump(),
-        artifacts=[
-            CollectionArtifactRecord(
-                artifact_id=artifact.artifact_id,
+        versions=[
+            DatasetVersionRecord(
                 created_at=artifact.created_at,
                 format=artifact.format,
-                request_scope=artifact.request_scope,
                 coverage=artifact.coverage,
-                artifact_path=artifact.path,
-                artifact_api_path=f"/artifacts/{artifact.artifact_id}",
+                request_scope=artifact.request_scope,
             )
             for artifact in ordered_artifacts
         ],
     )
 
 
-def _group_published_collections() -> dict[str, list[ArtifactRecord]]:
+def _group_datasets() -> dict[str, list[ArtifactRecord]]:
     grouped: dict[str, list[ArtifactRecord]] = {}
     for record in _load_records():
-        if record.publication.status != PublicationStatus.PUBLISHED:
-            continue
-        collection_id = record.publication.collection_id
-        if collection_id is None:
-            continue
-        grouped.setdefault(collection_id, []).append(record)
+        grouped.setdefault(managed_dataset_id_for(record), []).append(record)
     return grouped
+
+
+def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
+    """Compute the next expected period start for supported source period types."""
+    if period_type == "hourly":
+        timestamp = datetime.fromisoformat(latest_period_end)
+        return (timestamp + timedelta(hours=1)).isoformat()
+    if period_type == "daily":
+        current = date.fromisoformat(latest_period_end)
+        return (current + timedelta(days=1)).isoformat()
+    if period_type == "monthly":
+        current = date.fromisoformat(f"{latest_period_end}-01")
+        year = current.year + (1 if current.month == 12 else 0)
+        month = 1 if current.month == 12 else current.month + 1
+        return f"{year:04d}-{month:02d}"
+    if period_type == "yearly":
+        return f"{int(latest_period_end) + 1:04d}"
+    raise HTTPException(status_code=400, detail=f"Sync is not implemented for period type '{period_type}'")
+
+
+def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:
+    links = [
+        DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
+        DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
+    ]
+    if latest.format == ArtifactFormat.NETCDF:
+        links.append(
+            DatasetAccessLink(href=f"/datasets/{dataset_id}/download", rel="download", title="Download NetCDF")
+        )
+    if latest.publication.pygeoapi_path is not None:
+        links.append(
+            DatasetAccessLink(href=latest.publication.pygeoapi_path, rel="ogc-collection", title="OGC collection")
+        )
+    return links
+
+
+def _as_optional_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
@@ -363,7 +473,7 @@ def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
             item["request_scope"] = {
                 "start": start,
                 "end": end,
+                "extent_id": None,
                 "bbox": bbox,
-                "country_code": None,
             }
     return item

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import xarray as xr
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 
 from ...shared.dhis2_adapter import create_client, get_org_units_geojson
 from .utils import get_lon_lat_dims, get_time_dim
@@ -52,20 +52,39 @@ def download_dataset(
     )
 
     sig = inspect.signature(eo_download_func)
-    if "bbox" in sig.parameters:
-        params["bbox"] = _resolve_bbox(bbox=bbox)
-    if "country_code" in sig.parameters:
-        resolved_country_code = country_code or os.getenv("COUNTRY_CODE")
-        if resolved_country_code:
-            params["country_code"] = resolved_country_code
-        else:
-            raise Exception("Downloading WorldPop data requires COUNTRY_CODE environment variable")
+    try:
+        if "bbox" in sig.parameters:
+            params["bbox"] = _resolve_bbox(bbox=bbox)
+        if "country_code" in sig.parameters:
+            resolved_country_code = country_code or os.getenv("COUNTRY_CODE")
+            if resolved_country_code:
+                params["country_code"] = resolved_country_code
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Downloading this dataset requires a country code. "
+                        "Provide it through the resolved extent configuration or set COUNTRY_CODE in the environment."
+                    ),
+                )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if background_tasks is not None:
         background_tasks.add_task(eo_download_func, **params)
         return
 
-    eo_download_func(**params)
+    try:
+        eo_download_func(**params)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        message = str(exc).strip() or "Unexpected error from upstream data provider"
+        raise HTTPException(status_code=502, detail=f"Upstream dataset download failed: {message}") from exc
 
 
 def build_dataset_zarr(dataset: dict[str, Any]) -> None:
