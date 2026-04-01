@@ -24,11 +24,9 @@ app.add_middleware(
 
 app.include_router(system_routes.router, tags=["System"])
 app.include_router(extent_routes.router, prefix="/extents", tags=["Extents"])
-app.include_router(data_registry_routes.router, prefix="/registry", tags=["Data registry"])
-app.include_router(data_manager_routes.router, prefix="/manage", tags=["Data manager"])
-app.include_router(data_accessor_routes.router, prefix="/retrieve", tags=["Data retrieval"])
-app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
+app.include_router(data_registry_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
 app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
+app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
 app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
 app.include_router(ingestion_routes.sync_router, prefix="/sync", tags=["Sync"])
 
