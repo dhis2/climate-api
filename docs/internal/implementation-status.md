@@ -156,6 +156,8 @@ Those internal records retain:
 
 This internal model remains necessary for provenance and sync behavior, but it is no longer a public API concept.
 
+The current JSON-backed store is still an interim persistence layer. Record mutations now use file locking to avoid lost updates during concurrent writes, but the long-term direction should be a proper transactional store.
+
 ## How The Current Flow Works
 
 ### Ingestion

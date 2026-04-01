@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import mimetypes
+import os
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -182,25 +185,25 @@ def create_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    records = _load_records()
-    records.append(record)
-    _save_records(records)
-    if publish:
-        return publish_artifact_record(record.artifact_id)
-    return record
+    stored_record = _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
 
 
 def publish_artifact_record(artifact_id: str) -> ArtifactRecord:
     """Publish an artifact via pygeoapi and persist publication metadata."""
-    records = _load_records()
-    for index, record in enumerate(records):
-        if record.artifact_id != artifact_id:
-            continue
-        published = publish_artifact(record)
-        records[index] = published
-        _save_records(records)
-        return published
-    raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found")
+    published = publish_artifact(get_artifact_or_404(artifact_id))
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for index, record in enumerate(records):
+            if record.artifact_id != artifact_id:
+                continue
+            records[index] = published
+            return published
+        raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found")
+
+    return _mutate_records(mutate)
 
 
 def sync_dataset(
@@ -290,6 +293,51 @@ def _save_records(records: list[ArtifactRecord]) -> None:
     ARTIFACTS_INDEX_PATH.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
 
 
+def _store_artifact_record(
+    record: ArtifactRecord,
+    *,
+    prefer_zarr: bool,
+    publish: bool,
+) -> ArtifactRecord:
+    """Persist a newly created artifact record while avoiding lost updates."""
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        existing = _find_existing_artifact_in_records(
+            records=records,
+            dataset_id=record.dataset_id,
+            request_scope=record.request_scope,
+            prefer_zarr=prefer_zarr,
+        )
+        if existing is not None:
+            if publish and existing.publication.status != PublicationStatus.PUBLISHED:
+                return existing
+            return existing
+
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
+def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) -> ArtifactRecord:
+    """Apply a read-modify-write mutation under an exclusive file lock."""
+    ensure_store()
+    with ARTIFACTS_INDEX_PATH.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        handle.seek(0)
+        raw = handle.read()
+        records = [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in json.loads(raw or "[]")]
+        result = mutation(records)
+        payload = [record.model_dump(mode="json") for record in records]
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"{json.dumps(payload, indent=2)}\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return result
+
+
 def _get_zarr_root_or_409(artifact: ArtifactRecord) -> Path:
     """Return the Zarr root path for an artifact or raise a 409 if it is not Zarr-backed."""
     if artifact.format != ArtifactFormat.ZARR:
@@ -342,7 +390,23 @@ def _find_existing_artifact(
     prefer_zarr: bool,
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request when possible."""
-    for record in reversed(_load_records()):
+    return _find_existing_artifact_in_records(
+        records=_load_records(),
+        dataset_id=dataset_id,
+        request_scope=request_scope,
+        prefer_zarr=prefer_zarr,
+    )
+
+
+def _find_existing_artifact_in_records(
+    *,
+    records: list[ArtifactRecord],
+    dataset_id: str,
+    request_scope: ArtifactRequestScope,
+    prefer_zarr: bool,
+) -> ArtifactRecord | None:
+    """Return an existing artifact for an identical logical request from a provided record set."""
+    for record in reversed(records):
         if record.dataset_id != dataset_id:
             continue
         if record.request_scope != request_scope:
