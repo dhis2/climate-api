@@ -1,0 +1,1 @@
+"""Extent configuration support."""

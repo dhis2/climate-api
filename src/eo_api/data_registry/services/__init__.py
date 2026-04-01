@@ -1,1 +1,3 @@
-from . import datasets
+"""Dataset registry services package."""
+
+from . import datasets as datasets
