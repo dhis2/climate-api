@@ -4,9 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import eo_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
-from eo_api.data_accessor import routes as data_accessor_routes
-from eo_api.data_manager import routes as data_manager_routes
-from eo_api.data_registry import routes as data_registry_routes
+from eo_api.data_registry import routes as dataset_template_routes
 from eo_api.extents import routes as extent_routes
 from eo_api.ingestions import routes as ingestion_routes
 from eo_api.pygeoapi_app import mount_pygeoapi
@@ -24,7 +22,7 @@ app.add_middleware(
 
 app.include_router(system_routes.router, tags=["System"])
 app.include_router(extent_routes.router, prefix="/extents", tags=["Extents"])
-app.include_router(data_registry_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
+app.include_router(dataset_template_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
 app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
 app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
 app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
