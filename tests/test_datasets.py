@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -168,3 +169,60 @@ def test_managed_dataset_id_prefers_extent_id_when_present() -> None:
     artifact = _artifact(artifact_id="a1")
 
     assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily_sle"
+
+
+def test_create_artifact_computes_coverage_from_created_artifact_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "worldpop_population_yearly",
+        "name": "Total population (WorldPop Global12)",
+        "variable": "pop_total",
+        "period_type": "yearly",
+    }
+    created_file = tmp_path / "worldpop_population_yearly_2020.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+
+    captured: dict[str, object] = {}
+
+    def fake_get_data_coverage_for_paths(
+        dataset_arg: dict[str, object],
+        *,
+        zarr_path: str | None = None,
+        netcdf_paths: list[str] | None = None,
+    ) -> dict[str, object]:
+        captured["dataset_id"] = dataset_arg["id"]
+        captured["zarr_path"] = zarr_path
+        captured["netcdf_paths"] = netcdf_paths
+        return {
+            "coverage": {
+                "temporal": {"start": "2020", "end": "2020"},
+                "spatial": {"xmin": -13.3, "ymin": 6.9, "xmax": -10.2, "ymax": 10.0},
+            }
+        }
+
+    monkeypatch.setattr(services, "get_data_coverage_for_paths", fake_get_data_coverage_for_paths)
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2020",
+        end="2020",
+        extent_id="sle",
+        bbox=[-13.5, 6.9, -10.1, 10.0],
+        country_code="SLE",
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured["dataset_id"] == "worldpop_population_yearly"
+    assert captured["zarr_path"] is None
+    assert captured["netcdf_paths"] == [str(created_file.resolve())]
+    assert artifact.coverage.temporal.start == "2020"
+    assert artifact.coverage.temporal.end == "2020"

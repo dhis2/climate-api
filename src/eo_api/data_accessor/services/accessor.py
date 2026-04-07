@@ -58,15 +58,42 @@ def get_data(
 def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
     """Return temporal and spatial coverage metadata for downloaded data."""
     ds = get_data(dataset)
+    return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
 
+
+def get_data_coverage_for_paths(
+    dataset: dict[str, Any],
+    *,
+    zarr_path: str | None = None,
+    netcdf_paths: list[str] | None = None,
+) -> dict[str, Any]:
+    """Return coverage metadata for the concrete files created for one artifact."""
+    if zarr_path is not None:
+        ds = xr.open_zarr(zarr_path, consolidated=True)
+    else:
+        ds = xr.open_mfdataset(
+            netcdf_paths or [],
+            data_vars="minimal",
+            coords="minimal",  # pyright: ignore[reportArgumentType]
+            compat="override",
+        )
+
+    try:
+        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
+    finally:
+        ds.close()
+
+
+def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:
+    """Summarize temporal and spatial coverage for an already opened dataset."""
     if not ds:
         return {"temporal_coverage": None, "spatial_coverage": None}
 
     time_dim = get_time_dim(ds)
     lon_dim, lat_dim = get_lon_lat_dims(ds)
 
-    start = numpy_datetime_to_period_string(ds[time_dim].min(), dataset["period_type"])  # type: ignore[arg-type]
-    end = numpy_datetime_to_period_string(ds[time_dim].max(), dataset["period_type"])  # type: ignore[arg-type]
+    start = numpy_datetime_to_period_string(ds[time_dim].min(), period_type)  # type: ignore[arg-type]
+    end = numpy_datetime_to_period_string(ds[time_dim].max(), period_type)  # type: ignore[arg-type]
 
     xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
     ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()

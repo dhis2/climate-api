@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
-from eo_api.data_accessor.services.accessor import get_data_coverage
+from eo_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from eo_api.data_manager.services import downloader
 from eo_api.data_registry.services import datasets as registry_datasets
 from eo_api.ingestions.schemas import (
@@ -172,7 +172,11 @@ def create_artifact(
     else:
         raise HTTPException(status_code=500, detail="Download finished without any saved artifact files")
 
-    coverage_data = get_data_coverage(dataset)
+    coverage_data = get_data_coverage_for_paths(
+        dataset,
+        zarr_path=primary_path if artifact_format == ArtifactFormat.ZARR else None,
+        netcdf_paths=asset_paths if artifact_format == ArtifactFormat.NETCDF else None,
+    )
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
