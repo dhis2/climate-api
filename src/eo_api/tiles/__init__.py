@@ -1,5 +1,5 @@
-"""Tile routing utilities for eo_api."""
+"""Tiles package."""
 
-from eo_api.tiles.titiler import tiles_router
+from . import titiler as titiler_routes
 
-__all__ = ["tiles_router"]
+__all__ = ["titiler_routes"]
