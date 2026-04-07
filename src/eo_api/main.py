@@ -9,7 +9,7 @@ from eo_api.extents import routes as extent_routes
 from eo_api.ingestions import routes as ingestion_routes
 from eo_api.pygeoapi_app import mount_pygeoapi
 from eo_api.system import routes as system_routes
-from eo_api.tiles import titiler_routes as titiler_routes
+from eo_api.tiles import titiler_routes
 
 app = FastAPI()
 
