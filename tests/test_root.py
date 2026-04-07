@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from eo_api.schemas import HealthStatus, RootResponse
+from eo_api.system.schemas import HealthStatus, RootResponse
 
 
 def test_root_returns_200(client: TestClient) -> None:
@@ -18,6 +18,8 @@ def test_root_returns_links(client: TestClient) -> None:
     response = client.get("/")
     result = RootResponse.model_validate(response.json())
     rels = [link.rel for link in result.links]
+    assert "extents" in rels
+    assert "datasets" in rels
     assert "prefect" in rels
     assert "docs" in rels
 
