@@ -841,8 +841,8 @@ requires-dist = [
     { name = "prefect", specifier = ">=3.6" },
     { name = "pygeoapi", specifier = ">=0.22.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "titiler-core", specifier = ">=1.2.0" },
-    { name = "titiler-xarray", specifier = ">=1.2.0" },
+    { name = "titiler-core", specifier = ">=2.0.1" },
+    { name = "titiler-xarray", specifier = ">=2.0.1" },
     { name = "uvicorn", specifier = ">=0.41.0" },
     { name = "zarr", specifier = "==3.1.5" },
 ]
@@ -1100,6 +1100,7 @@ dependencies = [
     { name = "griffecli" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/04/56/28a0accac339c164b52a92c6cfc45a903acc0c174caa5c1713803467b533/griffe-2.0.0.tar.gz", hash = "sha256:c68979cd8395422083a51ea7cf02f9c119d889646d99b7b656ee43725de1b80f", size = 293906, upload-time = "2026-03-23T21:06:53.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/94/ee21d41e7eb4f823b94603b9d40f86d3c7fde80eacc2c3c71845476dddaa/griffe-2.0.0-py3-none-any.whl", hash = "sha256:5418081135a391c3e6e757a7f3f156f1a1a746cc7b4023868ff7d5e2f9a980aa", size = 5214, upload-time = "2026-02-09T19:09:44.105Z" },
 ]
@@ -1112,6 +1113,7 @@ dependencies = [
     { name = "colorama" },
     { name = "griffelib" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/f8/2e129fd4a86e52e58eefe664de05e7d502decf766e7316cc9e70fdec3e18/griffecli-2.0.0.tar.gz", hash = "sha256:312fa5ebb4ce6afc786356e2d0ce85b06c1c20d45abc42d74f0cda65e159f6ef", size = 56213, upload-time = "2026-03-23T21:06:54.8Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/ed/d93f7a447bbf7a935d8868e9617cbe1cadf9ee9ee6bd275d3040fbf93d60/griffecli-2.0.0-py3-none-any.whl", hash = "sha256:9f7cd9ee9b21d55e91689358978d2385ae65c22f307a63fb3269acf3f21e643d", size = 9345, upload-time = "2026-02-09T19:09:42.554Z" },
 ]
@@ -1120,6 +1122,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -2957,7 +2960,7 @@ wheels = [
 
 [[package]]
 name = "rio-tiler"
-version = "8.0.5"
+version = "9.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -2970,11 +2973,10 @@ dependencies = [
     { name = "pydantic" },
     { name = "pystac" },
     { name = "rasterio" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/00/3d4ee47e63eb1848acd996cbc02e915adc78360206847b11d26531029c53/rio_tiler-8.0.5.tar.gz", hash = "sha256:c1ce2b9ef166620541c21fe3a0d911a2127354fa68c17131d73ae4e889522cd9", size = 180790, upload-time = "2026-01-05T13:15:10.484Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/87/a034798912bc99f6a8b1ff576d6e33ce17fd64e0bc0d1d5936173739b21d/rio_tiler-9.0.5.tar.gz", hash = "sha256:5bf0ed036b3aa9a1ca76c12fcaf77d40e5c2bca484a242ec480a5585a2135c34", size = 190895, upload-time = "2026-04-03T09:05:48.651Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/b1/8ea5458d63ef63565e6e7c38ef419c034f1ba8cdfd69fb0ae9c9c90195a1/rio_tiler-8.0.5-py3-none-any.whl", hash = "sha256:137c558c29be1e7312719d2d865ac74f4198afd02e655cdcba306069380d44c9", size = 276693, upload-time = "2026-01-05T13:15:08.793Z" },
+    { url = "https://files.pythonhosted.org/packages/67/aa/44772ec88d0df54bae4196f90edd9cca268720a8850a4250389e9e22599c/rio_tiler-9.0.5-py3-none-any.whl", hash = "sha256:44ebfdbbe9c404011be66dbb33cbcd38650d653bee681ab6d0d555b4af37021f", size = 287490, upload-time = "2026-04-03T09:05:46.896Z" },
 ]
 
 [[package]]
@@ -3354,7 +3356,7 @@ wheels = [
 
 [[package]]
 name = "titiler-core"
-version = "1.2.0"
+version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -3366,16 +3368,15 @@ dependencies = [
     { name = "rasterio" },
     { name = "rio-tiler" },
     { name = "simplejson" },
-    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/8d/dcfa9cd77562c0d3525eab2b4b97d3616099b043fbe85db83734db28de44/titiler_core-1.2.0.tar.gz", hash = "sha256:6ac9d30ecd384832ade13029a49f74ffdcba1485fb511ac9509046bb98a571ee", size = 69857, upload-time = "2026-02-09T14:37:53.17Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/62/9b/ae47d292f8a7a21cef9716fa5e33fcba4048e26aa11abfe9228bb2c97c9e/titiler_core-2.0.1.tar.gz", hash = "sha256:590343a8da15f56950870d1ebb637924280530de3640877ebc46ab507e04a930", size = 69016, upload-time = "2026-03-31T13:45:15.064Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/d8/20d2982580c1e13025f7e54391f0b2bbf669cb2b1462f42b64d8fe3cf50c/titiler_core-1.2.0-py3-none-any.whl", hash = "sha256:ba7f34f83b3dab0cae612b88ad087be230bbce2043562e17b8ed9182484c4642", size = 88373, upload-time = "2026-02-09T14:37:52.263Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/32/68b4c9f81e8b1cf0dc57d03a4159d0118decda94af41fdf5a98a2b2ced25/titiler_core-2.0.1-py3-none-any.whl", hash = "sha256:f435cf653a3f9acaeaeb60d1e8cda1474ccd79d4364c9e1e8da91dd08c96a449", size = 87427, upload-time = "2026-03-31T13:45:08.265Z" },
 ]
 
 [[package]]
 name = "titiler-xarray"
-version = "1.2.0"
+version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "obstore" },
@@ -3384,9 +3385,9 @@ dependencies = [
     { name = "xarray" },
     { name = "zarr" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/00/b2/e6aec77d4160f610b49e95b9edd2ef585c7f8c83900a0ca66b5c6a02acfc/titiler_xarray-1.2.0.tar.gz", hash = "sha256:7e13b753e636ee5af4db1d7fbc84e8dfb58ba0ae0fdcccefb01d4ffdae82ba8d", size = 32428, upload-time = "2026-02-09T14:37:55.718Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/9a/edee70131c9976b0fd9818caab72b18fe0256225dafdb65b04609c476c24/titiler_xarray-2.0.1.tar.gz", hash = "sha256:257ee065d30a28e50bd821c45e548a190a530027eaa83e915738535c72386012", size = 32477, upload-time = "2026-03-31T13:45:18.42Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/d3/a3238916c0016a349f309e4ff4ab119c02063317c26d9eacdf4da136c27a/titiler_xarray-1.2.0-py3-none-any.whl", hash = "sha256:781489360d4562e33dd782187b10706ed619b7e0a0ce13c6ff7f459e6ff75915", size = 34150, upload-time = "2026-02-09T14:37:54.446Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/53/1cb5c09c8cf4e04a341ecc8afc4eb99b369db7a9dae1a089ffe89e43c739/titiler_xarray-2.0.1-py3-none-any.whl", hash = "sha256:e87bdacdbc5718cc2b0b1df5224ed90d7900670dbddbe99dbe3dd815f0e720eb", size = 34278, upload-time = "2026-03-31T13:45:12.764Z" },
 ]
 
 [[package]]
