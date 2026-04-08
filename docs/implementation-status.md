@@ -69,6 +69,8 @@ The route resolves `extent_id` inside EO API and then calls the downloader with 
 
 ### 2. Public ingestion responses now return datasets, not artifacts
 
+`POST /ingestions`, `GET /ingestions`, and `GET /ingestions/{ingestion_id}` now define the operational ingestion surface.
+
 `POST /ingestions` and `GET /ingestions/{ingestion_id}` return:
 
 - `ingestion_id`
@@ -78,6 +80,8 @@ The route resolves `extent_id` inside EO API and then calls the downloader with 
 The `dataset` field uses the public dataset summary model from `/datasets`, not the full dataset detail view with version history.
 
 Internal artifact records still exist, but they no longer define the public response story.
+
+`GET /ingestions` lists ingestion run records for admin and operational use. `/datasets` remains the canonical managed-data surface for consumers.
 
 ### 3. Extents are now a first-class read-only part of the native API
 
@@ -191,6 +195,7 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 ### Native FastAPI
 
 - `POST /ingestions`
+- `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
 - `GET /extents`
 - `GET /extents/{extent_id}`
@@ -224,9 +229,9 @@ Recent refinement:
 
 The branch now presents a much cleaner product story:
 
-1. ingest by dataset template plus configured extent
+1. run ingestions through `/ingestions` as an execution and admin surface
 2. return datasets, not artifacts
-3. discover datasets under `/datasets`
+3. discover managed data under `/datasets`
 4. access raw Zarr under `/zarr/{dataset_id}`
 5. browse published collections only under `/ogcapi`
 
