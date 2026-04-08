@@ -11,6 +11,7 @@ from eo_api.ingestions.schemas import (
     CreateIngestionRequest,
     DatasetDetailRecord,
     DatasetListResponse,
+    IngestionListResponse,
     IngestionResponse,
     SyncDatasetRequest,
     SyncResponse,
@@ -52,14 +53,16 @@ def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
     )
 
 
+@ingestions_router.get("", response_model=IngestionListResponse)
+def list_ingestions() -> IngestionListResponse:
+    """List ingestion run records for operational and admin use."""
+    return services.list_ingestions()
+
+
 @ingestions_router.get("/{ingestion_id}", response_model=IngestionResponse)
 def get_ingestion(ingestion_id: str) -> IngestionResponse:
     """Return the managed dataset view created for a given ingestion."""
-    return IngestionResponse(
-        ingestion_id=ingestion_id,
-        status="completed",
-        dataset=services.get_dataset_summary_for_artifact_or_404(ingestion_id),
-    )
+    return services.get_ingestion_or_404(ingestion_id)
 
 
 @datasets_router.get("", response_model=DatasetListResponse)

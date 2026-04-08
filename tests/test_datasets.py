@@ -114,6 +114,33 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
     assert any(link.href == f"/zarr/{dataset.dataset_id}" for link in dataset.links)
 
 
+def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    records = [
+        _artifact(artifact_id="a1", created_at="2026-01-10T00:00:00+00:00", end="2026-01-10"),
+        _artifact(artifact_id="a2", created_at="2026-01-11T00:00:00+00:00", end="2026-01-11"),
+    ]
+    monkeypatch.setattr(services, "_load_records", lambda: records)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "short_name": "CHIRPS3 precip",
+            "period_type": "daily",
+            "units": "mm",
+            "resolution": "5 km x 5 km",
+            "source": "CHIRPS v3",
+            "source_url": "https://example.com/chirps",
+        },
+    )
+
+    result = services.list_ingestions()
+
+    assert result.kind == "IngestionList"
+    assert [item.ingestion_id for item in result.items] == ["a2", "a1"]
+    assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily_sle"
+
+
 def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
     dataset_id = "chirps3_precipitation_daily_sle"
     monkeypatch.setattr(

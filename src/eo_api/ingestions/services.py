@@ -34,6 +34,8 @@ from eo_api.ingestions.schemas import (
     DatasetPublication,
     DatasetRecord,
     DatasetVersionRecord,
+    IngestionListResponse,
+    IngestionResponse,
     PublicationStatus,
     SyncResponse,
 )
@@ -58,6 +60,13 @@ def list_artifacts() -> ArtifactListResponse:
     return ArtifactListResponse(items=_load_records())
 
 
+def list_ingestions() -> IngestionListResponse:
+    """Return ingestion run records for operational/admin use."""
+    records = sorted(_load_records(), key=lambda record: record.created_at, reverse=True)
+    items = [_build_ingestion_response(record) for record in records]
+    return IngestionListResponse(items=items)
+
+
 def get_artifact_or_404(artifact_id: str) -> ArtifactRecord:
     """Return a single artifact or raise 404."""
     for record in _load_records():
@@ -80,6 +89,11 @@ def get_dataset_summary_for_artifact_or_404(artifact_id: str) -> DatasetRecord:
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
     return _build_dataset_record(dataset_id, artifacts)
+
+
+def get_ingestion_or_404(artifact_id: str) -> IngestionResponse:
+    """Return an ingestion run record resolved to the managed dataset summary."""
+    return _build_ingestion_response(get_artifact_or_404(artifact_id))
 
 
 def list_datasets() -> DatasetListResponse:
@@ -449,6 +463,15 @@ def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> D
             status=latest.publication.status,
             published_at=latest.publication.published_at,
         ),
+    )
+
+
+def _build_ingestion_response(artifact: ArtifactRecord) -> IngestionResponse:
+    """Build an operational ingestion response from one stored artifact record."""
+    return IngestionResponse(
+        ingestion_id=artifact.artifact_id,
+        status="completed",
+        dataset=get_dataset_summary_for_artifact_or_404(artifact.artifact_id),
     )
 
 

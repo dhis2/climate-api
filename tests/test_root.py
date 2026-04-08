@@ -19,6 +19,7 @@ def test_root_returns_links(client: TestClient) -> None:
     result = RootResponse.model_validate(response.json())
     rels = [link.rel for link in result.links]
     assert "extents" in rels
+    assert "ingestions" in rels
     assert "datasets" in rels
     assert "prefect" in rels
     assert "docs" in rels
