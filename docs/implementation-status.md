@@ -215,6 +215,11 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 4. any runtime write API for extents
 5. multi-version publication resolution behind one dataset id
 
+Recent refinement:
+
+- `/sync/{dataset_id}` now rematerializes a new managed dataset version from the dataset's original request start through the requested sync end period, instead of creating a latest-only delta slice
+- sync now re-resolves `extent_id` configuration so extent-backed `country_code` inputs continue to work during sync
+
 ## Short Summary
 
 The branch now presents a much cleaner product story:
