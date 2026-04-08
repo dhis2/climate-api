@@ -34,7 +34,13 @@ def download_dataset(
     overwrite: bool,
     background_tasks: BackgroundTasks | None,
 ) -> list[Path]:
-    """Download dataset from source and store as local NetCDF cache files."""
+    """Download dataset files and return the NetCDF paths created or modified by this run.
+
+    The download still happens primarily through side effects in the provider function.
+    This return value is used to identify the concrete files created for this invocation.
+    When running in the background-task path, the download is deferred and this function
+    returns an empty list because no files have been created yet.
+    """
     cache_info = dataset["cache_info"]
     eo_download_func_path = cache_info["eo_function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
