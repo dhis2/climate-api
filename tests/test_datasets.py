@@ -180,7 +180,6 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
 
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-
     result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
 
     assert captured["start"] == "2026-02-01"
@@ -210,9 +209,8 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     created_file = tmp_path / "worldpop_population_yearly_2020.nc"
     created_file.write_text("dummy", encoding="utf-8")
 
-    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
     monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
-    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
 
     captured: dict[str, object] = {}
@@ -253,3 +251,47 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     assert captured["netcdf_paths"] == [str(created_file.resolve())]
     assert artifact.coverage.temporal.start == "2020"
     assert artifact.coverage.temporal.end == "2020"
+
+
+def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "worldpop_population_yearly",
+        "name": "Total population (WorldPop Global12)",
+        "variable": "pop_total",
+        "period_type": "yearly",
+    }
+    created_file = tmp_path / "worldpop_population_yearly_2020.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "has_data": False,
+            "coverage": {
+                "temporal": {"start": None, "end": None},
+                "spatial": {"xmin": None, "ymin": None, "xmax": None, "ymax": None},
+            },
+        },
+    )
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2020",
+            end="2020",
+            extent_id="sle",
+            bbox=[-13.5, 6.9, -10.1, 10.0],
+            country_code="SLE",
+            overwrite=False,
+            prefer_zarr=False,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Downloaded artifact contains no data for the requested scope"

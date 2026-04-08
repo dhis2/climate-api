@@ -150,7 +150,7 @@ def create_artifact(
             return publish_artifact_record(existing.artifact_id)
         return existing
 
-    downloader.download_dataset(
+    downloaded_files = downloader.download_dataset(
         dataset,
         start=start,
         end=end,
@@ -172,7 +172,7 @@ def create_artifact(
             )
 
     zarr_path = downloader.get_zarr_path(dataset)
-    cache_files = downloader.get_cache_files(dataset)
+    cache_files = downloaded_files or downloader.get_cache_files(dataset)
     primary_path: str | None
 
     if zarr_path is not None:
@@ -191,6 +191,8 @@ def create_artifact(
         zarr_path=primary_path if artifact_format == ArtifactFormat.ZARR else None,
         netcdf_paths=asset_paths if artifact_format == ArtifactFormat.NETCDF else None,
     )
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Downloaded artifact contains no data for the requested scope")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
