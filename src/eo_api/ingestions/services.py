@@ -296,35 +296,16 @@ def get_dataset_zarr_store_file_or_404(
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
-        logger.warning(f"Zarr chunk/file not found: dataset_id={dataset_id}, relative_path={relative_path}, resolved={target}")
         raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
     if target.is_dir():
         return _zarr_directory_listing(dataset_id=dataset_id, store_root=store_root, directory=target)
     if target.name in {".zarray", ".zattrs", ".zgroup", "zarr.json"}:
         return JSONResponse(content=json.loads(target.read_text(encoding="utf-8")))
 
-    # Check file type and readability before serving
-    if not target.is_file():
-        logger.warning(f"Target exists but is not a file: {target}")
-        raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' is not a file")
-    if not os.access(target, os.R_OK):
-        logger.warning(f"Target file is not readable: {target}")
-        raise HTTPException(status_code=403, detail=f"Zarr path '{relative_path}' is not readable")
-
     media_type, _ = mimetypes.guess_type(target.name)
     if media_type is None:
         media_type = "application/octet-stream"
-    try:
-        # print(f"Serving file: {target} (size: {target.stat().st_size})")
-        # Try direct Response for diagnosis
-        with open(target, "rb") as f:
-            data = f.read()
-        return Response(content=data, media_type=media_type)
-        # Uncomment below to try FileResponse again if needed
-        # return FileResponse(target, media_type=media_type, filename=target.name)
-    except Exception as exc:
-        logger.error(f"Error serving Zarr chunk: {target} -- {exc}")
-        raise HTTPException(status_code=500, detail=f"Error serving Zarr chunk: {exc}")
+    return FileResponse(target, media_type=media_type, filename=target.name)
 
 
 def _load_records() -> list[ArtifactRecord]:

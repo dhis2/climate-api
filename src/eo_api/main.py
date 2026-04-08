@@ -30,21 +30,12 @@ async def add_zarr_browser_access_headers(
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     """Add browser access headers needed by remote Zarr inspectors calling localhost."""
-    # Handle CORS preflight for private network
     if (
         request.method == "OPTIONS"
         and (request.url.path == "/zarr" or request.url.path.startswith("/zarr/"))
         and request.headers.get("access-control-request-private-network") == "true"
     ):
         response = Response(status_code=200)
-    # Handle HEAD requests for /zarr and /zarr/*, even if no route is defined
-    elif (
-        request.method == "HEAD"
-        and (request.url.path == "/zarr" or request.url.path.startswith("/zarr/"))
-    ):
-        response = Response(status_code=200)
-        response.body = b""
-        response.headers["Content-Length"] = "0"
     else:
         response = await call_next(request)
     if request.url.path == "/zarr" or request.url.path.startswith("/zarr/"):
@@ -52,7 +43,7 @@ async def add_zarr_browser_access_headers(
         if origin is not None:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Vary"] = "Origin"
-            response.headers.setdefault("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD")
+            response.headers.setdefault("Access-Control-Allow-Methods", "GET, OPTIONS")
             response.headers.setdefault(
                 "Access-Control-Allow-Headers",
                 request.headers.get("access-control-request-headers", "*"),
