@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
-from eo_api.data_accessor.services.accessor import get_data_coverage
+from eo_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from eo_api.data_manager.services import downloader
 from eo_api.data_registry.services import datasets as registry_datasets
 from eo_api.ingestions.schemas import (
@@ -34,6 +34,8 @@ from eo_api.ingestions.schemas import (
     DatasetPublication,
     DatasetRecord,
     DatasetVersionRecord,
+    IngestionListResponse,
+    IngestionResponse,
     PublicationStatus,
     SyncResponse,
 )
@@ -58,6 +60,13 @@ def list_artifacts() -> ArtifactListResponse:
     return ArtifactListResponse(items=_load_records())
 
 
+def list_ingestions() -> IngestionListResponse:
+    """Return ingestion run records for operational/admin use."""
+    records = sorted(_load_records(), key=lambda record: record.created_at, reverse=True)
+    items = [_build_ingestion_response(record) for record in records]
+    return IngestionListResponse(items=items)
+
+
 def get_artifact_or_404(artifact_id: str) -> ArtifactRecord:
     """Return a single artifact or raise 404."""
     for record in _load_records():
@@ -80,6 +89,11 @@ def get_dataset_summary_for_artifact_or_404(artifact_id: str) -> DatasetRecord:
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
     return _build_dataset_record(dataset_id, artifacts)
+
+
+def get_ingestion_or_404(artifact_id: str) -> IngestionResponse:
+    """Return an ingestion run record resolved to the managed dataset summary."""
+    return _build_ingestion_response(get_artifact_or_404(artifact_id))
 
 
 def list_datasets() -> DatasetListResponse:
@@ -136,7 +150,7 @@ def create_artifact(
             return publish_artifact_record(existing.artifact_id)
         return existing
 
-    downloader.download_dataset(
+    downloaded_files = downloader.download_dataset(
         dataset,
         start=start,
         end=end,
@@ -158,7 +172,7 @@ def create_artifact(
             )
 
     zarr_path = downloader.get_zarr_path(dataset)
-    cache_files = downloader.get_cache_files(dataset)
+    cache_files = downloaded_files or downloader.get_cache_files(dataset)
     primary_path: str | None
 
     if zarr_path is not None:
@@ -172,7 +186,13 @@ def create_artifact(
     else:
         raise HTTPException(status_code=500, detail="Download finished without any saved artifact files")
 
-    coverage_data = get_data_coverage(dataset)
+    coverage_data = get_data_coverage_for_paths(
+        dataset,
+        zarr_path=primary_path if artifact_format == ArtifactFormat.ZARR else None,
+        netcdf_paths=asset_paths if artifact_format == ArtifactFormat.NETCDF else None,
+    )
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Downloaded artifact contains no data for the requested scope")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
@@ -445,6 +465,15 @@ def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> D
             status=latest.publication.status,
             published_at=latest.publication.published_at,
         ),
+    )
+
+
+def _build_ingestion_response(artifact: ArtifactRecord) -> IngestionResponse:
+    """Build an operational ingestion response from one stored artifact record."""
+    return IngestionResponse(
+        ingestion_id=artifact.artifact_id,
+        status="completed",
+        dataset=get_dataset_summary_for_artifact_or_404(artifact.artifact_id),
     )
 
 

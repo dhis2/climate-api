@@ -33,11 +33,12 @@ def download_dataset(
     country_code: str | None,
     overwrite: bool,
     background_tasks: BackgroundTasks | None,
-) -> None:
+) -> list[Path]:
     """Download dataset from source and store as local NetCDF cache files."""
     cache_info = dataset["cache_info"]
     eo_download_func_path = cache_info["eo_function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
+    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
     params = dict(cache_info.get("default_params", {}))
     params.update(
@@ -73,7 +74,7 @@ def download_dataset(
 
     if background_tasks is not None:
         background_tasks.add_task(eo_download_func, **params)
-        return
+        return []
 
     try:
         eo_download_func(**params)
@@ -84,6 +85,12 @@ def download_dataset(
     except Exception as exc:
         message = str(exc).strip() or "Unexpected error from upstream data provider"
         raise HTTPException(status_code=502, detail=f"Upstream dataset download failed: {message}") from exc
+
+    after_files = [path.resolve() for path in get_cache_files(dataset)]
+    changed_files = [
+        path for path in after_files if path not in before_files or path.stat().st_mtime_ns != before_files[path]
+    ]
+    return changed_files
 
 
 def build_dataset_zarr(dataset: dict[str, Any]) -> None:

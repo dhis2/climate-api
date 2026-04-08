@@ -4,7 +4,7 @@ This guide describes the current native FastAPI surface for EO API and how it re
 
 The current public story is:
 
-- ingest a managed dataset with `POST /ingestions`
+- run and inspect ingestion operations with `/ingestions`
 - discover configured extents with `/extents`
 - discover managed datasets with `/datasets`
 - access raw Zarr data with `/zarr/{dataset_id}`
@@ -12,9 +12,15 @@ The current public story is:
 
 Internal artifacts still exist as a storage and provenance model, but they are not part of the public API contract.
 
+Operational note:
+
+- `/ingestions` is the execution and admin-facing surface for ingestion runs
+- `/datasets` is the canonical managed-data surface for consumers
+
 ## Main Public Endpoints
 
 - `POST /ingestions`
+- `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
 - `GET /extents`
 - `GET /extents/{extent_id}`
@@ -165,11 +171,27 @@ What this means:
 
 - `ingestion_id` is the handle for the ingestion event lookup route
 - `status = "completed"` means this branch still treats ingestion synchronously
+- `/ingestions` is an operational/admin surface, not the main managed-data catalog
 - `dataset` is a public managed dataset summary, not an internal artifact record
 - `extent` is realized data coverage, not just the configured bbox
 - `links` point to the native dataset metadata, native Zarr access, and standards-facing OGC collection
 
-## 3. Ingestion failure behavior
+## 3. List ingestion runs
+
+`GET /ingestions` returns ingestion run records for operational and admin use.
+
+Example:
+
+```bash
+curl -s http://127.0.0.1:8000/ingestions | jq
+```
+
+What this means:
+
+- this route is for execution lookup and operational visibility
+- it is not intended to replace `/datasets` as the primary data discovery surface
+- items are ordered from most recent ingestion to oldest
+## 4. Ingestion failure behavior
 
 Ingestion should fail gracefully with a structured API error, not a raw 500 stack trace.
 
@@ -192,9 +214,9 @@ Example error response:
 }
 ```
 
-## 4. Discover managed datasets
+## 5. Discover managed datasets
 
-`GET /datasets` is the native managed-data catalog.
+`GET /datasets` is the native managed-data catalog and the main consumer-facing data surface.
 
 Example:
 
@@ -265,7 +287,7 @@ What this means:
 - dataset items contain public metadata and access links only
 - internal artifact ids, filesystem paths, and downloader implementation details are intentionally omitted
 
-## 5. Get dataset detail
+## 6. Get dataset detail
 
 `GET /datasets/{dataset_id}` returns the full managed dataset detail view.
 
@@ -283,7 +305,7 @@ What this adds beyond the list response:
 
 The detailed dataset response is where version history belongs. The ingestion response stays as a summary.
 
-## 6. Access raw Zarr data
+## 7. Access raw Zarr data
 
 If the latest managed dataset version is Zarr-backed, the canonical native raw-data route is `/zarr/{dataset_id}`.
 
@@ -309,7 +331,7 @@ What this means:
 - entry links stay inside the canonical `/zarr/{dataset_id}/...` namespace
 - internal artifact ids and local filesystem roots are not exposed
 
-## 7. Access published OGC collections
+## 8. Access published OGC collections
 
 Published datasets are exposed only through `/ogcapi`.
 
@@ -327,7 +349,7 @@ What this means:
 - native FastAPI no longer exposes `/collections`
 - dataset responses include links to `/ogcapi/collections/{dataset_id}`, but the collection resource itself lives only under `pygeoapi`
 
-## 8. `/sync`
+## 9. `/sync`
 
 `POST /sync/{dataset_id}` exists and is part of the intended public product shape, but its behavior is still the main refinement area.
 
@@ -335,6 +357,7 @@ Current intent:
 
 - sync a managed dataset forward from its latest available period
 - preserve stable managed dataset identity
+- rematerialize a fresh version covering the managed dataset's original start through the requested end period
 - return the updated dataset view
 
 This route should be treated as present but still under active behavioral design.

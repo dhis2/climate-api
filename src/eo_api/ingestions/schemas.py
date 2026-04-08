@@ -187,6 +187,20 @@ class IngestionResponse(BaseModel):
     dataset: DatasetRecord = Field(description="Managed dataset summary produced or resolved by the ingestion.")
 
 
+class IngestionListResponse(BaseModel):
+    """Envelope response for ingestion run records."""
+
+    kind: str = Field(
+        default="IngestionList",
+        description="Self-describing envelope type for this collection response.",
+        examples=["IngestionList"],
+    )
+    items: list[IngestionResponse] = Field(
+        default_factory=list,
+        description="Ingestion run records available in this EO API instance.",
+    )
+
+
 class DatasetListResponse(BaseModel):
     """Envelope response for managed datasets."""
 
