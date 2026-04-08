@@ -8,7 +8,7 @@ def get_time_dim(ds: Any) -> str:
     for time_name in ["valid_time", "time"]:
         if hasattr(ds, time_name):
             return time_name
-    raise ValueError(f"Unable to find time dimension: {ds.coordinates}")
+    raise ValueError(f"Unable to find time dimension: {ds.coords}")
 
 
 def get_lon_lat_dims(ds: Any) -> tuple[str, str]:
@@ -16,4 +16,4 @@ def get_lon_lat_dims(ds: Any) -> tuple[str, str]:
     for lon_name, lat_name in [("lon", "lat"), ("longitude", "latitude"), ("x", "y")]:
         if hasattr(ds, lat_name):
             return lon_name, lat_name
-    raise ValueError(f"Unable to find space dimension: {ds.coordinates}")
+    raise ValueError(f"Unable to find space dimension: {ds.coords}")

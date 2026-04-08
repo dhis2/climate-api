@@ -25,7 +25,7 @@ def get_data(
     zarr_path = get_zarr_path(dataset)
     if zarr_path:
         logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = xr.open_zarr(zarr_path, consolidated=True)
+        ds = _open_zarr_dataset(str(zarr_path))
     else:
         logger.warning(
             f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
@@ -77,7 +77,7 @@ def get_data_coverage_for_paths(
         raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
 
     if zarr_path is not None:
-        ds = xr.open_zarr(zarr_path, consolidated=True)
+        ds = _open_zarr_dataset(zarr_path)
     else:
         assert netcdf_paths is not None
         ds = xr.open_mfdataset(
@@ -91,6 +91,15 @@ def get_data_coverage_for_paths(
         return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
     finally:
         ds.close()
+
+
+def _open_zarr_dataset(zarr_path: str) -> xr.Dataset:
+    """Open a zarr store, handling pyramid stores by opening the base resolution level."""
+    ds = xr.open_zarr(zarr_path, consolidated=False)
+    if not ds.dims:
+        ds.close()
+        ds = xr.open_zarr(f"{zarr_path}/0", consolidated=False)
+    return ds
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:

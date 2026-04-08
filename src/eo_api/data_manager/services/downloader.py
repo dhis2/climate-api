@@ -105,6 +105,7 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
+    ds.load()
 
     lon_dim, lat_dim = get_lon_lat_dims(ds)
     dims = [lon_dim, lat_dim]
@@ -205,9 +206,11 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
 
     pyramid.dt.attrs.update(geozarr_attrs)
 
+    ds.close()
+
     pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
 
-    # 
+    #
     # multiscales = pyramid.dt.attrs.get("multiscales", None)
 
     # print(json.dumps(multiscales, indent=2))
