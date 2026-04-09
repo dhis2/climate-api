@@ -6,6 +6,7 @@ import inspect
 import logging
 import os
 import json
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -209,6 +210,15 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     ds.close()
 
     pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
+
+    # zarr-layer looks for the time coordinate at the root of the store, not inside each level.
+    # Copy it from level 0 so browser clients can discover it without knowing the level structure.
+    time_src = zarr_path / "0" / "time"
+    time_dst = zarr_path / "time"
+    if time_src.exists():
+        if time_dst.exists():
+            shutil.rmtree(time_dst)
+        shutil.copytree(time_src, time_dst)
 
     #
     # multiscales = pyramid.dt.attrs.get("multiscales", None)

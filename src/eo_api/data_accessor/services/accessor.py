@@ -96,7 +96,7 @@ def get_data_coverage_for_paths(
 def _open_zarr_dataset(zarr_path: str) -> xr.Dataset:
     """Open a zarr store, handling pyramid stores by opening the base resolution level."""
     ds = xr.open_zarr(zarr_path, consolidated=False)
-    if not ds.dims:
+    if not ds.data_vars:
         ds.close()
         ds = xr.open_zarr(f"{zarr_path}/0", consolidated=False)
     return ds
