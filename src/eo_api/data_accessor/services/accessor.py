@@ -3,7 +3,6 @@
 import logging
 import os
 import tempfile
-from pathlib import Path
 from typing import Any
 
 import xarray as xr
@@ -95,11 +94,21 @@ def get_data_coverage_for_paths(
 
 
 def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
-    """Open a zarr store, handling pyramid stores by opening the base resolution level."""
+    """Open a zarr store, handling pyramid stores by opening the base resolution level.
+
+    When the root group has no data variables (as in a multiscale pyramid store),
+    attempts to open level 0 instead. This works for any store backend — local
+    paths, S3 URIs, GCS URIs, fsspec mappers — without filesystem-specific checks.
+    """
     ds = _open_zarr(zarr_path)
-    if not ds.data_vars and (Path(zarr_path) / "0").is_dir():
+    if not ds.data_vars:
+        level0_path = zarr_path.rstrip("/") + "/0"
+        try:
+            level0 = _open_zarr(level0_path)
+        except Exception:
+            return ds
         ds.close()
-        ds = _open_zarr(f"{zarr_path}/0")
+        ds = level0
     return ds
 
 

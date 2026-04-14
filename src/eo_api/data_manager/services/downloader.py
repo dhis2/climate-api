@@ -149,8 +149,11 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
         zarr_conventions.append(MultiscalesConventionMetadata().model_dump())
         geozarr_attrs["zarr_conventions"] = zarr_conventions
 
-        # load into memory to release netCDF file handles before multiprocessing in create_pyramid
+        # Load into memory then close to deterministically release netCDF file handles
+        # before create_pyramid spawns multiprocessing workers. After load() the data
+        # lives in numpy arrays and no longer needs the underlying file objects.
         ds.load()
+        ds.close()
 
         ds = ds.proj.assign_crs(spatial_ref=CRS)
 
