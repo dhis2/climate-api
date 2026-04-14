@@ -43,7 +43,7 @@ async def add_zarr_browser_access_headers(
         if origin is not None:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Vary"] = "Origin"
-            response.headers.setdefault("Access-Control-Allow-Methods", "GET, OPTIONS")
+            response.headers.setdefault("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
             response.headers.setdefault(
                 "Access-Control-Allow-Headers",
                 request.headers.get("access-control-request-headers", "*"),

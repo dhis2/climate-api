@@ -193,7 +193,7 @@ def test_open_zarr_dataset_pyramid_falls_back_to_level_0(tmp_path: Path) -> None
     """Pyramid zarr with no data vars at root falls back to opening /0."""
     zarr_path = tmp_path / "pyramid.zarr"
     zarr.open_group(str(zarr_path), mode="w", zarr_format=3)
-    _make_dataset().to_zarr(str(zarr_path / "0"), mode="w")
+    _make_dataset().to_zarr(str(zarr_path / "0"), mode="w", zarr_format=3)
 
     result = open_zarr_dataset(str(zarr_path))
     try:
@@ -212,7 +212,7 @@ def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: 
     ds = _make_dataset()
     zarr_path = tmp_path / "pyramid.zarr"
     zarr.open_group(str(zarr_path), mode="w", zarr_format=3)
-    ds.to_zarr(str(zarr_path / "0"), mode="w")
+    ds.to_zarr(str(zarr_path / "0"), mode="w", zarr_format=3)
     # Simulate what build_dataset_zarr does: copy time to root
     import shutil
 

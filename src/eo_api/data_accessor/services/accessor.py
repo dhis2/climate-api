@@ -105,8 +105,12 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
         level0_path = zarr_path.rstrip("/") + "/0"
         try:
             level0 = _open_zarr(level0_path)
-        except Exception:
-            return ds
+        except Exception as exc:
+            ds.close()
+            raise ValueError(
+                f"Zarr store at {zarr_path!r} has no data variables at the root "
+                f"and base pyramid level {level0_path!r} could not be opened"
+            ) from exc
         ds.close()
         ds = level0
     return ds
