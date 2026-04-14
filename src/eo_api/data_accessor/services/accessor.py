@@ -117,16 +117,8 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
 
 
 def _open_zarr(zarr_path: str) -> xr.Dataset:
-    """Open a zarr store, preferring consolidated metadata when available."""
-    try:
-        return xr.open_zarr(zarr_path, consolidated=True)  # type: ignore[no-any-return]
-    except Exception as exc:
-        logger.debug(
-            "Could not open zarr store with consolidated metadata at %s; falling back to non-consolidated open: %s",
-            zarr_path,
-            exc,
-        )
-        return xr.open_zarr(zarr_path, consolidated=False)  # type: ignore[no-any-return]
+    """Open a zarr store with automatic consolidated metadata detection."""
+    return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:
