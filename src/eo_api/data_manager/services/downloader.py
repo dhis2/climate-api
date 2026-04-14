@@ -126,12 +126,8 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     xmax = ds[lon_dim].max().item()
     ymin = ds[lat_dim].min().item() 
     ymax = ds[lat_dim].max().item()
-    
     bbox = [xmin, ymin, xmax, ymax]
-    
     shape = (ds.sizes[lon_dim], ds.sizes[lat_dim]) 
-
-    multiscales = dict(cache_info.get("multiscales", {}))
 
     # https://github.com/zarr-developers/geozarr-toolkit/issues/15
     geozarr_attrs =  create_geozarr_attrs(
@@ -145,6 +141,7 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
 
+    multiscales = dict(cache_info.get("multiscales", {}))
 
     if (multiscales):
         levels = multiscales.get("levels", 4)
