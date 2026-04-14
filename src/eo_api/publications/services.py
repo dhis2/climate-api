@@ -12,6 +12,7 @@ from zlib import adler32
 import xarray as xr
 import yaml
 
+from eo_api.data_accessor.services.accessor import open_zarr_dataset
 from eo_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
 from eo_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
@@ -56,6 +57,9 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         active = published_record if artifact.artifact_id == record.artifact_id else artifact
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
+        data_path = active.path or active.asset_paths[0]
+        if active.format == ArtifactFormat.ZARR and Path(f"{data_path}/0").exists():
+            continue  # pyramid zarr: not served via pygeoapi, use /zarr endpoint instead
         assert active.publication.collection_id is not None
         resources[active.publication.collection_id] = _build_collection_resource(active)
 
@@ -108,7 +112,7 @@ def _build_collection_resource(record: ArtifactRecord) -> dict[str, Any]:
         "format": _provider_format(record.format),
     }
     if record.format == ArtifactFormat.ZARR:
-        provider["options"] = {"zarr": {"consolidated": True}, "squeeze": True}
+        provider["options"] = {"zarr": {"consolidated": False}, "squeeze": True}
 
     return {
         "type": "collection",
@@ -144,7 +148,7 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
     """Inspect an artifact and return provider axis field names."""
     data_path = record.path or record.asset_paths[0]
     if record.format == ArtifactFormat.ZARR:
-        ds = xr.open_zarr(data_path, consolidated=True)
+        ds = open_zarr_dataset(data_path)
     else:
         ds = xr.open_dataset(data_path)
 

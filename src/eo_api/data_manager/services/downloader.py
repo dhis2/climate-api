@@ -14,7 +14,7 @@ from typing import Any
 import xarray as xr
 import xproj # pyright: ignore[reportUnusedImport]
 from fastapi import BackgroundTasks, HTTPException
-from geozarr_toolkit import create_geozarr_attrs, create_multiscales_layout
+from geozarr_toolkit import create_geozarr_attrs, MultiscalesConventionMetadata
 from topozarr.coarsen import create_pyramid
 
 from ...shared.dhis2_adapter import create_client, get_org_units_geojson
@@ -103,6 +103,9 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     """Collect all dataset files into a single optimised zarr archive."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
+    print(json.dumps(dataset, indent=2))
+
+    cache_info = dataset["cache_info"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
@@ -119,14 +122,18 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    lon_dim, lat_dim = get_lon_lat_dims(ds)
-    dims = [lon_dim, lat_dim]
-
-    xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
-    ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()
+    xmin = ds[lon_dim].min().item() 
+    xmax = ds[lon_dim].max().item()
+    ymin = ds[lat_dim].min().item() 
+    ymax = ds[lat_dim].max().item()
+    
     bbox = [xmin, ymin, xmax, ymax]
+    
     shape = (ds.sizes[lon_dim], ds.sizes[lat_dim]) 
 
+    multiscales = dict(cache_info.get("multiscales", {}))
+
+    # https://github.com/zarr-developers/geozarr-toolkit/issues/15
     geozarr_attrs =  create_geozarr_attrs(
         dimensions=dims,
         crs=CRS,
@@ -134,107 +141,60 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
         shape=shape,
     )
 
-    print("########");
-
-    print(json.dumps(geozarr_attrs, indent=2))
-
-    print("########");
-
-    zarr_conventions = geozarr_attrs.get("zarr_conventions", [])
-
-    # Fix stale org name in convention metadata
-    # for convention in zarr_conventions:
-    #     if convention.get("name") == "proj:":
-    #        convention["schema_url"] = convention["schema_url"].replace(
-    #            "zarr-experimental", "zarr-conventions"
-    #        )
-    #        convention["spec_url"] = convention["spec_url"].replace(
-    #            "zarr-experimental", "zarr-conventions"
-    #        )
-
-    multiscales_convention = {
-        "uuid": "d35379db-88df-4056-af3a-620245f8e347",
-        "schema_url": "https://raw.githubusercontent.com/zarr-conventions/multiscales/refs/tags/v1/schema.json",
-        "spec_url": "https://github.com/zarr-conventions/multiscales/blob/v1/README.md",
-        "name": "multiscales",
-        "description": "Multiscale layout of zarr datasets"
-    }
-
-    zarr_conventions.append(multiscales_convention)
-    geozarr_attrs["zarr_conventions"] = zarr_conventions
-
-    ds.attrs.update(geozarr_attrs)
-
-    print(json.dumps(geozarr_attrs, indent=2))
-
-    ds = ds.proj.assign_crs(spatial_ref=CRS)
-
-    pyramid = create_pyramid(
-        ds,
-        levels=5,
-        x_dim=lon_dim,
-        y_dim=lat_dim,
-        method="mean",  # "mean" (default) | "max" | "min" | "sum"
-    )
-    # print(pyramid.encoding)
-    # print(pyramid.dt)
-
-    # print(json.dumps(pyramid.dt.attrs, indent=2))
-
-    # levels = []
-    # for i, level in enumerate(pyramid.dt.levels):  # or pyramid.dt.levels, depending on your object
-    #    entry = {"asset": str(i)}
-    #    if i > 0:
-    #        entry["derived_from"] = str(i - 1)
-    #        entry["transform"] = {"scale": [2.0, 2.0]}  # or actual scale for your data
-    #    levels.append(entry)
-    # multiscales = create_multiscales_layout(pyramid)
-
-    # determine optimal chunk sizes
-    # logger.info("Determining optimal chunk size for zarr archive")
-    # ds_autochunk = ds.chunk("auto").unify_chunks()
-    # uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
-    # time_space_chunks = _compute_time_space_chunks(ds, dataset)
-    # uniform_chunks.update(time_space_chunks)
-    #logging.info(f"--> {uniform_chunks}")
-
     # save as zarr
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
-    # ds_chunked = ds.chunk(uniform_chunks)
-    # ds_chunked.to_zarr(zarr_path, mode="w")
-    # ds_chunked.close()
 
-    pyramid.dt.attrs.update(geozarr_attrs)
+
+    if (multiscales):
+        levels = multiscales.get("levels", 4)
+        method = multiscales.get("method", "mean")
+
+        # Add multiscales convention metadata to the zarr attributes
+        zarr_conventions = geozarr_attrs.get("zarr_conventions", [])
+        zarr_conventions.append(MultiscalesConventionMetadata().model_dump())
+        geozarr_attrs["zarr_conventions"] = zarr_conventions
+
+        ds = ds.proj.assign_crs(spatial_ref=CRS)
+
+        # https://github.com/carbonplan/topozarr/issues/13
+        pyramid = create_pyramid(
+            ds,
+            levels=levels,
+            x_dim=lon_dim,
+            y_dim=lat_dim,
+            method=method
+        )
+
+        pyramid.dt.attrs.update(geozarr_attrs)
+        pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
+
+        # zarr-layer looks for the time coordinate at the root of the store, not inside each level.
+        # Copy it from level 0 so browser clients can discover it without knowing the level structure.
+        time_src = zarr_path / "0" / "time"
+        time_dst = zarr_path / "time"
+        if time_src.exists():
+            if time_dst.exists():
+                shutil.rmtree(time_dst)
+            shutil.copytree(time_src, time_dst)
+
+        pyramid.dt.close()
+
+    else:    
+        # determine optimal chunk sizes
+        logger.info("Determining optimal chunk size for zarr archive")
+        ds_autochunk = ds.chunk("auto").unify_chunks()
+        uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
+        time_space_chunks = _compute_time_space_chunks(ds, dataset)
+        uniform_chunks.update(time_space_chunks)
+        logging.info(f"--> {uniform_chunks}")
+
+        ds.attrs.update(geozarr_attrs)
+        ds_chunked = ds.chunk(uniform_chunks)
+        ds_chunked.to_zarr(zarr_path, mode="w")
+        ds_chunked.close()
 
     ds.close()
-
-    pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
-
-    # zarr-layer looks for the time coordinate at the root of the store, not inside each level.
-    # Copy it from level 0 so browser clients can discover it without knowing the level structure.
-    time_src = zarr_path / "0" / "time"
-    time_dst = zarr_path / "time"
-    if time_src.exists():
-        if time_dst.exists():
-            shutil.rmtree(time_dst)
-        shutil.copytree(time_src, time_dst)
-
-    #
-    # multiscales = pyramid.dt.attrs.get("multiscales", None)
-
-    # print(json.dumps(multiscales, indent=2))
-
-    # --- Add multiscales attribute to each pyramid level group ---
-    # import zarr
-    # store = zarr.open_group(str(zarr_path), mode='a')
-    # Write to root
-    # if multiscales is not None:
-    #    store.attrs['multiscales'] = multiscales
-        # Write to each pyramid level group (e.g., '0', '1', ...)
-    #    for level in store.group_keys():
-    #        store[level].attrs['multiscales'] = multiscales
-
     logger.info("Finished cache optimization")
 
 
