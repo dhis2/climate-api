@@ -58,7 +58,7 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
         data_path = active.path or active.asset_paths[0]
-        if active.format == ArtifactFormat.ZARR and Path(f"{data_path}/0").exists():
+        if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():
             continue  # pyramid zarr: not served via pygeoapi, use /zarr endpoint instead
         assert active.publication.collection_id is not None
         resources[active.publication.collection_id] = _build_collection_resource(active)
@@ -112,7 +112,7 @@ def _build_collection_resource(record: ArtifactRecord) -> dict[str, Any]:
         "format": _provider_format(record.format),
     }
     if record.format == ArtifactFormat.ZARR:
-        provider["options"] = {"zarr": {"consolidated": False}, "squeeze": True}
+        provider["options"] = {"zarr": {"consolidated": True}, "squeeze": True}
 
     return {
         "type": "collection",

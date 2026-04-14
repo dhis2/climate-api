@@ -846,7 +846,7 @@ requires-dist = [
     { name = "titiler-core", specifier = ">=1.2.0" },
     { name = "topozarr", specifier = ">=0.0.6" },
     { name = "uvicorn", specifier = ">=0.41.0" },
-    { name = "zarr", specifier = ">=3.1.6" },
+    { name = "zarr", specifier = ">=3.1.6,<4" },
 ]
 
 [package.metadata.requires-dev]

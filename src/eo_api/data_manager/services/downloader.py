@@ -183,7 +183,7 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
 
         ds.attrs.update(geozarr_attrs)
         ds_chunked = ds.chunk(uniform_chunks)
-        ds_chunked.to_zarr(zarr_path, mode="w")
+        ds_chunked.to_zarr(zarr_path, mode="w", consolidated=True)
         ds_chunked.close()
 
     ds.close()
