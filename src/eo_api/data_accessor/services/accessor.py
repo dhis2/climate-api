@@ -96,11 +96,24 @@ def get_data_coverage_for_paths(
 
 def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
     """Open a zarr store, handling pyramid stores by opening the base resolution level."""
-    ds = xr.open_zarr(zarr_path, consolidated=False)
+    ds = _open_zarr(zarr_path)
     if not ds.data_vars and Path(f"{zarr_path}/0").exists():
         ds.close()
-        ds = xr.open_zarr(f"{zarr_path}/0", consolidated=False)
-    return ds  # type: ignore[no-any-return]
+        ds = _open_zarr(f"{zarr_path}/0")
+    return ds
+
+
+def _open_zarr(zarr_path: str) -> xr.Dataset:
+    """Open a zarr store, preferring consolidated metadata when available."""
+    try:
+        return xr.open_zarr(zarr_path, consolidated=True)  # type: ignore[no-any-return]
+    except Exception as exc:
+        logger.debug(
+            "Could not open zarr store with consolidated metadata at %s; falling back to non-consolidated open: %s",
+            zarr_path,
+            exc,
+        )
+        return xr.open_zarr(zarr_path, consolidated=False)  # type: ignore[no-any-return]
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:

@@ -119,9 +119,6 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    # load into memory to release netCDF file handles before multiprocessing in create_pyramid
-    ds.load()
-
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
     ymin = ds[lat_dim].min().item()
@@ -151,6 +148,9 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
         zarr_conventions = geozarr_attrs.get("zarr_conventions", [])
         zarr_conventions.append(MultiscalesConventionMetadata().model_dump())
         geozarr_attrs["zarr_conventions"] = zarr_conventions
+
+        # load into memory to release netCDF file handles before multiprocessing in create_pyramid
+        ds.load()
 
         ds = ds.proj.assign_crs(spatial_ref=CRS)
 
