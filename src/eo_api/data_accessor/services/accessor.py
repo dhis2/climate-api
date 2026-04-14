@@ -3,6 +3,7 @@
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import xarray as xr
@@ -41,7 +42,7 @@ def get_data(
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
         time_dim = get_time_dim(ds)
-        ds = ds.sel(**{time_dim: slice(start, end)})  # pyright: ignore[reportArgumentType]
+        ds = ds.sel(**{time_dim: slice(start, end)})  # type: ignore[call-overload]  # pyright: ignore[reportArgumentType]
 
     if bbox is not None:
         logger.info(f"Subsetting xy to {bbox}")
@@ -50,9 +51,9 @@ def get_data(
         # TODO: this assumes y axis increases towards north and is not very stable
         # ...and also does not consider partial pixels at the edges
         # ...should probably switch to rioxarray.clip instead
-        ds = ds.sel(**{lon_dim: slice(xmin, xmax), lat_dim: slice(ymax, ymin)})  # pyright: ignore[reportArgumentType]
+        ds = ds.sel(**{lon_dim: slice(xmin, xmax), lat_dim: slice(ymax, ymin)})  # type: ignore[call-overload]  # pyright: ignore[reportArgumentType]
 
-    return ds  # type: ignore[no-any-return]
+    return ds
 
 
 def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
@@ -95,12 +96,11 @@ def get_data_coverage_for_paths(
 
 def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
     """Open a zarr store, handling pyramid stores by opening the base resolution level."""
-    from pathlib import Path
     ds = xr.open_zarr(zarr_path, consolidated=False)
     if not ds.data_vars and Path(f"{zarr_path}/0").exists():
         ds.close()
         ds = xr.open_zarr(f"{zarr_path}/0", consolidated=False)
-    return ds
+    return ds  # type: ignore[return-value]
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:
