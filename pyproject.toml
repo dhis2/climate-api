@@ -64,7 +64,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "titiler.*", "rasterio.*", "pygeofilter.*", "prefect.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml"]
+module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "titiler.*", "rasterio.*", "pygeofilter.*", "prefect.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit"]
 ignore_missing_imports = true
 
 [tool.pyright]

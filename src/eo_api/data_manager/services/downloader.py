@@ -5,16 +5,15 @@ import importlib
 import inspect
 import logging
 import os
-import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import xarray as xr
-import xproj # pyright: ignore[reportUnusedImport]
+import xproj  # noqa: F401  # type: ignore[import-untyped]  # pyright: ignore[reportUnusedImport]
 from fastapi import BackgroundTasks, HTTPException
-from geozarr_toolkit import create_geozarr_attrs, MultiscalesConventionMetadata
+from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from ...shared.dhis2_adapter import create_client, get_org_units_geojson
@@ -29,7 +28,8 @@ if CACHE_OVERRIDE:
     _download_dir = Path(CACHE_OVERRIDE)
 DOWNLOAD_DIR = _download_dir
 
-CRS ="EPSG:4326"
+CRS = "EPSG:4326"
+
 
 def download_dataset(
     dataset: dict[str, Any],
@@ -103,18 +103,15 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     """Collect all dataset files into a single optimised zarr archive."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
-    print(json.dumps(dataset, indent=2))
-
     cache_info = dataset["cache_info"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
-    ds.load()
 
     lon_dim, lat_dim = get_lon_lat_dims(ds)
     dims = [lon_dim, lat_dim]
 
-    # trim to only minimal vars and coords
+    # trim to only minimal vars and coords before loading into memory
     logger.info("Trimming unnecessary variables and coordinates")
     varname = dataset["variable"]
     ds = ds[[varname]]
@@ -122,15 +119,18 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    xmin = ds[lon_dim].min().item() 
+    # load into memory to release netCDF file handles before multiprocessing in create_pyramid
+    ds.load()
+
+    xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
-    ymin = ds[lat_dim].min().item() 
+    ymin = ds[lat_dim].min().item()
     ymax = ds[lat_dim].max().item()
     bbox = [xmin, ymin, xmax, ymax]
-    shape = (ds.sizes[lon_dim], ds.sizes[lat_dim]) 
+    shape = (ds.sizes[lon_dim], ds.sizes[lat_dim])
 
     # https://github.com/zarr-developers/geozarr-toolkit/issues/15
-    geozarr_attrs =  create_geozarr_attrs(
+    geozarr_attrs = create_geozarr_attrs(
         dimensions=dims,
         crs=CRS,
         bbox=bbox,
@@ -143,7 +143,7 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
 
     multiscales = dict(cache_info.get("multiscales", {}))
 
-    if (multiscales):
+    if multiscales:
         levels = multiscales.get("levels", 4)
         method = multiscales.get("method", "mean")
 
@@ -155,21 +155,16 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
         ds = ds.proj.assign_crs(spatial_ref=CRS)
 
         # https://github.com/carbonplan/topozarr/issues/13
-        pyramid = create_pyramid(
-            ds,
-            levels=levels,
-            x_dim=lon_dim,
-            y_dim=lat_dim,
-            method=method
-        )
+        pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method=method)
 
         pyramid.dt.attrs.update(geozarr_attrs)
         pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
 
         # zarr-layer looks for the time coordinate at the root of the store, not inside each level.
         # Copy it from level 0 so browser clients can discover it without knowing the level structure.
-        time_src = zarr_path / "0" / "time"
-        time_dst = zarr_path / "time"
+        time_dim = get_time_dim(ds)
+        time_src = zarr_path / "0" / time_dim
+        time_dst = zarr_path / time_dim
         if time_src.exists():
             if time_dst.exists():
                 shutil.rmtree(time_dst)
@@ -177,14 +172,14 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
 
         pyramid.dt.close()
 
-    else:    
+    else:
         # determine optimal chunk sizes
         logger.info("Determining optimal chunk size for zarr archive")
         ds_autochunk = ds.chunk("auto").unify_chunks()
         uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
         time_space_chunks = _compute_time_space_chunks(ds, dataset)
         uniform_chunks.update(time_space_chunks)
-        logging.info(f"--> {uniform_chunks}")
+        logger.info(f"--> {uniform_chunks}")
 
         ds.attrs.update(geozarr_attrs)
         ds_chunked = ds.chunk(uniform_chunks)
