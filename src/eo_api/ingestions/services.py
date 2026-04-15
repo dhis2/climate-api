@@ -8,7 +8,7 @@ import logging
 import mimetypes
 import os
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -39,6 +39,7 @@ from eo_api.ingestions.schemas import (
     PublicationStatus,
     SyncResponse,
 )
+from eo_api.ingestions.sync_engine import run_sync
 from eo_api.publications.services import managed_dataset_id_for, publish_artifact
 
 logger = logging.getLogger(__name__)
@@ -240,36 +241,24 @@ def sync_dataset(
     prefer_zarr: bool,
     publish: bool,
 ) -> SyncResponse:
-    """Sync a managed dataset by fetching data after its latest covered period."""
+    """Resolve sync inputs and delegate managed-dataset sync to the sync engine.
+
+    The service layer stays thin on purpose: it validates that the requested
+    public dataset id resolves to a managed dataset plus a source template, then
+    hands execution to `sync_engine.run_sync(...)`.
+    """
     latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-
-    resolved_end = end or date.today().isoformat()
-    next_start = _next_period_start(
-        latest_artifact.coverage.temporal.end,
-        period_type=str(source_dataset["period_type"]),
-    )
-
-    if next_start > resolved_end:
-        return SyncResponse(sync_id=None, status="up_to_date", dataset=get_dataset_or_404(dataset_id))
-
-    artifact = create_artifact(
-        dataset=source_dataset,
-        start=next_start,
-        end=resolved_end,
-        extent_id=latest_artifact.request_scope.extent_id,
-        bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
-        country_code=None,
-        overwrite=False,
+    return run_sync(
+        latest_artifact=latest_artifact,
+        source_dataset=source_dataset,
+        requested_end=end,
         prefer_zarr=prefer_zarr,
         publish=publish,
-    )
-    return SyncResponse(
-        sync_id=artifact.artifact_id,
-        status="completed",
-        dataset=get_dataset_or_404(managed_dataset_id_for(artifact)),
+        create_artifact_fn=create_artifact,
+        get_dataset_fn=get_dataset_or_404,
     )
 
 
@@ -499,24 +488,6 @@ def _group_datasets() -> dict[str, list[ArtifactRecord]]:
     for record in _load_records():
         grouped.setdefault(managed_dataset_id_for(record), []).append(record)
     return grouped
-
-
-def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
-    """Compute the next expected period start for supported source period types."""
-    if period_type == "hourly":
-        timestamp = datetime.fromisoformat(latest_period_end)
-        return (timestamp + timedelta(hours=1)).isoformat()
-    if period_type == "daily":
-        current = date.fromisoformat(latest_period_end)
-        return (current + timedelta(days=1)).isoformat()
-    if period_type == "monthly":
-        current = date.fromisoformat(f"{latest_period_end}-01")
-        year = current.year + (1 if current.month == 12 else 0)
-        month = 1 if current.month == 12 else current.month + 1
-        return f"{year:04d}-{month:02d}"
-    if period_type == "yearly":
-        return f"{int(latest_period_end) + 1:04d}"
-    raise HTTPException(status_code=400, detail=f"Sync is not implemented for period type '{period_type}'")
 
 
 def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:

@@ -3,6 +3,7 @@
   short_name: Total precipitation
   variable: precip
   period_type: daily
+  sync_kind: temporal
   cache_info: 
     eo_function: dhis2eo.data.chc.chirps3.daily.download
   units: mm

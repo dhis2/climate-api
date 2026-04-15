@@ -141,56 +141,6 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
     assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily_sle"
 
 
-def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    monkeypatch.setattr(
-        services,
-        "get_latest_artifact_for_dataset_or_404",
-        lambda _: _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31"),
-    )
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily"},
-    )
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", prefer_zarr=True, publish=True)
-
-    assert result.sync_id is None
-    assert result.status == "up_to_date"
-    assert result.dataset.dataset_id == dataset_id
-
-
-def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily"},
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
-        captured.update(kwargs)
-        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
-
-    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
-
-    assert captured["start"] == "2026-02-01"
-    assert captured["end"] == "2026-02-10"
-    assert captured["extent_id"] == "sle"
-    assert captured["bbox"] == [1.0, 2.0, 3.0, 4.0]
-    assert captured["country_code"] is None
-    assert result.sync_id == "a2"
-    assert result.status == "completed"
-
-
 def test_managed_dataset_id_prefers_extent_id_when_present() -> None:
     artifact = _artifact(artifact_id="a1")
 

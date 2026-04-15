@@ -20,6 +20,23 @@ class PublicationStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class SyncKind(StrEnum):
+    """Supported sync planning modes declared by dataset templates."""
+
+    TEMPORAL = "temporal"
+    RELEASE = "release"
+    STATIC = "static"
+
+
+class SyncAction(StrEnum):
+    """Planner-selected sync action."""
+
+    REMATERIALIZE = "rematerialize"
+    APPEND = "append"
+    NO_OP = "no_op"
+    NOT_SYNCABLE = "not_syncable"
+
+
 class CoverageSpatial(BaseModel):
     """Spatial extent summary."""
 
@@ -258,11 +275,44 @@ class SyncDatasetRequest(BaseModel):
 
 
 class SyncResponse(BaseModel):
-    """Response returned after syncing or checking a managed dataset."""
+    """Public response returned after planning and optionally running a sync."""
 
     sync_id: str | None = Field(
         default=None,
         description="Identifier of the sync-created version when a new version was written.",
     )
     status: str = Field(description="Execution status, for example completed or up_to_date.")
+    message: str | None = Field(default=None, description="Human-readable explanation of the sync outcome.")
     dataset: DatasetDetailRecord = Field(description="Current dataset detail after the sync operation.")
+    sync_detail: "SyncDetail" = Field(description="Planner output describing how EO API interpreted the sync request.")
+
+
+class SyncDetail(BaseModel):
+    """Structured planner output for one managed dataset sync decision.
+
+    This record exists so callers can see both the operational outcome and the
+    reasoning that led to it without needing to infer that logic from status
+    strings alone.
+    """
+
+    source_dataset_id: str = Field(description="Source dataset template id used to plan the sync.")
+    extent_id: str | None = Field(default=None, description="Configured extent id used to scope the managed dataset.")
+    sync_kind: SyncKind = Field(description="Sync planning mode declared by the dataset template.")
+    action: SyncAction = Field(description="Planner-selected sync action.")
+    reason: str = Field(description="Stable machine-readable reason for the selected action.")
+    requested_start: str | None = Field(
+        default=None,
+        description="Start period EO API will use for the execution request.",
+    )
+    requested_end: str | None = Field(
+        default=None,
+        description="End period EO API will use for the execution request.",
+    )
+    latest_available_start: str | None = Field(
+        default=None,
+        description="Earliest upstream period considered by the planner, when applicable.",
+    )
+    latest_available_end: str | None = Field(
+        default=None,
+        description="Latest upstream period considered by the planner, when applicable.",
+    )

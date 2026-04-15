@@ -3,6 +3,7 @@
   short_name: Total population
   variable: pop_total
   period_type: yearly
+  sync_kind: release
   cache_info: 
     eo_function: dhis2eo.data.worldpop.pop_total.yearly.download
     default_params:
