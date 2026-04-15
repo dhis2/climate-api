@@ -12,9 +12,9 @@ from zlib import adler32
 import xarray as xr
 import yaml
 
-from eo_api.data_accessor.services.accessor import open_zarr_dataset
-from eo_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
-from eo_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
+from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config" / "pygeoapi"
@@ -36,7 +36,7 @@ def ensure_pygeoapi_base_config() -> Path:
 
 def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     """Mark an artifact as published and regenerate the pygeoapi config."""
-    from eo_api.ingestions.services import list_artifacts
+    from climate_api.ingestions.services import list_artifacts
 
     collection_id = managed_dataset_id_for(record)
     data_path = record.path or record.asset_paths[0]
@@ -94,7 +94,7 @@ def _sync_pygeoapi_documents(*, resources: dict[str, Any]) -> None:
 def _refresh_mounted_pygeoapi() -> None:
     """Refresh the in-process pygeoapi mount if the wrapper has been initialized."""
     try:
-        from eo_api.pygeoapi_app import refresh_pygeoapi
+        from climate_api.pygeoapi_app import refresh_pygeoapi
     except Exception:
         return
     refresh_pygeoapi()
@@ -184,7 +184,7 @@ def managed_dataset_id_for(record: ArtifactRecord) -> str:
 def _native_dataset_href(dataset_id: str) -> str:
     """Return a dataset-detail link suitable for generated pygeoapi metadata."""
     path = f"/datasets/{dataset_id}"
-    base_url = os.getenv("EO_API_BASE_URL")
+    base_url = os.getenv("CLIMATE_API_BASE_URL")
     if base_url:
         return f"{base_url.rstrip('/')}{path}"
 

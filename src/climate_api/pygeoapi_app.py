@@ -9,7 +9,7 @@ import threading
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from eo_api.publications.services import ensure_pygeoapi_base_config
+from climate_api.publications.services import ensure_pygeoapi_base_config
 
 logger = logging.getLogger(__name__)
 

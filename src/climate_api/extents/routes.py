@@ -2,22 +2,22 @@
 
 from fastapi import APIRouter
 
-from eo_api.extents import services
-from eo_api.extents.schemas import ExtentListResponse, ExtentRecord
+from climate_api.extents import services
+from climate_api.extents.schemas import ExtentListResponse, ExtentRecord
 
 router = APIRouter()
 
 
 @router.get("", response_model=ExtentListResponse)
 def list_extents() -> ExtentListResponse:
-    """List configured extents for this EO API instance."""
+    """List configured extents for this Climate API instance."""
     items = [_build_extent_record(extent) for extent in services.list_extents()]
     return ExtentListResponse(items=items)
 
 
 @router.get("/{extent_id}", response_model=ExtentRecord)
 def get_extent(extent_id: str) -> ExtentRecord:
-    """Get one configured extent for this EO API instance."""
+    """Get one configured extent for this Climate API instance."""
     return _build_extent_record(services.get_extent_or_404(extent_id))
 
 

@@ -4,10 +4,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
-from eo_api.data_registry.routes import _get_dataset_or_404
-from eo_api.extents.services import get_extent_or_404
-from eo_api.ingestions import services
-from eo_api.ingestions.schemas import (
+from climate_api.data_registry.routes import _get_dataset_or_404
+from climate_api.extents.services import get_extent_or_404
+from climate_api.ingestions import services
+from climate_api.ingestions.schemas import (
     CreateIngestionRequest,
     DatasetDetailRecord,
     DatasetListResponse,

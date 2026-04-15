@@ -20,7 +20,7 @@ All standards share a common core: JSON/HTML responses, OpenAPI-described endpoi
 
 [pygeoapi](https://pygeoapi.io) is a Python server that implements the OGC API standards listed above. It is the OGC Reference Implementation for OGC API - Features.
 
-In this project pygeoapi is mounted as a sub-application at `/ogcapi`. The integration is minimal -- a single re-export in `src/eo_api/routers/ogcapi.py`:
+In this project pygeoapi is mounted as a sub-application at `/ogcapi`. The integration is minimal -- a single re-export in `src/climate_api/routers/ogcapi.py`:
 
 ```python
 from pygeoapi.starlette_app import APP as pygeoapi_app
@@ -75,11 +75,11 @@ Service-level identification, contact details, and license. Supports multilingua
 metadata:
   identification:
     title:
-      en: DHIS2 EO API
+      en: DHIS2 Climate API
     description:
       en: OGC API compliant geospatial data API
   provider:
-    name: DHIS2 EO API
+    name: DHIS2 Climate API
     url: https://dhis2.org
   contact:
     name: DHIS2 Climate Team
@@ -501,7 +501,7 @@ In the YAML config the `name` field on a provider or processor identifies the pl
 
 ### Plugin directory layout
 
-Custom plugins live under `src/eo_api/routers/ogcapi/plugins/`, organized by type:
+Custom plugins live under `src/climate_api/routers/ogcapi/plugins/`, organized by type:
 
 ```
 plugins/
@@ -543,7 +543,7 @@ Reference it in the config by dotted path:
 ```yaml
 providers:
   - type: feature
-    name: eo_api.routers.ogcapi.plugins.providers.my_provider.MyProvider
+    name: climate_api.routers.ogcapi.plugins.providers.my_provider.MyProvider
     data: /path/to/data
 ```
 
@@ -580,7 +580,7 @@ resources:
   my-process:
     type: process
     processor:
-      name: eo_api.routers.ogcapi.plugins.processes.my_process.MyProcessor
+      name: climate_api.routers.ogcapi.plugins.processes.my_process.MyProcessor
 ```
 
 ## References

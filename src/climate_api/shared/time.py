@@ -1,4 +1,4 @@
-"""Time helpers shared across EO API modules."""
+"""Time helpers shared across Climate API modules."""
 
 from typing import Any
 

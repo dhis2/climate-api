@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from eo_api.ingestions import services
-from eo_api.ingestions.schemas import (
+from climate_api.ingestions import services
+from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
     ArtifactPublication,
@@ -16,7 +16,7 @@ from eo_api.ingestions.schemas import (
     DatasetPublication,
     PublicationStatus,
 )
-from eo_api.publications.services import managed_dataset_id_for
+from climate_api.publications.services import managed_dataset_id_for
 
 
 def _artifact(

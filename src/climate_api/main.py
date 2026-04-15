@@ -1,4 +1,4 @@
-"""DHIS2 EO API -- Earth observation data API for DHIS2."""
+"""DHIS2 Climate API -- Climate and earth observation data API for DHIS2."""
 
 import os
 from collections.abc import Awaitable, Callable
@@ -7,12 +7,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
-import eo_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
-from eo_api.data_registry import routes as dataset_template_routes
-from eo_api.extents import routes as extent_routes
-from eo_api.ingestions import routes as ingestion_routes
-from eo_api.pygeoapi_app import mount_pygeoapi
-from eo_api.system import routes as system_routes
+import climate_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
+from climate_api.data_registry import routes as dataset_template_routes
+from climate_api.extents import routes as extent_routes
+from climate_api.ingestions import routes as ingestion_routes
+from climate_api.pygeoapi_app import mount_pygeoapi
+from climate_api.system import routes as system_routes
 
 app = FastAPI()
 
@@ -27,7 +27,7 @@ app.add_middleware(
 
 def _zarr_browser_access_origins() -> set[str]:
     """Return allowlisted remote origins permitted to inspect local Zarr endpoints."""
-    raw = os.getenv("EO_API_ZARR_BROWSER_ORIGINS", "https://inspect.geozarr.org")
+    raw = os.getenv("CLIMATE_API_ZARR_BROWSER_ORIGINS", "https://inspect.geozarr.org")
     return {origin.strip() for origin in raw.split(",") if origin.strip()}
 
 

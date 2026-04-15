@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from eo_api.main import app
+from climate_api.main import app
 
 
 @pytest.fixture

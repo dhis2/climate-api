@@ -11,7 +11,7 @@ EXTENTS_PATH = SCRIPT_DIR.parent.parent.parent / "data" / "extents.yaml"
 
 
 def list_extents() -> list[dict[str, Any]]:
-    """Return configured extents for this EO API instance."""
+    """Return configured extents for this Climate API instance."""
     if not EXTENTS_PATH.exists():
         return []
     payload = yaml.safe_load(EXTENTS_PATH.read_text(encoding="utf-8")) or {}

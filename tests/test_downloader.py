@@ -10,8 +10,8 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from eo_api.data_accessor.services.accessor import open_zarr_dataset
-from eo_api.data_manager.services import downloader
+from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_manager.services import downloader
 
 
 def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
