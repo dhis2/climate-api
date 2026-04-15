@@ -9,8 +9,6 @@ Key concepts:
 - **Dataset templates** — YAML files in `data/datasets/` describing a data source (variable, period type, download function). These are blueprints.
 - **Artifacts / managed datasets** — ingested instances of a template for a specific spatial extent and time range. Exposed under `/datasets` and `/zarr/{dataset_id}`.
 - **Extents** — named spatial bounding boxes configured at instance setup time (`id`, `bbox`, optional `country_code`).
-- **GeoZarr stores** — all output is written as zarr v3 with GeoZarr metadata. Datasets with `multiscales` in their cache config are written as multiscale pyramids; others are flat zarr stores.
-- **Pyramid vs flat zarr** — pyramid stores (e.g.WorldPop) are served via `/zarr/{dataset_id}` and detected by the presence of a `0/` subdirectory. Flat stores (e.g. CHIRPS) are also served via `/zarr` and additionally exposed through pygeoapi under `/ogcapi`.
 
 ## Repository layout
 
@@ -54,17 +52,13 @@ cache_info:
     method: mean
 ```
 
-If `multiscales` is present, `build_dataset_zarr` builds a topozarr pyramid. Otherwise it writes a flat chunked zarr with auto-computed chunk sizes tuned to the dataset's `period_type`.
+If `multiscales` is present, `build_dataset_zarr` builds a multiscale Zarr pyramid. Otherwise it writes a flat chunked zarr with auto-computed chunk sizes tuned to the dataset's `period_type`.
 
 ## pygeoapi
 
 pygeoapi is mounted at `/ogcapi` as a sub-application. Its config is generated dynamically from published artifacts by `publications/services.py` and written to `data/pygeoapi/pygeoapi-config.yml`.
 
 The config is regenerated on each `publish_artifact` call and also at startup via `ensure_pygeoapi_base_config()`.
-
-## CORS / browser access
-
-The `/zarr` routes require special CORS handling for Private Network Access preflights (zarr-layer calling localhost from a remote origin). This is implemented as a custom middleware in `main.py` that intercepts OPTIONS requests and adds `Access-Control-Allow-Private-Network: true` and `Access-Control-Allow-Methods: GET, HEAD, OPTIONS`.
 
 ## Commit conventions
 

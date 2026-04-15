@@ -68,14 +68,7 @@ The following constraints apply to the first version of the Climate API. They re
 
 ### 5.1 Single spatial extent
 
-Each Climate API instance is configured with one or more named extents, defined at setup time. Each extent has a required `id` and `bbox`, and an optional `org_unit_id` for linking to a DHIS2 org unit. For example:
-
-```yaml
-extents:
-  - id: sle
-    bbox: [-13.5, 6.9, -10.1, 10.0]
-    org_unit_id: ... # optional
-```
+Each Climate API instance is configured with one or more named extents, defined at setup time. Each extent has a required `id` and `bbox`, and an optional `org_unit_id` for linking to a DHIS2 org unit.
 
 Extents are not expected to change after setup. For the first version, only a single extent is supported. Larger countries may configure a sub-national extent (e.g. a district) to limit initial download volume. The `extent_id` is passed as a parameter to ingestion alongside the `dataset_id` — ingestion is not tied to a DHIS2 instance.
 
@@ -176,13 +169,13 @@ Sub-national extents use the same schema (e.g. `chirps3_precipitation_daily_bo` 
 
 The API is built on FastAPI and exposes the following endpoint groups:
 
-| Endpoint             | Description                                                                                                                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/ingestion`         | Trigger data download from an upstream source for the configured extent and date range. Parameters: `dataset_id`, `start`, `end`, `extent_id`. Creates or updates the corresponding Zarr store.                        |
-| `/sync`              | Check for more recent data from the upstream source and append new time steps to the existing Zarr store. Validates temporal continuity before writing.                                                                |
-| `/datasets`          | List and describe available published datasets — metadata, period type, extent, last updated, and access links.                                                                                                        |
-| `/zarr/{dataset_id}` | Serve the GeoZarr store via HTTP range requests (FastAPI StaticFiles). Consumed by `xarray.open_zarr()`, QGIS, zarr-layer, and the OGC layer. In cloud deployments, redirects to the object storage endpoint directly. |
-| `/ogcapi/...`        | OGC API-compliant endpoints served by pygeoapi: Coverages, EDR, Processes, Tiles, Collections.                                                                                                                         |
+| Endpoint             | Description                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/ingestions`        | Trigger data download from an upstream source for the configured extent and date range. Parameters: `dataset_id`, `start`, `end`, `extent_id`. Creates or updates the corresponding Zarr store. |
+| `/sync`              | Check for more recent data from the upstream source and append new time steps to the existing Zarr store. Validates temporal continuity before writing.                                         |
+| `/datasets`          | List and describe available published datasets — metadata, period type, extent, last updated, and access links.                                                                                 |
+| `/zarr/{dataset_id}` | Serve the GeoZarr store by returning a directory listing at the dataset path and file responses for Zarr contents beneath it.                                                                   |
+| `/ogcapi/...`        | OGC API-compliant endpoints served by pygeoapi: Coverages, EDR, Processes, Collections.                                                                                                         |
 
 ### 8.2 Storage layer
 
@@ -216,7 +209,7 @@ The pipeline stages are:
 
 Each stage is independently accessible as an API endpoint, allowing custom pipelines to be constructed by combining steps in different sequences.
 
-Long-running jobs (ingestion, sync, aggregation) are executed asynchronously via a Celery task queue backed by Redis. This ensures the API remains responsive under concurrent load. Dask is used for parallel computation within each job, processing Zarr chunks concurrently across CPU cores or threads.
+Long-running jobs (ingestion, sync, aggregation) are executed asynchronously. This ensures the API remains responsive under concurrent load. Dask is used for parallel computation within each job, processing Zarr chunks concurrently across CPU cores or threads.
 
 ### 8.4 Technology stack
 
@@ -225,7 +218,6 @@ Long-running jobs (ingestion, sync, aggregation) are executed asynchronously via
 | FastAPI (Python)              | Core REST API framework. Handles ingestion, sync, dataset, and OGC endpoints. Each pipeline step is exposed as a separate endpoint.                                                      |
 | Xarray + Zarr                 | In-memory dataset model and cloud-native chunked storage format. GeoZarr conventions applied for geospatial metadata and multiscale pyramid support.                                     |
 | Dask                          | Parallel computation within jobs — processes Zarr chunks concurrently for aggregation, reprojection, and derived variable computation. Works natively with Xarray.                       |
-| Celery + Redis                | Job queue for concurrent and long-running requests. Celery dispatches jobs across workers; Dask parallelises computation within each job.                                                |
 | rioxarray                     | Raster operations on Xarray datasets — reprojection, clipping, resampling, and CRS management.                                                                                           |
 | exactextract                  | Polygon aggregation (zonal statistics) to org unit features. Supports weighted partial-pixel coverage for accurate population aggregation.                                               |
 | xarray-multiscale             | Generates multiscale pyramid overview levels at ingest time, required for zarr-layer zoom-level-aware chunk fetching.                                                                    |
