@@ -7,7 +7,7 @@ sync: ## Install dependencies with uv
 	uv sync
 
 run: openapi ## Start the app with uvicorn
-	uv run uvicorn eo_api.main:app --reload
+	uv run uvicorn climate_api.main:app --reload
 
 lint: ## Run ruff linting and formatting (autofix)
 	uv run ruff check --fix .
@@ -20,7 +20,7 @@ test: ## Run tests with pytest
 
 openapi: ## Generate pygeoapi OpenAPI spec
 	@set -a && . ./.env && set +a && \
-		PYTHONPATH="$(PWD)/src" uv run python -c "from eo_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
+		PYTHONPATH="$(PWD)/src" uv run python -c "from climate_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
 
 start: openapi ## Start the Docker stack (builds images first)
 	docker compose up --build

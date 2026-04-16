@@ -1,6 +1,6 @@
 """Early-boot side effects.
 
-This module is imported before any other eo_api modules so that
+This module is imported before any other climate_api modules so that
 environment variables and logging are configured before other imports.
 """
 
@@ -18,8 +18,8 @@ DEFAULT_PYGEOAPI_OPENAPI = Path(__file__).resolve().parent.parent.parent / "data
 os.environ.setdefault("PYGEOAPI_CONFIG", str(DEFAULT_PYGEOAPI_CONFIG))
 os.environ.setdefault("PYGEOAPI_OPENAPI", str(DEFAULT_PYGEOAPI_OPENAPI))
 
-# -- eo_api / third-party logging setup ---------------------------------------
-eo_logger = logging.getLogger("eo_api")
+# -- climate_api / third-party logging setup ---------------------------------------
+eo_logger = logging.getLogger("climate_api")
 eo_logger.setLevel(logging.INFO)
 if not eo_logger.handlers:
     handler = logging.StreamHandler()

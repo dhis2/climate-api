@@ -13,7 +13,7 @@ Key concepts:
 ## Repository layout
 
 ```
-src/eo_api/
+src/climate_api/
   data_manager/     # download and zarr build (downloader.py)
   data_accessor/    # open zarr / netcdf for read (accessor.py)
   data_registry/    # dataset template YAML loading

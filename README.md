@@ -1,6 +1,6 @@
-# eo-api
+# climate-api
 
-DHIS2 EO API allows data from multiple sources (primarily earth observation data) to be extracted, transformed and loaded into DHIS2 and the Chap Modelling Platform.
+DHIS2 Climate API allows data from multiple sources (primarily climate and earth observation data) to be extracted, transformed and loaded into DHIS2 and the Chap Modelling Platform.
 
 ## Setup
 
@@ -21,7 +21,7 @@ Key environment variables (used by the OGC API DHIS2 plugin):
 
 Start the app:
 
-`uv run uvicorn eo_api.main:app --reload`
+`uv run uvicorn climate_api.main:app --reload`
 
 ### Using pip (alternative)
 
@@ -31,16 +31,16 @@ If you can't use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-uvicorn eo_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
 
 ```
-conda create -n dhis2-eo-api python=3.13
-conda activate dhis2-eo-api
+conda create -n dhis2-climate-api python=3.13
+conda activate dhis2-climate-api
 pip install -e .
-uvicorn eo_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
 ### Makefile targets
@@ -58,7 +58,7 @@ uvicorn eo_api.main:app --reload
 To validate the configuration:
 
 ```
-PYTHONPATH="$(pwd)/src" uv run python -c "from eo_api.publications.services import ensure_pygeoapi_base_config; print(ensure_pygeoapi_base_config())"
+PYTHONPATH="$(pwd)/src" uv run python -c "from climate_api.publications.services import ensure_pygeoapi_base_config; print(ensure_pygeoapi_base_config())"
 PYTHONPATH="$(pwd)/src" uv run pygeoapi config validate -c data/pygeoapi/pygeoapi-config.yml
 ```
 
@@ -67,14 +67,14 @@ Run after changes are made in `config/pygeoapi/base.yml` or publication generati
 `make openapi` or
 
 ```
-PYTHONPATH="$(pwd)/src" uv run python -c "from eo_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
+PYTHONPATH="$(pwd)/src" uv run python -c "from climate_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
 ```
 
 ### Endpoints
 
 Root endpoint:
 
-http://127.0.0.1:8000/ -> Welcome to DHIS2 EO API
+http://127.0.0.1:8000/ -> Welcome to DHIS2 Climate API
 
 Docs:
 

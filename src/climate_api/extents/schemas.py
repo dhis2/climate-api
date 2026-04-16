@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class ExtentRecord(BaseModel):
-    """Configured spatial extent for this EO API instance."""
+    """Configured spatial extent for this Climate API instance."""
 
     extent_id: str = Field(description="Stable identifier for the configured extent.")
     name: str | None = Field(default=None, description="Human-readable name of the extent.")
@@ -24,7 +24,7 @@ class ExtentListResponse(BaseModel):
     )
     items: list[ExtentRecord] = Field(
         default_factory=list,
-        description="Configured extents available in this EO API instance.",
+        description="Configured extents available in this Climate API instance.",
         examples=[
             [
                 {

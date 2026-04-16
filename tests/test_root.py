@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from eo_api.ingestions import services as ingestion_services
-from eo_api.system.schemas import HealthStatus, RootResponse
+from climate_api.ingestions import services as ingestion_services
+from climate_api.system.schemas import HealthStatus, RootResponse
 
 
 def test_root_returns_200(client: TestClient) -> None:
@@ -13,7 +13,7 @@ def test_root_returns_200(client: TestClient) -> None:
 def test_root_returns_welcome_message(client: TestClient) -> None:
     response = client.get("/")
     result = RootResponse.model_validate(response.json())
-    assert result.message == "Welcome to DHIS2 EO API"
+    assert result.message == "Welcome to DHIS2 Climate API"
 
 
 def test_root_returns_links(client: TestClient) -> None:

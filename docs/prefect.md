@@ -65,10 +65,10 @@ Both endpoints return:
 
 ## Adding New Pipelines
 
-1. Add a Pydantic input model in `src/eo_api/pipelines/schemas.py`
-2. Add a `@task` function in `src/eo_api/pipelines/tasks.py`
-3. Add a `@flow` function in `src/eo_api/pipelines/flows.py` that chains tasks
-4. Add a `POST` endpoint in `src/eo_api/pipelines/router.py`
+1. Add a Pydantic input model in `src/climate_api/pipelines/schemas.py`
+2. Add a `@task` function in `src/climate_api/pipelines/tasks.py`
+3. Add a `@flow` function in `src/climate_api/pipelines/flows.py` that chains tasks
+4. Add a `POST` endpoint in `src/climate_api/pipelines/router.py`
 
 ## Configuration
 
