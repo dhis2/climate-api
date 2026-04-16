@@ -25,7 +25,7 @@ def get_data(
     zarr_path = get_zarr_path(dataset)
     if zarr_path:
         logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = xr.open_zarr(zarr_path, consolidated=True)
+        ds = open_zarr_dataset(str(zarr_path))
     else:
         logger.warning(
             f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
@@ -41,7 +41,7 @@ def get_data(
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
         time_dim = get_time_dim(ds)
-        ds = ds.sel(**{time_dim: slice(start, end)})  # pyright: ignore[reportArgumentType]
+        ds = ds.sel(**{time_dim: slice(start, end)})  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
     if bbox is not None:
         logger.info(f"Subsetting xy to {bbox}")
@@ -50,9 +50,9 @@ def get_data(
         # TODO: this assumes y axis increases towards north and is not very stable
         # ...and also does not consider partial pixels at the edges
         # ...should probably switch to rioxarray.clip instead
-        ds = ds.sel(**{lon_dim: slice(xmin, xmax), lat_dim: slice(ymax, ymin)})  # pyright: ignore[reportArgumentType]
+        ds = ds.sel(**{lon_dim: slice(xmin, xmax), lat_dim: slice(ymax, ymin)})  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
-    return ds  # type: ignore[no-any-return]
+    return ds
 
 
 def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
@@ -77,7 +77,7 @@ def get_data_coverage_for_paths(
         raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
 
     if zarr_path is not None:
-        ds = xr.open_zarr(zarr_path, consolidated=True)
+        ds = open_zarr_dataset(zarr_path)
     else:
         assert netcdf_paths is not None
         ds = xr.open_mfdataset(
@@ -91,6 +91,34 @@ def get_data_coverage_for_paths(
         return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
     finally:
         ds.close()
+
+
+def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
+    """Open a zarr store, handling pyramid stores by opening the base resolution level.
+
+    When the root group has no data variables (as in a multiscale pyramid store),
+    attempts to open level 0 instead. This works for any store backend — local
+    paths, S3 URIs, GCS URIs, fsspec mappers — without filesystem-specific checks.
+    """
+    ds = _open_zarr(zarr_path)
+    if not ds.data_vars:
+        level0_path = zarr_path.rstrip("/") + "/0"
+        try:
+            level0 = _open_zarr(level0_path)
+        except Exception as exc:
+            ds.close()
+            raise ValueError(
+                f"Zarr store at {zarr_path!r} has no data variables at the root "
+                f"and base pyramid level {level0_path!r} could not be opened"
+            ) from exc
+        ds.close()
+        ds = level0
+    return ds
+
+
+def _open_zarr(zarr_path: str) -> xr.Dataset:
+    """Open a zarr store with automatic consolidated metadata detection."""
+    return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:
