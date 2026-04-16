@@ -21,7 +21,7 @@ logging:
 metadata:
   identification:
     title:
-      en: DHIS2 EO API
+      en: DHIS2 Climate API
     description:
       en: Published EO gridded data collections
     keywords:
@@ -34,7 +34,7 @@ metadata:
     terms_of_service: https://dhis2.org
     url: https://dhis2.org
   provider:
-    name: DHIS2 EO API
+    name: DHIS2 Climate API
     url: https://dhis2.org
   contact:
     name: DHIS2 Climate Team
