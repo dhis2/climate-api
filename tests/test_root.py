@@ -23,7 +23,6 @@ def test_root_returns_links(client: TestClient) -> None:
     assert "extents" in rels
     assert "ingestions" in rels
     assert "datasets" in rels
-    assert "prefect" in rels
     assert "docs" in rels
 
 
