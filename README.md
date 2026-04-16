@@ -2,6 +2,8 @@
 
 DHIS2 Climate API extracts, transforms, and loads climate and Earth Observation data into DHIS2 and the CHAP modelling platform.
 
+> **Status: active development.** Current focus is on dataset ingestion, sync workflows, and GeoZarr storage. APIs and data models may change without notice.
+
 ## Setup
 
 ### Using uv (recommended)
