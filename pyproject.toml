@@ -7,7 +7,6 @@ name = "climate-api"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "titiler-core>=1.2.0",
     "uvicorn>=0.41.0",
     "python-dotenv>=1.0.1",
     "pygeoapi>=0.22.0",
@@ -15,7 +14,6 @@ dependencies = [
     "dhis2-client @ git+https://github.com/dhis2/dhis2-python-client.git@V0.3.0",
     "geojson-pydantic>=2.1.0",
     "httpx>=0.28.1",
-    "prefect>=3.6",
     "earthkit-transforms==0.5.*",
     "metpy>=1.7,<2",
     "zarr>=3.1.6,<4",
@@ -64,7 +62,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "titiler.*", "rasterio.*", "pygeofilter.*", "prefect.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit"]
+module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit"]
 ignore_missing_imports = true
 
 [tool.pyright]
