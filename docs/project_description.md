@@ -263,12 +263,12 @@ The storage backend is configured entirely via environment variables — no code
 
 ## 11. Related work and repositories
 
-| Resource                 | Link / Description                                                        |
-| ------------------------ | ------------------------------------------------------------------------- |
-| DHIS2 climate data       | https://dhis2.org/climate/climate-data/                                   |
-| CHAP Modelling Platform  | https://chap.dhis2.org/                                                   |
-| dhis2eo (Python library) | Underlying extraction and processing library for EO data.                 |
-| dhis2-python-client      | DHIS2 API client library used for org unit queries and data value upload. |
-| Climate API GitHub       | https://github.com/dhis2/eo-api                                           |
-| GeoZarr roadmap          | https://geozarr.org/roadmap.html                                          |
-| pygeoapi                 | https://pygeoapi.io/                                                      |
+| Resource                | Link / Description                           |
+| ----------------------- | -------------------------------------------- |
+| Climate API GitHub      | https://github.com/dhis2/climate-api         |
+| DHIS2 climate data      | https://dhis2.org/climate/climate-data/      |
+| CHAP Modelling Platform | https://chap.dhis2.org/                      |
+| dhis2eo                 | https://github.com/dhis2/dhis2eo             |
+| dhis2-python-client     | https://github.com/dhis2/dhis2-python-client |
+| GeoZarr roadmap         | https://geozarr.org/roadmap.html             |
+| pygeoapi                | https://pygeoapi.io/                         |
