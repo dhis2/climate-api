@@ -44,6 +44,6 @@ def get_file(
     return FileResponse(
         file_path,
         media_type="application/x-netcdf",
-        filename="eo-api-raster-download.nc",
+        filename="climate-api-raster-download.nc",
         background=BackgroundTask(cleanup_file, file_path),
     )

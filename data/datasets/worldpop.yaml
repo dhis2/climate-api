@@ -4,8 +4,10 @@
   variable: pop_total
   period_type: yearly
   sync_kind: release
-  cache_info: 
+  cache_info:
     eo_function: dhis2eo.data.worldpop.pop_total.yearly.download
+    multiscales:
+      levels: 4
     default_params:
       version: global2
   units: people

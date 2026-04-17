@@ -15,8 +15,8 @@ It is intended to answer:
 
 The branch now centers on one narrow vertical slice:
 
-1. define dataset templates in the EO API registry
-2. define configured extents for the EO API instance
+1. define dataset templates in the Climate API registry
+2. define configured extents for the Climate API instance
 3. ingest data into a managed dataset for one dataset template plus one extent
 4. publish that managed dataset through `pygeoapi` under `/ogcapi`
 5. expose native metadata under `/datasets` and raw Zarr access under `/zarr`
@@ -32,22 +32,22 @@ The public surface is intentionally small:
 
 ## Main Code References
 
-- [src/eo_api/main.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/main.py)
+- [src/climate_api/main.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/main.py)
   - app assembly and router mounting
-- [src/eo_api/ingestions/routes.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/ingestions/routes.py)
+- [src/climate_api/ingestions/routes.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/routes.py)
   - ingestion, dataset, zarr, and sync routes
-- [src/eo_api/ingestions/services.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/ingestions/services.py)
+- [src/climate_api/ingestions/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/services.py)
   - internal artifact persistence, dataset grouping, sync behavior, Zarr browsing
-- [src/eo_api/ingestions/schemas.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/ingestions/schemas.py)
+- [src/climate_api/ingestions/schemas.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/schemas.py)
   - public ingestion, dataset, and sync contracts
-- [src/eo_api/extents/routes.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/extents/routes.py)
+- [src/climate_api/extents/routes.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/extents/routes.py)
   - extent discovery endpoints
-- [src/eo_api/extents/services.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/extents/services.py)
+- [src/climate_api/extents/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/extents/services.py)
   - YAML-backed extent registry
-- [src/eo_api/publications/services.py](/home/abyot/coding/EO/eo-api-pygeoapi-publication/src/eo_api/publications/services.py)
+- [src/climate_api/publications/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
-- [data/extents.yaml](/home/abyot/coding/EO/eo-api-pygeoapi-publication/data/extents.yaml)
-  - configured extents for the EO API instance
+- [data/extents.yaml](/home/abyot/coding/EO/climate-api-pygeoapi-publication/data/extents.yaml)
+  - configured extents for the Climate API instance
 
 ## What Was Achieved
 
@@ -65,7 +65,7 @@ The public surface is intentionally small:
 
 Raw `bbox` and `country_code` are no longer part of the public ingestion payload.
 
-The route resolves `extent_id` inside EO API and then calls the downloader with concrete spatial inputs.
+The route resolves `extent_id` inside Climate API and then calls the downloader with concrete spatial inputs.
 
 ### 2. Public ingestion responses now return datasets, not artifacts
 
@@ -167,14 +167,14 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 ### Ingestion
 
 1. client submits `dataset_id`, `start`, optional `end`, and optional `extent_id`
-2. EO API resolves the dataset template from the registry
-3. EO API resolves `extent_id` to a concrete bbox or other configured spatial input
-4. EO API checks for an existing matching internal artifact
-5. if needed, EO API downloads the source data
-6. EO API prefers Zarr materialization and falls back to NetCDF when needed
-7. EO API computes realized coverage metadata
-8. EO API stores an internal artifact record
-9. if `publish=true`, EO API publishes the dataset through pygeoapi
+2. Climate API resolves the dataset template from the registry
+3. Climate API resolves `extent_id` to a concrete bbox or other configured spatial input
+4. Climate API checks for an existing matching internal artifact
+5. if needed, Climate API downloads the source data
+6. Climate API prefers Zarr materialization and falls back to NetCDF when needed
+7. Climate API computes realized coverage metadata
+8. Climate API stores an internal artifact record
+9. if `publish=true`, Climate API publishes the dataset through pygeoapi
 10. the route returns the public managed dataset view
 
 ### Dataset publication

@@ -4,10 +4,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
-from eo_api.data_registry.routes import _get_dataset_or_404
-from eo_api.extents.services import get_extent_or_404
-from eo_api.ingestions import services
-from eo_api.ingestions.schemas import (
+from climate_api.data_registry.routes import _get_dataset_or_404
+from climate_api.extents.services import get_extent_or_404
+from climate_api.ingestions import services
+from climate_api.ingestions.schemas import (
     CreateIngestionRequest,
     DatasetDetailRecord,
     DatasetListResponse,
@@ -92,13 +92,13 @@ def download_artifact_file(dataset_id: str) -> FileResponse:
     return FileResponse(artifact.path, media_type=media_type, filename=filename)
 
 
-@zarr_router.get("/{dataset_id}")
+@zarr_router.api_route("/{dataset_id}", methods=["GET", "HEAD"])
 def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
     """Return canonical Zarr store listing for a managed dataset."""
     return services.get_dataset_zarr_store_info_or_404(dataset_id)
 
 
-@zarr_router.get("/{dataset_id}/{relative_path:path}", response_model=None)
+@zarr_router.api_route("/{dataset_id}/{relative_path:path}", methods=["GET", "HEAD"], response_model=None)
 def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> FileResponse | Response | dict[str, object]:
     """Serve canonical Zarr store content for a managed dataset."""
     return services.get_dataset_zarr_store_file_or_404(dataset_id, relative_path)

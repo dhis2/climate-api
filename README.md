@@ -1,6 +1,8 @@
-# eo-api
+# DHIS2 Climate API
 
-DHIS2 EO API allows data from multiple sources (primarily earth observation data) to be extracted, transformed and loaded into DHIS2 and the Chap Modelling Platform.
+DHIS2 Climate API extracts, transforms, and loads climate and Earth Observation data into DHIS2 and the CHAP modelling platform.
+
+> **Status: active development.** Current focus is on dataset ingestion, sync workflows, and GeoZarr storage. APIs and data models may change without notice.
 
 ## Setup
 
@@ -8,98 +10,82 @@ DHIS2 EO API allows data from multiple sources (primarily earth observation data
 
 Install dependencies (requires [uv](https://docs.astral.sh/uv/)):
 
-`uv sync`
+```
+uv sync
+```
 
-Environment variables are loaded automatically from `.env` (via `python-dotenv`).
-Copy `.env.example` to `.env` and adjust values as needed.
+Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime.
 
-Key environment variables (used by the OGC API DHIS2 plugin):
+Key environment variables:
 
-- `DHIS2_BASE_URL` -- DHIS2 API base URL (defaults to play server in `.env.example`)
-- `DHIS2_USERNAME` -- DHIS2 username
-- `DHIS2_PASSWORD` -- DHIS2 password
+- `DHIS2_BASE_URL` — DHIS2 API base URL (defaults to play server in `.env.example`)
+- `DHIS2_USERNAME` — DHIS2 username
+- `DHIS2_PASSWORD` — DHIS2 password
 
 Start the app:
 
-`uv run uvicorn eo_api.main:app --reload`
+```
+uv run uvicorn climate_api.main:app --reload
+```
 
-### Using pip (alternative)
+### Using pip
 
-If you can't use uv (e.g. mixed conda/forge environments):
+If you cannot use uv (e.g. mixed conda/forge environments):
 
 ```
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-uvicorn eo_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
 
 ```
-conda create -n dhis2-eo-api python=3.13
-conda activate dhis2-eo-api
+conda create -n dhis2-climate-api python=3.13
+conda activate dhis2-climate-api
 pip install -e .
-uvicorn eo_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
-### Makefile targets
+## Development
 
-- `make sync` -- install dependencies with uv
-- `make run` -- start the app with uvicorn
-- `make lint` -- run ruff linting and format checks
-- `make test` -- run tests with pytest
-- `make openapi` -- generate pygeoapi OpenAPI spec
-- `make start` -- start the Docker stack (builds images first)
-- `make restart` -- tear down, rebuild, and start the Docker stack from scratch
+Common Makefile targets:
 
-### pygeoapi instructions
+| Target | Description |
+|---|---|
+| `make sync` | Install dependencies with uv |
+| `make run` | Start the app with uvicorn (hot reload) |
+| `make lint` | Check linting, formatting, and types |
+| `make fix` | Autofix ruff lint and format issues |
+| `make test` | Run the test suite with pytest |
+| `make openapi` | Regenerate the pygeoapi OpenAPI spec |
+| `make start` | Build and start the Docker stack |
+| `make restart` | Tear down, rebuild, and restart the Docker stack |
 
-To validate the configuration:
+## Endpoints
+
+Once running, the API is available at:
+
+| Endpoint | Description |
+|---|---|
+| `http://localhost:8000/` | Welcome / health check |
+| `http://localhost:8000/docs` | Interactive API documentation (Swagger UI) |
+| `http://localhost:8000/ogcapi` | OGC API root |
+| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset |
+
+## pygeoapi
+
+The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to `data/pygeoapi/pygeoapi-config.yml`.
+
+To validate the configuration manually:
 
 ```
-PYTHONPATH="$(pwd)/src" uv run python -c "from eo_api.publications.services import ensure_pygeoapi_base_config; print(ensure_pygeoapi_base_config())"
 PYTHONPATH="$(pwd)/src" uv run pygeoapi config validate -c data/pygeoapi/pygeoapi-config.yml
 ```
 
-Run after changes are made in `config/pygeoapi/base.yml` or publication generation logic:
-
-`make openapi` or
+Regenerate after changes to `config/pygeoapi/base.yml` or publication logic:
 
 ```
-PYTHONPATH="$(pwd)/src" uv run python -c "from eo_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
+make openapi
 ```
-
-### Endpoints
-
-Root endpoint:
-
-http://127.0.0.1:8000/ -> Welcome to DHIS2 EO API
-
-Docs:
-
-http://127.0.0.1:8000/docs
-
-OGC API
-
-http://127.0.0.1:8000/ogcapi
-
-Examples:
-
-COG info:
-
-http://127.0.0.1:8000/cog/info?url=https%3A%2F%2Fdata.chc.ucsb.edu%2Fproducts%2FCHIRPS%2Fv3.0%2Fdaily%2Ffinal%2Frnl%2F2026%2Fchirps-v3.0.rnl.2026.01.31.tif
-
-COG preview:
-
-http://127.0.0.1:8000/cog/preview.png?url=https%3A%2F%2Fdata.chc.ucsb.edu%2Fproducts%2FCHIRPS%2Fv3.0%2Fdaily%2Ffinal%2Frnl%2F2026%2Fchirps-v3.0.rnl.2026.01.31.tif&max_size=2048&colormap_name=delta
-
-Tile:
-
-http://127.0.0.1:8000/cog/tiles/WebMercatorQuad/4/5/5.png?url=https%3A%2F%2Fdata.chc.ucsb.edu%2Fproducts%2FCHIRPS%2Fv3.0%2Fdaily%2Ffinal%2Frnl%2F2026%2Fchirps-v3.0.rnl.2026.01.31.tif&colormap_name=delta
-
----
-
-CHIRPS COG test file:
-
-https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/final/rnl/2026/chirps-v3.0.rnl.2026.01.31.tif

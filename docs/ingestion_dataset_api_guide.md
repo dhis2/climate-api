@@ -1,6 +1,6 @@
-# EO API Ingestion and Dataset Guide
+# Climate API Ingestion and Dataset Guide
 
-This guide describes the current native FastAPI surface for EO API and how it relates to the standards-facing `pygeoapi` publication layer.
+This guide describes the current native FastAPI surface for Climate API and how it relates to the standards-facing `pygeoapi` publication layer.
 
 The current public story is:
 
@@ -36,7 +36,7 @@ Operational note:
 
 ## 1. Discover configured extents
 
-Configured extents are setup-time EO API configuration. They are read-only at runtime and are identified by `extent_id`.
+Configured extents are setup-time Climate API configuration. They are read-only at runtime and are identified by `extent_id`.
 
 Example:
 
@@ -62,7 +62,7 @@ Example response:
 
 What this means:
 
-- `extent_id` is the public EO API handle for a configured spatial extent
+- `extent_id` is the public Climate API handle for a configured spatial extent
 - `bbox` is the resolved spatial extent exposed publicly
 - provider-specific hints may exist internally in extent config, but they are not part of the public extent response
 
@@ -471,4 +471,4 @@ The public contract is now:
 - access raw native data with `/zarr/{dataset_id}`
 - access standards-facing publication with `/ogcapi`
 
-Artifacts remain internal because EO API still needs storage and provenance records behind ingestion and publication, but those internals are no longer exposed as first-class public resources.
+Artifacts remain internal because Climate API still needs storage and provenance records behind ingestion and publication, but those internals are no longer exposed as first-class public resources.

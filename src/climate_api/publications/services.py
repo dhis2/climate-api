@@ -12,8 +12,9 @@ from zlib import adler32
 import xarray as xr
 import yaml
 
-from eo_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
-from eo_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
+from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 CONFIG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config" / "pygeoapi"
@@ -35,9 +36,11 @@ def ensure_pygeoapi_base_config() -> Path:
 
 def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     """Mark an artifact as published and regenerate the pygeoapi config."""
-    from eo_api.ingestions.services import list_artifacts
+    from climate_api.ingestions.services import list_artifacts
 
     collection_id = managed_dataset_id_for(record)
+    data_path = record.path or record.asset_paths[0]
+    is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
     published_record = record.model_copy(
         update={
             "publication": record.publication.model_copy(
@@ -45,7 +48,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "status": PublicationStatus.PUBLISHED,
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
-                    "pygeoapi_path": f"/ogcapi/collections/{collection_id}",
+                    # Pyramid zarr stores are served via the /zarr endpoint, not pygeoapi.
+                    "pygeoapi_path": None if is_pyramid_zarr else f"/ogcapi/collections/{collection_id}",
                 }
             )
         }
@@ -56,6 +60,9 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         active = published_record if artifact.artifact_id == record.artifact_id else artifact
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
+        data_path = active.path or active.asset_paths[0]
+        if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():
+            continue  # pyramid zarr: not served via pygeoapi, use /zarr endpoint instead
         assert active.publication.collection_id is not None
         resources[active.publication.collection_id] = _build_collection_resource(active)
 
@@ -87,7 +94,7 @@ def _sync_pygeoapi_documents(*, resources: dict[str, Any]) -> None:
 def _refresh_mounted_pygeoapi() -> None:
     """Refresh the in-process pygeoapi mount if the wrapper has been initialized."""
     try:
-        from eo_api.pygeoapi_app import refresh_pygeoapi
+        from climate_api.pygeoapi_app import refresh_pygeoapi
     except Exception:
         return
     refresh_pygeoapi()
@@ -144,7 +151,7 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
     """Inspect an artifact and return provider axis field names."""
     data_path = record.path or record.asset_paths[0]
     if record.format == ArtifactFormat.ZARR:
-        ds = xr.open_zarr(data_path, consolidated=True)
+        ds = open_zarr_dataset(data_path)
     else:
         ds = xr.open_dataset(data_path)
 
@@ -177,7 +184,7 @@ def managed_dataset_id_for(record: ArtifactRecord) -> str:
 def _native_dataset_href(dataset_id: str) -> str:
     """Return a dataset-detail link suitable for generated pygeoapi metadata."""
     path = f"/datasets/{dataset_id}"
-    base_url = os.getenv("EO_API_BASE_URL")
+    base_url = os.getenv("CLIMATE_API_BASE_URL")
     if base_url:
         return f"{base_url.rstrip('/')}{path}"
 

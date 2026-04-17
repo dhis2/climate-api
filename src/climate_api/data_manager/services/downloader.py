@@ -5,12 +5,16 @@ import importlib
 import inspect
 import logging
 import os
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import xarray as xr
+import xproj  # noqa: F401  # type: ignore[import-untyped]  # pyright: ignore[reportUnusedImport]
 from fastapi import BackgroundTasks, HTTPException
+from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
+from topozarr.coarsen import create_pyramid
 
 from ...shared.dhis2_adapter import create_client, get_org_units_geojson
 from .utils import get_lon_lat_dims, get_time_dim
@@ -23,6 +27,8 @@ CACHE_OVERRIDE = os.getenv("CACHE_OVERRIDE")
 if CACHE_OVERRIDE:
     _download_dir = Path(CACHE_OVERRIDE)
 DOWNLOAD_DIR = _download_dir
+
+CRS = "EPSG:4326"
 
 
 def download_dataset(
@@ -103,33 +109,93 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     """Collect all dataset files into a single optimised zarr archive."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
+    cache_info = dataset["cache_info"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
 
-    # trim to only minimal vars and coords
+    lon_dim, lat_dim = get_lon_lat_dims(ds)
+    dims = [lon_dim, lat_dim]
+
+    # trim to only minimal vars and coords before loading into memory
     logger.info("Trimming unnecessary variables and coordinates")
     varname = dataset["variable"]
     ds = ds[[varname]]
-    keep_coords = [get_time_dim(ds)] + list(get_lon_lat_dims(ds))
+    keep_coords = [get_time_dim(ds)] + dims
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    # determine optimal chunk sizes
-    logger.info("Determining optimal chunk size for zarr archive")
-    ds_autochunk = ds.chunk("auto").unify_chunks()
-    uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
-    time_space_chunks = _compute_time_space_chunks(ds, dataset)
-    uniform_chunks.update(time_space_chunks)
-    logging.info(f"--> {uniform_chunks}")
+    xmin = ds[lon_dim].min().item()
+    xmax = ds[lon_dim].max().item()
+    ymin = ds[lat_dim].min().item()
+    ymax = ds[lat_dim].max().item()
+    bbox = [xmin, ymin, xmax, ymax]
+    shape = (ds.sizes[lon_dim], ds.sizes[lat_dim])
+
+    # https://github.com/zarr-developers/geozarr-toolkit/issues/15
+    geozarr_attrs = create_geozarr_attrs(
+        dimensions=dims,
+        crs=CRS,
+        bbox=bbox,
+        shape=shape,
+    )
 
     # save as zarr
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
-    ds_chunked = ds.chunk(uniform_chunks)
-    ds_chunked.to_zarr(zarr_path, mode="w")
-    ds_chunked.close()
 
+    multiscales = dict(cache_info.get("multiscales", {}))
+
+    if multiscales:
+        levels = multiscales.get("levels", 4)
+        method = multiscales.get("method", "mean")
+
+        # Add multiscales convention metadata to the zarr attributes
+        zarr_conventions = geozarr_attrs.get("zarr_conventions", [])
+        zarr_conventions.append(MultiscalesConventionMetadata().model_dump())
+        geozarr_attrs["zarr_conventions"] = zarr_conventions
+
+        # Load into memory then close to deterministically release netCDF file handles
+        # before create_pyramid spawns multiprocessing workers. After load() the data
+        # lives in numpy arrays and no longer needs the underlying file objects.
+        ds.load()
+        ds.close()
+
+        ds = ds.proj.assign_crs(spatial_ref=CRS)
+
+        # https://github.com/carbonplan/topozarr/issues/13
+        pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method=method)
+
+        pyramid.dt.attrs.update(geozarr_attrs)
+        pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
+
+        # zarr-layer looks for the time coordinate at the root of the store, not inside each level.
+        # Copy it from level 0 so browser clients can discover it without knowing the level structure.
+        time_dim = get_time_dim(ds)
+        time_src = zarr_path / "0" / time_dim
+        time_dst = zarr_path / time_dim
+        if time_src.exists():
+            if time_dst.exists():
+                shutil.rmtree(time_dst)
+            shutil.copytree(time_src, time_dst)
+
+        pyramid.dt.close()
+
+    else:
+        # determine optimal chunk sizes
+        logger.info("Determining optimal chunk size for zarr archive")
+        ds_autochunk = ds.chunk("auto").unify_chunks()
+        uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
+        time_space_chunks = _compute_time_space_chunks(ds, dataset)
+        uniform_chunks.update(time_space_chunks)
+        logger.info(f"--> {uniform_chunks}")
+
+        ds.attrs.update(geozarr_attrs)
+        ds_chunked = ds.chunk(uniform_chunks)
+        ds_chunked.to_zarr(zarr_path, mode="w", consolidated=True)
+        ds_chunked.close()
+
+    ds.close()
     logger.info("Finished cache optimization")
 
 

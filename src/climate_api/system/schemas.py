@@ -45,6 +45,5 @@ class AppInfo(BaseModel):
 
     app_version: str
     python_version: str
-    titiler_version: str
     pygeoapi_version: str
     uvicorn_version: str

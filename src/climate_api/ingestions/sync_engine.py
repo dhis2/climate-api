@@ -15,8 +15,8 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from eo_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
-from eo_api.publications.services import managed_dataset_id_for
+from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
+from climate_api.publications.services import managed_dataset_id_for
 
 
 def plan_sync(

@@ -16,10 +16,10 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
-from eo_api.data_accessor.services.accessor import get_data_coverage_for_paths
-from eo_api.data_manager.services import downloader
-from eo_api.data_registry.services import datasets as registry_datasets
-from eo_api.ingestions.schemas import (
+from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
+from climate_api.data_manager.services import downloader
+from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
     ArtifactListResponse,
@@ -39,8 +39,8 @@ from eo_api.ingestions.schemas import (
     PublicationStatus,
     SyncResponse,
 )
-from eo_api.ingestions.sync_engine import run_sync
-from eo_api.publications.services import managed_dataset_id_for, publish_artifact
+from climate_api.ingestions.sync_engine import run_sync
+from climate_api.publications.services import managed_dataset_id_for, publish_artifact
 
 logger = logging.getLogger(__name__)
 
