@@ -351,84 +351,16 @@ What this means:
 
 ## 9. `/sync`
 
-`POST /sync/{dataset_id}` now delegates to a first-pass `sync_engine` with `plan_sync(...)` and `run_sync(...)`, but direct upstream-availability discovery is still the main refinement area.
+`POST /sync/{dataset_id}` exists and is part of the intended public product shape, but its behavior is still the main refinement area.
 
-Current implemented behavior:
+Current intent:
 
-- read the latest managed dataset version
-- resolve the source dataset template and its `sync_kind`
-- build a sync plan without downloading data
+- sync a managed dataset forward from its latest available period
 - preserve stable managed dataset identity
 - rematerialize a fresh version covering the managed dataset's original start through the requested end period
-- return the updated dataset view plus structured sync detail
+- return the updated dataset view
 
-Current limitations:
-
-- planning can apply conservative template metadata such as lag days or other explicit fallback availability hints
-- the engine still does not query upstream providers directly for "latest available upstream state"
-- append-style canonical updates are still deferred
-
-Current response shape:
-
-```json
-{
-  "sync_id": "a2",
-  "status": "completed",
-  "message": "Managed dataset was rematerialized against the latest planned upstream state.",
-  "dataset": {},
-  "sync_detail": {
-    "source_dataset_id": "chirps3_precipitation_daily",
-    "extent_id": "sle",
-    "sync_kind": "temporal",
-    "action": "rematerialize",
-    "reason": "new_periods_available",
-    "requested_start": "2024-01-01",
-    "requested_end": "2024-02-10",
-    "latest_available_start": "2024-02-01",
-    "latest_available_end": "2024-02-10"
-  }
-}
-```
-
-Manual sync examples:
-
-No new period due:
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle \
-  -H "Content-Type: application/json" \
-  -d '{
-    "end": "2024-01-31",
-    "prefer_zarr": true,
-    "publish": true
-  }' | jq
-```
-
-Expected shape:
-
-- `status = "up_to_date"`
-- `sync_detail.action = "no_op"`
-- `sync_detail.reason = "no_new_period"`
-
-Temporal rematerialization:
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle \
-  -H "Content-Type: application/json" \
-  -d '{
-    "end": "2024-02-10",
-    "prefer_zarr": true,
-    "publish": true
-  }' | jq
-```
-
-Expected shape:
-
-- `status = "completed"`
-- `sync_detail.action = "rematerialize"`
-- `sync_detail.reason = "new_periods_available"`
-- `sync_detail.requested_start` remains the original managed dataset start
-- `sync_detail.requested_end` is the planned sync end actually used by EO API
+This route should be treated as present but still under active behavioral design.
 
 ## Manual Test Sequence
 
@@ -442,9 +374,7 @@ For a clean manual test, this is the best sequence to run:
 6. `GET /ogcapi/collections`
 7. `GET /ogcapi/collections/{dataset_id}`
 8. `GET /ogcapi/collections/{dataset_id}/coverage`
-9. `POST /sync/{dataset_id}` with no new period due
-10. `POST /sync/{dataset_id}` with a later end period
-11. `POST /ingestions` with WorldPop
+9. `POST /ingestions` with WorldPop
 
 Good demo payloads:
 

@@ -214,7 +214,7 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 
 ## What Is Still Deferred
 
-1. direct provider-specific `/sync` availability discovery beyond template-metadata clamping
+1. refined `/sync` behavior and policy
 2. a final decision on how much version history to expose publicly
 3. richer extent configuration shapes beyond `id + bbox + optional metadata`
 4. any runtime write API for extents
@@ -223,8 +223,6 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 Recent refinement:
 
 - `/sync/{dataset_id}` now rematerializes a new managed dataset version from the dataset's original request start through the requested sync end period, instead of creating a latest-only delta slice
-- `/sync/{dataset_id}` now delegates to `sync_engine.plan_sync(...)` and `sync_engine.run_sync(...)`, keyed by dataset-template `sync_kind`
-- sync responses now include `message` and structured `sync_detail`
 - sync now re-resolves `extent_id` configuration so extent-backed `country_code` inputs continue to work during sync
 
 ## Short Summary
