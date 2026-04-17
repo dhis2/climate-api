@@ -20,7 +20,7 @@ A key design principle is data sovereignty — the platform is deployable on nat
 
 ## 2. Overview
 
-The DHIS2 Climate API is a no-code data integration platform that enables earth observation (EO) and climate data from multiple upstream sources to be downloaded, processed, harmonised, and loaded into DHIS2 and the CHAP Modelling Platform. It is designed to supplement and eventually replace the current reliance on Google Earth Engine in DHIS2.
+The DHIS2 Climate API is a no-code data integration platform that enables earth observation (EO) and climate data from multiple upstream sources to be downloaded, processed, harmonised, and loaded into DHIS2 and the CHAP Modelling Platform.
 
 The platform is built as a Python-based REST API (FastAPI) and exposes both native endpoints and OGC API-compliant endpoints (via pygeoapi). Data is stored in cloud-native GeoZarr format and can be consumed by the DHIS2 Climate App, the DHIS2 Maps App, DHIS2 Climate Tools, the CHAP Modelling Platform, and third-party tools such as QGIS.
 
@@ -41,7 +41,6 @@ This document describes the project vision, design constraints, user stories, fu
 The Climate API aims to:
 
 - Provide a unified API through which EO and climate data can be requested, downloaded, processed, and uploaded to DHIS2 — with all complexity handled behind the scenes.
-- Replace the current usage of Google Earth Engine for on-the-fly image tiling, point queries, and org unit aggregation.
 - Serve as a no-code alternative to DHIS2 Climate Tools for standard data integration workflows, built on the same underlying libraries.
 - Allow DHIS2 Climate/Maps app and CHAP to act as frontends consuming the Climate API.
 - Support custom orchestration — users can build pipelines with pre- and post-processing steps.
@@ -117,7 +116,7 @@ This mirrors the approach used in the CHAP Modelling Platform, where generic mod
 
 ### 6.3 Visualisation
 
-- Support on-the-fly map tile rendering with custom styling — replacing the current Google Earth Engine tiling workflow.
+- Support on-the-fly map tile rendering with custom styling.
 - Support image tile generation using TiTiler (following the OGC API — Tiles specification as closely as possible).
 - Support direct browser rendering of Zarr data via zarr-layer (MapLibre custom layer) with GPU reprojection from EPSG:4326 to Spherical Mercator and client-side dynamic colour classification.
 - Support point queries (single location time series) for preview before import.
@@ -138,7 +137,7 @@ This mirrors the approach used in the CHAP Modelling Platform, where generic mod
 ### 6.6 Non-functional requirements
 
 - Handle simultaneous and long-running requests without blocking.
-- Follow DPG requirements and FAIR principles.
+- Follow FAIR principles: Findable, Accessible, Interoperable and Reusable.
 - Build on existing open-source solutions — the team is small and sustainability matters.
 - Support deployment via Docker for local, cloud-hosted, and sovereign country environments.
 - Storage backend configurable via environment variables — no code changes required to switch between local filesystem, different cloud providers, AWS S3 (including Africa and Asia regions), and self-hosted Ceph/RGW for sovereign deployments.
