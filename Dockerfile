@@ -17,9 +17,7 @@ COPY config/ config/
 COPY data/datasets/ data/datasets/
 COPY data/extents.yaml data/extents.yaml
 
-RUN uv sync --frozen --no-dev && \
-    mkdir -p /app/.venv/lib/python3.13/site-packages/prefect/server/ui_build && \
-    chown eo:eo /app/.venv/lib/python3.13/site-packages/prefect/server/ui_build
+RUN uv sync --frozen --no-dev
 
 RUN mkdir -p /tmp/data /app/data/pygeoapi /app/data/artifacts && \
     printf '[]\n' > /app/data/artifacts/records.json && \

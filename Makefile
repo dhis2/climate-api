@@ -9,11 +9,15 @@ sync: ## Install dependencies with uv
 run: openapi ## Start the app with uvicorn
 	uv run uvicorn climate_api.main:app --reload
 
-lint: ## Run ruff linting and formatting (autofix)
-	uv run ruff check --fix .
-	uv run ruff format .
+lint: ## Check linting, formatting, and types (no autofix)
+	uv run ruff check .
+	uv run ruff format --check .
 	uv run mypy src/
 	uv run pyright
+
+fix: ## Autofix ruff lint and format issues
+	uv run ruff check --fix .
+	uv run ruff format .
 
 test: ## Run tests with pytest
 	uv run pytest tests/
