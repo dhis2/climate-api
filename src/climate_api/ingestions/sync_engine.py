@@ -11,6 +11,8 @@ and keeps future scheduler-driven sync jobs on the same code path.
 
 from __future__ import annotations
 
+import importlib
+import inspect
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -61,8 +63,6 @@ def plan_sync(
 
     if sync_kind == SyncKind.TEMPORAL:
         next_period_start = _next_period_start(current_end, period_type=str(source_dataset["period_type"]))
-        # TODO: add append-style execution once canonical stores can accept deltas.
-        # V1 rematerializes from the original request scope even when only a delta exists.
         if next_period_start > latest_available_end:
             return SyncDetail(
                 source_dataset_id=latest_artifact.dataset_id,
@@ -74,12 +74,14 @@ def plan_sync(
                 requested_end=current_end,
                 latest_available_end=latest_available_end,
             )
+        action = SyncAction.APPEND if _supports_append(source_dataset) else SyncAction.REMATERIALIZE
+        reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
             extent_id=latest_artifact.request_scope.extent_id,
             sync_kind=sync_kind,
-            action=SyncAction.REMATERIALIZE,
-            reason="new_periods_available",
+            action=action,
+            reason=reason,
             requested_start=current_start,
             requested_end=latest_available_end,
             latest_available_start=next_period_start,
@@ -156,12 +158,16 @@ def run_sync(
         )
 
     # Execution always goes through the ingestion materialization path so sync
-    # does not grow a second downloader/storage implementation.
+    # does not grow a second downloader/storage implementation. APPEND is a V1
+    # delta-download plus canonical rebuild, not in-place Zarr mutation.
     assert sync_detail.requested_end is not None
+    download_start = sync_detail.latest_available_start if sync_detail.action == SyncAction.APPEND else None
     artifact = create_artifact_fn(
         dataset=source_dataset,
         start=sync_detail.requested_start or latest_artifact.request_scope.start,
         end=sync_detail.requested_end,
+        download_start=download_start,
+        download_end=sync_detail.requested_end if download_start is not None else None,
         extent_id=latest_artifact.request_scope.extent_id,
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         country_code=None,
@@ -212,6 +218,14 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     if not isinstance(availability, dict):
         return requested_end
 
+    provider_latest = _provider_latest_available_end(
+        source_dataset=source_dataset,
+        availability=availability,
+        requested_end=requested_end,
+    )
+    if provider_latest is not None:
+        return min(requested_end, provider_latest)
+
     period_type = str(source_dataset["period_type"])
     if period_type in {"hourly", "daily", "monthly"}:
         lag_days = availability.get("lag_days")
@@ -235,3 +249,48 @@ def _format_lagged_period_end(lagged_date: date, *, period_type: str) -> str:
     if period_type == "monthly":
         return f"{lagged_date.year:04d}-{lagged_date.month:02d}"
     return lagged_date.isoformat()
+
+
+def _supports_append(source_dataset: dict[str, Any]) -> bool:
+    """Return whether this template opts into V1 delta-download sync execution."""
+    if source_dataset.get("sync_execution") != SyncAction.APPEND.value:
+        return False
+    cache_info = source_dataset.get("cache_info")
+    if not isinstance(cache_info, dict):
+        return False
+    # Multiscale stores are rebuilt as pyramids today; keep append opt-in to flat
+    # canonical stores until pyramid delta behavior is explicitly designed.
+    return not bool(cache_info.get("multiscales"))
+
+
+def _provider_latest_available_end(
+    *,
+    source_dataset: dict[str, Any],
+    availability: dict[str, Any],
+    requested_end: str,
+) -> str | None:
+    """Call an optional provider-specific latest-availability function."""
+    function_path = availability.get("latest_available_function") or availability.get("eo_function")
+    if not isinstance(function_path, str) or not function_path:
+        return None
+
+    latest_available_fn = _get_dynamic_function(function_path)
+    params: dict[str, Any] = {}
+    signature = inspect.signature(latest_available_fn)
+    if "dataset" in signature.parameters:
+        params["dataset"] = source_dataset
+    if "requested_end" in signature.parameters:
+        params["requested_end"] = requested_end
+    result = latest_available_fn(**params)
+    if not isinstance(result, str):
+        raise ValueError(f"Latest availability function '{function_path}' must return a period string")
+    return result
+
+
+def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
+    """Import and return a function given its dotted module path."""
+    parts = full_path.split(".")
+    module_path = ".".join(parts[:-1])
+    function_name = parts[-1]
+    module = importlib.import_module(module_path)
+    return getattr(module, function_name)  # type: ignore[no-any-return]

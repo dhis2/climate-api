@@ -92,7 +92,12 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "cache_info": {},
+        },
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
@@ -140,6 +145,89 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.reason == "new_periods_available"
     assert result.sync_detail.requested_start == "2026-01-01"
     assert result.sync_detail.requested_end == "2026-02-10"
+
+
+def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "sync_execution": "append",
+            "cache_info": {},
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
+        captured.update(kwargs)
+        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
+
+    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+
+    assert captured["start"] == "2026-01-01"
+    assert captured["end"] == "2026-02-10"
+    assert captured["download_start"] == "2026-02-01"
+    assert captured["download_end"] == "2026-02-10"
+    assert result.sync_detail.action == SyncAction.APPEND
+    assert result.sync_detail.reason == "new_periods_available_for_append"
+    assert result.sync_detail.requested_start == "2026-01-01"
+    assert result.sync_detail.latest_available_start == "2026-02-01"
+
+
+def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "worldpop_population_yearly_sle"
+    latest = _artifact(
+        artifact_id="a1",
+        source_dataset_id="worldpop_population_yearly",
+        managed_dataset_id=dataset_id,
+        end="2024",
+    )
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "worldpop_population_yearly",
+            "period_type": "yearly",
+            "sync_kind": "temporal",
+            "sync_execution": "append",
+            "cache_info": {"multiscales": {"levels": 4}},
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
+        captured.update(kwargs)
+        return _artifact(
+            artifact_id="a2",
+            source_dataset_id="worldpop_population_yearly",
+            managed_dataset_id=dataset_id,
+            end="2025",
+        )
+
+    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+
+    result = services.sync_dataset(dataset_id=dataset_id, end="2025", prefer_zarr=True, publish=True)
+
+    assert "download_start" in captured
+    assert captured["download_start"] is None
+    assert result.sync_detail.action == SyncAction.REMATERIALIZE
 
 
 def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -391,3 +479,38 @@ def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: py
     )
 
     assert result == "2026-04"
+
+
+def test_latest_available_end_uses_provider_availability_hook(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_latest_available(*, dataset: dict[str, object], requested_end: str) -> str:
+        calls.append({"dataset": dataset, "requested_end": requested_end})
+        return "2026-02-05"
+
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: fake_latest_available)
+
+    source_dataset = {
+        "id": "provider_dataset",
+        "period_type": "daily",
+        "sync_availability": {"latest_available_function": "provider.latest_available"},
+    }
+    result = sync_engine._latest_available_end(source_dataset=source_dataset, requested_end="2026-02-10")
+
+    assert result == "2026-02-05"
+    assert calls == [{"dataset": source_dataset, "requested_end": "2026-02-10"}]
+
+
+def test_latest_available_end_clamps_provider_availability_to_requested_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-03-01")
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "provider_dataset",
+            "period_type": "daily",
+            "sync_availability": {"latest_available_function": "provider.latest_available"},
+        },
+        requested_end="2026-02-10",
+    )
+
+    assert result == "2026-02-10"

@@ -364,13 +364,15 @@ Implemented behavior:
 - `release` datasets compare the current materialized release with the requested or metadata-clamped latest release
 - `static` datasets return `not_syncable`
 - preserve stable managed dataset identity
-- rematerialize a fresh version covering the managed dataset's original start through the requested end period
+- use template-level `sync_execution`
+- `append` execution downloads only the missing period range, then rebuilds the canonical artifact from the local cache
+- `rematerialize` execution downloads the full original request range through the requested end period
 - return the updated dataset view plus structured `sync_detail`
 
 Current limitations:
 
-- temporal sync rematerializes the full original request range instead of append-only deltas
-- upstream availability is driven by template metadata such as `sync_availability`; provider-specific discovery is still deferred
+- append execution is a delta-download plus canonical rebuild, not in-place Zarr mutation
+- upstream availability can use a provider-specific `sync_availability.latest_available_function`; otherwise it falls back to template metadata such as lag days
 
 Example dry-run plan:
 

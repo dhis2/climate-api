@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 SCRIPT_DIR = Path(__file__).parent.resolve()
 CONFIGS_DIR = SCRIPT_DIR.parent.parent.parent.parent / "data" / "datasets"
 SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
+SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
 
 def list_datasets() -> list[dict[str, Any]]:
@@ -57,4 +58,14 @@ def _validate_dataset_template(dataset: object, *, file_path: Path) -> None:
         raise ValueError(
             f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_kind "
             f"'{sync_kind}'. Supported values: {supported}"
+        )
+
+    sync_execution = dataset.get("sync_execution")
+    if sync_execution is None:
+        return
+    if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
+        supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
+        raise ValueError(
+            f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_execution "
+            f"'{sync_execution}'. Supported values: {supported}"
         )

@@ -134,6 +134,8 @@ def create_artifact(
     overwrite: bool,
     prefer_zarr: bool,
     publish: bool,
+    download_start: str | None = None,
+    download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
     request_scope = ArtifactRequestScope(
@@ -154,8 +156,8 @@ def create_artifact(
 
     downloaded_files = downloader.download_dataset(
         dataset,
-        start=start,
-        end=end,
+        start=download_start or start,
+        end=download_end if download_end is not None else end,
         bbox=bbox,
         country_code=country_code,
         overwrite=overwrite,

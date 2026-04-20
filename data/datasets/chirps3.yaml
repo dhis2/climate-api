@@ -4,6 +4,7 @@
   variable: precip
   period_type: daily
   sync_kind: temporal
+  sync_execution: append
   cache_info: 
     eo_function: dhis2eo.data.chc.chirps3.daily.download
   units: mm

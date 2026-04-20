@@ -31,8 +31,8 @@ class SyncKind(StrEnum):
 class SyncAction(StrEnum):
     """Planner-selected sync action.
 
-    APPEND is reserved for future canonical-store delta updates. The current
-    engine only emits rematerialize, no-op, and not-syncable actions.
+    APPEND is V1 delta-download execution followed by canonical artifact rebuild;
+    it is not in-place Zarr mutation.
     """
 
     REMATERIALIZE = "rematerialize"
