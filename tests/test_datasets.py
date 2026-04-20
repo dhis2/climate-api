@@ -275,7 +275,7 @@ def test_create_artifact_can_download_delta_while_recording_full_request_scope(
         return [created_file]
 
     monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
-    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda _: None)
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
     monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: tmp_path / "chirps3_precipitation_daily.zarr")
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(

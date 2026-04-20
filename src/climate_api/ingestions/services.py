@@ -185,7 +185,7 @@ def create_artifact(
     if prefer_zarr:
         try:
             logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
-            downloader.build_dataset_zarr(dataset)
+            downloader.build_dataset_zarr(dataset, start=start, end=end)
             logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
         except Exception:
             # Fall back to NetCDF when Zarr materialization is not viable.

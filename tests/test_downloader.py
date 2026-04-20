@@ -155,6 +155,20 @@ def _write_nc_files(tmp_path: Path) -> list[Path]:
     return paths
 
 
+def _write_daily_nc_file(tmp_path: Path) -> list[Path]:
+    ds = xr.Dataset(
+        {"precip": (["time", "lat", "lon"], np.ones((29, 3, 3), dtype="float32"))},
+        coords={
+            "time": pd.date_range("2024-02-01", "2024-02-29", freq="D"),
+            "lat": [10.0, 9.0, 8.0],
+            "lon": [30.0, 31.0, 32.0],
+        },
+    )
+    path = tmp_path / "chirps3_precipitation_daily_2024-02.nc"
+    ds.to_netcdf(path)
+    return [path]
+
+
 _FLAT_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
@@ -246,6 +260,32 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
     try:
         assert "pop_total" in result.data_vars
         assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
+def test_build_dataset_zarr_clips_to_requested_daily_range(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Provider cache files may contain full months; canonical Zarr honors request scope."""
+    nc_files = _write_daily_nc_file(tmp_path)
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "variable": "precip",
+        "period_type": "daily",
+        "cache_info": {},
+    }
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+
+    downloader.build_dataset_zarr(dataset, start="2024-02-01", end="2024-02-10")
+
+    result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
+    try:
+        assert result.sizes["time"] == 10
+        assert pd.Timestamp(result.time.min().item()).strftime("%Y-%m-%d") == "2024-02-01"
+        assert pd.Timestamp(result.time.max().item()).strftime("%Y-%m-%d") == "2024-02-10"
     finally:
         result.close()
 
