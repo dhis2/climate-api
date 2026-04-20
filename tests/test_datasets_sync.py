@@ -154,6 +154,7 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
+    assert result.sync_detail.target_end_source == "request"
     assert result.sync_detail.delta_start == "2026-02-01"
     assert result.sync_detail.delta_end == "2026-02-10"
 
@@ -201,6 +202,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
+    assert result.sync_detail.target_end_source == "request"
     assert result.sync_detail.delta_start == "2026-02-01"
     assert result.sync_detail.delta_end == "2026-02-10"
 
@@ -334,6 +336,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.target_end == "2025"
+    assert result.sync_detail.target_end_source == "request"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(
@@ -394,6 +397,7 @@ def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: p
     assert result.current_start == "2026-01-01"
     assert result.current_end == "2026-01-31"
     assert result.target_end == "2026-02-10"
+    assert result.target_end_source == "request"
     assert result.delta_start == "2026-02-01"
     assert result.delta_end == "2026-02-10"
 
@@ -425,6 +429,7 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
         "current_start": "2026-01-01",
         "current_end": "2026-01-31",
         "target_end": "2026-02-10",
+        "target_end_source": "request",
         "delta_start": "2026-02-01",
         "delta_end": "2026-02-10",
     }
@@ -482,6 +487,32 @@ def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch:
     )
 
     assert result == "2026-05"
+
+
+def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> "FixedDate":
+            return cls(2026, 4, 20)
+
+    monkeypatch.setattr(sync_engine, "date", FixedDate)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "sync_execution": "append",
+            "cache_info": {},
+        },
+        latest_artifact=_artifact(artifact_id="a1", end="2024-02-29"),
+        requested_end=None,
+    )
+
+    assert result.target_end == "2026-04-20"
+    assert result.target_end_source == "default_today"
+    assert result.delta_start == "2024-03-01"
+    assert result.delta_end == "2026-04-20"
 
 
 def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:

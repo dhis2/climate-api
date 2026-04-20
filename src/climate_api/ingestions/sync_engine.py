@@ -48,6 +48,7 @@ def plan_sync(
         raise ValueError("source_dataset must define sync_kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     period_type = str(source_dataset["period_type"])
+    target_end_source = "request" if requested_end is not None else "default_today"
     resolved_end = requested_end or _default_target_end(period_type=period_type)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
@@ -64,6 +65,7 @@ def plan_sync(
             current_start=current_start,
             current_end=current_end,
             target_end=current_end,
+            target_end_source="current_coverage",
         )
 
     if sync_kind == SyncKind.TEMPORAL:
@@ -82,6 +84,7 @@ def plan_sync(
                 current_start=current_start,
                 current_end=current_end,
                 target_end=latest_available_end,
+                target_end_source=target_end_source,
             )
         action = SyncAction.APPEND if _supports_append(source_dataset) else SyncAction.REMATERIALIZE
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
@@ -101,6 +104,7 @@ def plan_sync(
             current_start=current_start,
             current_end=current_end,
             target_end=latest_available_end,
+            target_end_source=target_end_source,
             delta_start=next_period_start,
             delta_end=latest_available_end,
         )
@@ -119,6 +123,7 @@ def plan_sync(
             current_start=current_start,
             current_end=current_end,
             target_end=latest_available_end,
+            target_end_source=target_end_source,
         )
 
     return SyncDetail(
@@ -131,6 +136,7 @@ def plan_sync(
         current_start=current_start,
         current_end=current_end,
         target_end=latest_available_end,
+        target_end_source=target_end_source,
         delta_start=latest_available_end,
         delta_end=latest_available_end,
     )

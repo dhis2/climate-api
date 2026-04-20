@@ -447,6 +447,7 @@ Expected planning response:
 - `current_start` is `2024-01-01`
 - `current_end` is `2024-01-31`
 - `target_end` is `2024-02-10`
+- `target_end_source` is `request`
 - `delta_start` is `2024-02-01`
 - `delta_end` is `2024-02-10`
 
@@ -457,13 +458,15 @@ Where these timestamps come from:
 
 - `current_start` and `current_end` come from the latest stored artifact coverage
 - `target_end` comes from the explicit `end` query parameter, or defaults to today in the dataset-native period format when omitted
+- `target_end_source` tells you whether `target_end` came from `request`, `default_today`, or `current_coverage`
 - `delta_start` is the first period after `current_end`
 - `delta_end` is the resolved target period after any availability clamping
 
 If `end` is omitted, the planner defaults to the current date. For example, calling
 `/sync/chirps3_precipitation_daily_sle/plan` on `2026-04-20` after ingesting
 through `2024-01-31` plans an append from `2024-02-01` through `2026-04-20`.
-For controlled tests, always pass an explicit `end`.
+In that response, `target_end_source` will be `default_today`. For controlled
+tests, always pass an explicit `end`.
 
 ### 5. Execute the CHIRPS3 sync
 

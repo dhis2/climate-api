@@ -317,6 +317,9 @@ class SyncDetail(BaseModel):
         default=None,
         description="Resolved target period after applying request defaults and availability constraints.",
     )
+    target_end_source: str = Field(
+        description="Where target_end came from, for example request or default_today.",
+    )
     delta_start: str | None = Field(
         default=None,
         description="First missing period planned for delta download, when applicable.",
