@@ -1,9 +1,9 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
-from eo_api.ingestions import services, sync_engine
-from eo_api.ingestions.schemas import (
+from climate_api.ingestions import services, sync_engine
+from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
     ArtifactPublication,
@@ -227,3 +227,34 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.requested_end == "2025"
     assert result.sync_detail.latest_available_end == "2025"
+
+
+def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> "FixedDate":
+            return cls(2026, 4, 15)
+
+    monkeypatch.setattr(sync_engine, "date", FixedDate)
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "monthly_dataset",
+            "period_type": "monthly",
+            "sync_availability": {"lag_days": 0},
+        },
+        requested_end="2026-05",
+    )
+
+    assert result == "2026-05"
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "monthly_dataset",
+            "period_type": "monthly",
+            "sync_availability": {"lag_days": 1},
+        },
+        requested_end="2026-05",
+    )
+
+    assert result == "2026-04"

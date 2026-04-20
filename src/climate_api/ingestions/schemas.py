@@ -29,7 +29,11 @@ class SyncKind(StrEnum):
 
 
 class SyncAction(StrEnum):
-    """Planner-selected sync action."""
+    """Planner-selected sync action.
+
+    APPEND is reserved for future canonical-store delta updates. The current
+    engine only emits rematerialize, no-op, and not-syncable actions.
+    """
 
     REMATERIALIZE = "rematerialize"
     APPEND = "append"

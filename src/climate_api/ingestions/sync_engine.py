@@ -58,6 +58,7 @@ def plan_sync(
         )
 
     if sync_kind == SyncKind.TEMPORAL:
+        # TODO: add append-style execution once canonical stores can accept deltas.
         # V1 rematerializes from the original request scope even when only a delta exists.
         if next_period_start > latest_available_end:
             return SyncDetail(
@@ -211,7 +212,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     if period_type in {"hourly", "daily", "monthly"}:
         lag_days = availability.get("lag_days")
         if isinstance(lag_days, int) and lag_days > 0:
-            latest_by_lag = (date.today() - timedelta(days=lag_days)).isoformat()
+            latest_by_lag = _format_lagged_period_end(date.today() - timedelta(days=lag_days), period_type=period_type)
             return min(requested_end, latest_by_lag)
         return requested_end
 
@@ -223,3 +224,10 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
         return requested_end
 
     return requested_end
+
+
+def _format_lagged_period_end(lagged_date: date, *, period_type: str) -> str:
+    """Return lag-derived availability in the dataset-native period format."""
+    if period_type == "monthly":
+        return f"{lagged_date.year:04d}-{lagged_date.month:02d}"
+    return lagged_date.isoformat()
