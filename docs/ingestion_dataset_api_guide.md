@@ -390,32 +390,147 @@ curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
 
 ## Manual Test Sequence
 
-For a clean manual test, this is the best sequence to run:
+These commands assume the API is running on `http://127.0.0.1:8000` and that
+`jq` is available.
 
-1. `GET /extents`
-2. `POST /ingestions` with CHIRPS3
-3. `GET /datasets`
-4. `GET /datasets/{dataset_id}`
-5. `GET /zarr/{dataset_id}`
-6. `GET /ogcapi/collections`
-7. `GET /ogcapi/collections/{dataset_id}`
-8. `GET /ogcapi/collections/{dataset_id}/coverage`
-9. `GET /sync/{dataset_id}/plan?end={period}`
-10. `POST /sync/{dataset_id}`
-11. `POST /ingestions` with WorldPop
+### 1. Confirm configured extents
 
-Good demo payloads:
+```bash
+curl -s "http://127.0.0.1:8000/extents" | jq
+```
 
-- CHIRPS3:
-  - `dataset_id = "chirps3_precipitation_daily"`
-  - `extent_id = "sle"`
-  - `start = "2024-01-01"`
-  - `end = "2024-01-31"`
-- WorldPop:
-  - `dataset_id = "worldpop_population_yearly"`
-  - `extent_id = "sle"`
-  - `start = "2020"`
-  - `end = "2020"`
+Use an extent that has enough spatial metadata for the selected dataset. The
+examples below use `sle`.
+
+### 2. Create an initial CHIRPS3 managed dataset
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/ingestions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "chirps3_precipitation_daily",
+    "extent_id": "sle",
+    "start": "2024-01-01",
+    "end": "2024-01-31",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `dataset.dataset_id` is `chirps3_precipitation_daily_sle`
+- `dataset.extent.temporal.end` is `2024-01-31`
+
+### 3. Inspect the managed dataset and publication
+
+```bash
+curl -s "http://127.0.0.1:8000/datasets/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle/coverage?f=json" | jq
+```
+
+### 4. Dry-run a CHIRPS3 append sync
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+```
+
+Expected planning response:
+
+- `sync_kind` is `temporal`
+- `action` is `append`
+- `reason` is `new_periods_available_for_append`
+- `requested_start` remains `2024-01-01`
+- `requested_end` is `2024-02-10`
+- `latest_available_start` is `2024-02-01`
+
+`append` here means Climate API downloads only the missing period range and then
+rebuilds the canonical artifact from local cache. It is not in-place Zarr mutation.
+
+### 5. Execute the CHIRPS3 sync
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2024-02-10",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `sync_detail.action` is `append`
+- `sync_detail.requested_start` is `2024-01-01`
+- `sync_detail.requested_end` is `2024-02-10`
+- the returned `dataset.dataset_id` is still `chirps3_precipitation_daily_sle`
+- the returned dataset has a newer version in `versions`
+
+### 6. Confirm no-op behavior
+
+Run the same plan again with the same end:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+```
+
+Expected:
+
+- `action` is `no_op`
+- `reason` is `no_new_period`
+
+### 7. Test release-style sync with WorldPop
+
+Create an initial WorldPop managed dataset:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/ingestions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "worldpop_population_yearly",
+    "extent_id": "sle",
+    "start": "2020",
+    "end": "2020",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Plan a later release:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle/plan?end=2021" | jq
+```
+
+Expected:
+
+- `sync_kind` is `release`
+- `action` is `rematerialize`
+- `reason` is `new_release_available`
+- `requested_end` is `2021`
+
+Execute the release sync:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2021",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `sync_detail.action` is `rematerialize`
+- the managed dataset id remains `worldpop_population_yearly_sle`
 
 ## Summary
 
