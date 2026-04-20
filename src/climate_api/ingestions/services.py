@@ -150,10 +150,27 @@ def create_artifact(
         prefer_zarr=prefer_zarr,
     )
     if existing is not None and not overwrite:
+        logger.info(
+            "Reusing existing artifact '%s' for dataset '%s' scope=%s..%s",
+            existing.artifact_id,
+            dataset["id"],
+            start,
+            end,
+        )
         if publish and existing.publication.status != PublicationStatus.PUBLISHED:
             return publish_artifact_record(existing.artifact_id)
         return existing
 
+    logger.info(
+        "Downloading dataset '%s': request_scope=%s..%s download_scope=%s..%s prefer_zarr=%s publish=%s",
+        dataset["id"],
+        start,
+        end,
+        download_start or start,
+        download_end if download_end is not None else end,
+        prefer_zarr,
+        publish,
+    )
     downloaded_files = downloader.download_dataset(
         dataset,
         start=download_start or start,
@@ -163,10 +180,13 @@ def create_artifact(
         overwrite=overwrite,
         background_tasks=None,
     )
+    logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
     if prefer_zarr:
         try:
+            logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
             downloader.build_dataset_zarr(dataset)
+            logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
         except Exception:
             # Fall back to NetCDF when Zarr materialization is not viable.
             logger.warning(
@@ -217,7 +237,16 @@ def create_artifact(
         publication=ArtifactPublication(),
     )
     stored_record = _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+    logger.info(
+        "Stored artifact '%s' for dataset '%s': format=%s coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.format,
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
     if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
 

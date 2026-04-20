@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.publications.services import managed_dataset_id_for
+
+logger = logging.getLogger(__name__)
 
 
 def plan_sync(
@@ -142,8 +145,20 @@ def run_sync(
         requested_end=requested_end,
     )
     dataset_id = managed_dataset_id_for(latest_artifact)
+    logger.info(
+        "Sync plan for dataset '%s': action=%s reason=%s current=%s..%s target=%s delta=%s..%s",
+        dataset_id,
+        sync_detail.action,
+        sync_detail.reason,
+        sync_detail.current_start,
+        sync_detail.current_end,
+        sync_detail.target_end,
+        sync_detail.delta_start,
+        sync_detail.delta_end,
+    )
 
     if sync_detail.action == SyncAction.NO_OP:
+        logger.info("Sync skipped for dataset '%s': already current", dataset_id)
         return SyncResponse(
             sync_id=None,
             status="up_to_date",
@@ -153,6 +168,7 @@ def run_sync(
         )
 
     if sync_detail.action == SyncAction.NOT_SYNCABLE:
+        logger.info("Sync skipped for dataset '%s': dataset is not syncable", dataset_id)
         return SyncResponse(
             sync_id=None,
             status="not_syncable",
@@ -167,6 +183,16 @@ def run_sync(
     assert sync_detail.current_start is not None
     assert sync_detail.target_end is not None
     download_start = sync_detail.delta_start if sync_detail.action == SyncAction.APPEND else None
+    logger.info(
+        "Sync executing for dataset '%s': action=%s artifact_scope=%s..%s download_scope=%s..%s publish=%s",
+        dataset_id,
+        sync_detail.action,
+        sync_detail.current_start,
+        sync_detail.target_end,
+        download_start or sync_detail.current_start,
+        sync_detail.delta_end if download_start is not None else sync_detail.target_end,
+        publish,
+    )
     artifact = create_artifact_fn(
         dataset=source_dataset,
         start=sync_detail.current_start,
@@ -180,13 +206,26 @@ def run_sync(
         prefer_zarr=prefer_zarr,
         publish=publish,
     )
+    logger.info(
+        "Sync completed for dataset '%s': artifact_id=%s action=%s",
+        dataset_id,
+        artifact.artifact_id,
+        sync_detail.action,
+    )
     return SyncResponse(
         sync_id=artifact.artifact_id,
         status="completed",
-        message="Managed dataset was rematerialized against the latest planned upstream state.",
+        message=_sync_completed_message(sync_detail.action),
         dataset=get_dataset_fn(managed_dataset_id_for(artifact)),
         sync_detail=sync_detail,
     )
+
+
+def _sync_completed_message(action: SyncAction) -> str:
+    """Return a user-facing completion message for the executed sync action."""
+    if action == SyncAction.APPEND:
+        return "Managed dataset was synced by downloading the missing period range and rebuilding the artifact."
+    return "Managed dataset was rematerialized against the latest planned upstream state."
 
 
 def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
