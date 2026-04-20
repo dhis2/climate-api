@@ -351,16 +351,40 @@ What this means:
 
 ## 9. `/sync`
 
-`POST /sync/{dataset_id}` exists and is part of the intended public product shape, but its behavior is still the main refinement area.
+`/sync` advances an existing managed dataset from its latest local coverage toward a requested upstream period.
 
-Current intent:
+Available operations:
 
-- sync a managed dataset forward from its latest available period
+- `GET /sync/{dataset_id}/plan?end={period}` returns the planned sync action without downloading or writing data
+- `POST /sync/{dataset_id}` executes the plan when a new version is needed
+
+Implemented behavior:
+
+- `temporal` datasets compare the next missing period with the requested or metadata-clamped latest period
+- `release` datasets compare the current materialized release with the requested or metadata-clamped latest release
+- `static` datasets return `not_syncable`
 - preserve stable managed dataset identity
 - rematerialize a fresh version covering the managed dataset's original start through the requested end period
-- return the updated dataset view
+- return the updated dataset view plus structured `sync_detail`
 
-This route should be treated as present but still under active behavioral design.
+Current limitations:
+
+- temporal sync rematerializes the full original request range instead of append-only deltas
+- upstream availability is driven by template metadata such as `sync_availability`; provider-specific discovery is still deferred
+
+Example dry-run plan:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+```
+
+Example execution:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{"end":"2024-02-10","prefer_zarr":true,"publish":true}' | jq
+```
 
 ## Manual Test Sequence
 
@@ -374,7 +398,9 @@ For a clean manual test, this is the best sequence to run:
 6. `GET /ogcapi/collections`
 7. `GET /ogcapi/collections/{dataset_id}`
 8. `GET /ogcapi/collections/{dataset_id}/coverage`
-9. `POST /ingestions` with WorldPop
+9. `GET /sync/{dataset_id}/plan?end={period}`
+10. `POST /sync/{dataset_id}`
+11. `POST /ingestions` with WorldPop
 
 Good demo payloads:
 

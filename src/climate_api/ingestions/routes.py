@@ -14,6 +14,7 @@ from climate_api.ingestions.schemas import (
     IngestionListResponse,
     IngestionResponse,
     SyncDatasetRequest,
+    SyncDetail,
     SyncResponse,
 )
 
@@ -113,3 +114,9 @@ def sync_dataset(dataset_id: str, request: SyncDatasetRequest) -> SyncResponse:
         prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
+
+
+@sync_router.get("/{dataset_id}/plan", response_model=SyncDetail)
+def plan_sync_dataset(dataset_id: str, end: str | None = None) -> SyncDetail:
+    """Return the sync plan for a managed dataset without starting a download."""
+    return services.plan_sync_dataset(dataset_id=dataset_id, end=end)

@@ -38,7 +38,10 @@ def plan_sync(
 
     This planner deliberately does not download data or persist artifacts.
     """
-    sync_kind = SyncKind(str(source_dataset.get("sync_kind", SyncKind.TEMPORAL.value)))
+    sync_kind_value = source_dataset.get("sync_kind")
+    if not isinstance(sync_kind_value, str) or not sync_kind_value:
+        raise ValueError("source_dataset must define sync_kind for sync planning")
+    sync_kind = SyncKind(sync_kind_value)
     resolved_end = requested_end or date.today().isoformat()
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end

@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 
 import pytest
+from fastapi.testclient import TestClient
 
 from climate_api.ingestions import services, sync_engine
 from climate_api.ingestions.schemas import (
@@ -91,7 +92,7 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily"},
+        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
@@ -255,6 +256,101 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
     assert result.sync_detail.sync_kind == SyncKind.STATIC
     assert result.sync_detail.action == SyncAction.NOT_SYNCABLE
     assert result.sync_detail.reason == "static_dataset"
+
+
+def test_plan_sync_requires_sync_kind() -> None:
+    latest = _artifact(artifact_id="a1", end="2026-01-31")
+
+    with pytest.raises(ValueError, match="must define sync_kind"):
+        sync_engine.plan_sync(
+            source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily"},
+            latest_artifact=latest,
+            requested_end="2026-02-10",
+        )
+
+
+def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+    )
+    monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("sync plan should not create artifacts"))
+
+    result = services.plan_sync_dataset(dataset_id=dataset_id, end="2026-02-10")
+
+    assert result.sync_kind == SyncKind.TEMPORAL
+    assert result.action == SyncAction.REMATERIALIZE
+    assert result.reason == "new_periods_available"
+    assert result.requested_start == "2026-01-01"
+    assert result.requested_end == "2026-02-10"
+
+
+def test_sync_plan_route_returns_plan_without_creating_artifact(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+    )
+    monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("sync plan should not create artifacts"))
+
+    response = client.get(f"/sync/{dataset_id}/plan", params={"end": "2026-02-10"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source_dataset_id": "chirps3_precipitation_daily",
+        "extent_id": "sle",
+        "sync_kind": "temporal",
+        "action": "rematerialize",
+        "reason": "new_periods_available",
+        "requested_start": "2026-01-01",
+        "requested_end": "2026-02-10",
+        "latest_available_start": "2026-02-01",
+        "latest_available_end": "2026-02-10",
+    }
+
+
+def test_sync_route_executes_rematerialize_and_returns_structured_detail(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+    )
+    monkeypatch.setattr(
+        services,
+        "create_artifact",
+        lambda **_: _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10"),
+    )
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+
+    response = client.post(
+        f"/sync/{dataset_id}",
+        json={"end": "2026-02-10", "prefer_zarr": True, "publish": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sync_id"] == "a2"
+    assert payload["status"] == "completed"
+    assert payload["dataset"]["dataset_id"] == dataset_id
+    assert payload["sync_detail"]["sync_kind"] == "temporal"
+    assert payload["sync_detail"]["action"] == "rematerialize"
+    assert payload["sync_detail"]["requested_end"] == "2026-02-10"
 
 
 def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -37,9 +37,10 @@ from climate_api.ingestions.schemas import (
     IngestionListResponse,
     IngestionResponse,
     PublicationStatus,
+    SyncDetail,
     SyncResponse,
 )
-from climate_api.ingestions.sync_engine import run_sync
+from climate_api.ingestions.sync_engine import plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
 
 logger = logging.getLogger(__name__)
@@ -259,6 +260,23 @@ def sync_dataset(
         publish=publish,
         create_artifact_fn=create_artifact,
         get_dataset_fn=get_dataset_or_404,
+    )
+
+
+def plan_sync_dataset(
+    *,
+    dataset_id: str,
+    end: str | None,
+) -> SyncDetail:
+    """Return the sync plan for a managed dataset without downloading or writing artifacts."""
+    latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+    source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
+    if source_dataset is None:
+        raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    return plan_sync(
+        latest_artifact=latest_artifact,
+        source_dataset=source_dataset,
+        requested_end=end,
     )
 
 
