@@ -43,7 +43,6 @@ def plan_sync(
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
     latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
-    next_period_start = _next_period_start(current_end, period_type=str(source_dataset["period_type"]))
 
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
@@ -58,6 +57,7 @@ def plan_sync(
         )
 
     if sync_kind == SyncKind.TEMPORAL:
+        next_period_start = _next_period_start(current_end, period_type=str(source_dataset["period_type"]))
         # TODO: add append-style execution once canonical stores can accept deltas.
         # V1 rematerializes from the original request scope even when only a delta exists.
         if next_period_start > latest_available_end:
@@ -154,6 +154,7 @@ def run_sync(
 
     # Execution always goes through the ingestion materialization path so sync
     # does not grow a second downloader/storage implementation.
+    assert sync_detail.requested_end is not None
     artifact = create_artifact_fn(
         dataset=source_dataset,
         start=sync_detail.requested_start or latest_artifact.request_scope.start,

@@ -229,7 +229,35 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.sync_detail.latest_available_end == "2025"
 
 
-def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "static_dataset_sle"
+    latest = _artifact(
+        artifact_id="a1",
+        source_dataset_id="static_dataset",
+        managed_dataset_id=dataset_id,
+        end="static-release",
+    )
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "static_dataset", "period_type": "unsupported-static-period", "sync_kind": "static"},
+    )
+    monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("static sync should not create artifacts"))
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+
+    result = services.sync_dataset(dataset_id=dataset_id, end="ignored", prefer_zarr=True, publish=True)
+
+    assert result.sync_id is None
+    assert result.status == "not_syncable"
+    assert result.sync_detail.sync_kind == SyncKind.STATIC
+    assert result.sync_detail.action == SyncAction.NOT_SYNCABLE
+    assert result.sync_detail.reason == "static_dataset"
+
+
+def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch: pytest.MonkeyPatch) -> None:
     class FixedDate(date):
         @classmethod
         def today(cls) -> "FixedDate":
@@ -247,6 +275,15 @@ def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: py
     )
 
     assert result == "2026-05"
+
+
+def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> "FixedDate":
+            return cls(2026, 4, 15)
+
+    monkeypatch.setattr(sync_engine, "date", FixedDate)
 
     result = sync_engine._latest_available_end(
         source_dataset={
