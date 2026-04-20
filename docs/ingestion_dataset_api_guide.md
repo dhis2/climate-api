@@ -443,12 +443,29 @@ Expected planning response:
 - `sync_kind` is `temporal`
 - `action` is `append`
 - `reason` is `new_periods_available_for_append`
-- `requested_start` remains `2024-01-01`
+- `current_start` is `2024-01-01`
+- `current_end` is `2024-01-31`
+- `target_end` is `2024-02-10`
+- `delta_start` is `2024-02-01`
+- `delta_end` is `2024-02-10`
+- `requested_start` is `2024-01-01`
 - `requested_end` is `2024-02-10`
-- `latest_available_start` is `2024-02-01`
 
 `append` here means Climate API downloads only the missing period range and then
 rebuilds the canonical artifact from local cache. It is not in-place Zarr mutation.
+
+Where these timestamps come from:
+
+- `current_start` and `current_end` come from the latest stored artifact coverage
+- `target_end` comes from the explicit `end` query parameter, or defaults to today in the dataset-native period format when omitted
+- `delta_start` is the first period after `current_end`
+- `delta_end` is the resolved target period after any availability clamping
+- `requested_start` and `requested_end` are the full managed dataset coverage that the resulting artifact should represent
+
+If `end` is omitted, the planner defaults to the current date. For example, calling
+`/sync/chirps3_precipitation_daily_sle/plan` on `2026-04-20` after ingesting
+through `2024-01-31` plans an append from `2024-02-01` through `2026-04-20`.
+For controlled tests, always pass an explicit `end`.
 
 ### 5. Execute the CHIRPS3 sync
 
@@ -466,6 +483,9 @@ Expected:
 
 - `status` is `completed`
 - `sync_detail.action` is `append`
+- `sync_detail.current_end` was `2024-01-31`
+- `sync_detail.delta_start` is `2024-02-01`
+- `sync_detail.delta_end` is `2024-02-10`
 - `sync_detail.requested_start` is `2024-01-01`
 - `sync_detail.requested_end` is `2024-02-10`
 - the returned `dataset.dataset_id` is still `chirps3_precipitation_daily_sle`

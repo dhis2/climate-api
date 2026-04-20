@@ -44,7 +44,8 @@ def plan_sync(
     if not isinstance(sync_kind_value, str) or not sync_kind_value:
         raise ValueError("source_dataset must define sync_kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
-    resolved_end = requested_end or date.today().isoformat()
+    period_type = str(source_dataset["period_type"])
+    resolved_end = requested_end or _default_target_end(period_type=period_type)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
     latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
@@ -56,13 +57,16 @@ def plan_sync(
             sync_kind=sync_kind,
             action=SyncAction.NOT_SYNCABLE,
             reason="static_dataset",
+            current_start=current_start,
+            current_end=current_end,
+            target_end=current_end,
             requested_start=current_start,
             requested_end=current_end,
             latest_available_end=current_end,
         )
 
     if sync_kind == SyncKind.TEMPORAL:
-        next_period_start = _next_period_start(current_end, period_type=str(source_dataset["period_type"]))
+        next_period_start = _next_period_start(current_end, period_type=period_type)
         if next_period_start > latest_available_end:
             return SyncDetail(
                 source_dataset_id=latest_artifact.dataset_id,
@@ -70,6 +74,9 @@ def plan_sync(
                 sync_kind=sync_kind,
                 action=SyncAction.NO_OP,
                 reason="no_new_period",
+                current_start=current_start,
+                current_end=current_end,
+                target_end=latest_available_end,
                 requested_start=current_start,
                 requested_end=current_end,
                 latest_available_end=latest_available_end,
@@ -82,6 +89,11 @@ def plan_sync(
             sync_kind=sync_kind,
             action=action,
             reason=reason,
+            current_start=current_start,
+            current_end=current_end,
+            target_end=latest_available_end,
+            delta_start=next_period_start,
+            delta_end=latest_available_end,
             requested_start=current_start,
             requested_end=latest_available_end,
             latest_available_start=next_period_start,
@@ -95,6 +107,9 @@ def plan_sync(
             sync_kind=sync_kind,
             action=SyncAction.NO_OP,
             reason="no_new_release",
+            current_start=current_start,
+            current_end=current_end,
+            target_end=latest_available_end,
             requested_start=current_start,
             requested_end=current_end,
             latest_available_end=latest_available_end,
@@ -106,6 +121,11 @@ def plan_sync(
         sync_kind=sync_kind,
         action=SyncAction.REMATERIALIZE,
         reason="new_release_available",
+        current_start=current_start,
+        current_end=current_end,
+        target_end=latest_available_end,
+        delta_start=latest_available_end,
+        delta_end=latest_available_end,
         requested_start=current_start,
         requested_end=latest_available_end,
         latest_available_end=latest_available_end,
@@ -205,6 +225,20 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     if period_type == "yearly":
         return str(int(latest_period_end) + 1)
     raise ValueError(f"Unsupported period_type '{period_type}' for sync")
+
+
+def _default_target_end(*, period_type: str) -> str:
+    """Return the default sync target in the dataset-native period format."""
+    today = date.today()
+    if period_type == "hourly":
+        return datetime.now().replace(minute=0, second=0, microsecond=0).isoformat()
+    if period_type == "daily":
+        return today.isoformat()
+    if period_type == "monthly":
+        return f"{today.year:04d}-{today.month:02d}"
+    if period_type == "yearly":
+        return str(today.year)
+    return today.isoformat()
 
 
 def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str) -> str:

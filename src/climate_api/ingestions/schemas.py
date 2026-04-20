@@ -304,6 +304,26 @@ class SyncDetail(BaseModel):
     sync_kind: SyncKind = Field(description="Sync planning mode declared by the dataset template.")
     action: SyncAction = Field(description="Planner-selected sync action.")
     reason: str = Field(description="Stable machine-readable reason for the selected action.")
+    current_start: str | None = Field(
+        default=None,
+        description="First period currently covered by the managed dataset before sync.",
+    )
+    current_end: str | None = Field(
+        default=None,
+        description="Last period currently covered by the managed dataset before sync.",
+    )
+    target_end: str | None = Field(
+        default=None,
+        description="Resolved target period after applying request defaults and availability constraints.",
+    )
+    delta_start: str | None = Field(
+        default=None,
+        description="First missing period planned for delta download, when applicable.",
+    )
+    delta_end: str | None = Field(
+        default=None,
+        description="Last missing period planned for delta download, when applicable.",
+    )
     requested_start: str | None = Field(
         default=None,
         description="Start period EO API will use for the execution request.",

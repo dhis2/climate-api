@@ -143,6 +143,11 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.reason == "new_periods_available"
+    assert result.sync_detail.current_start == "2026-01-01"
+    assert result.sync_detail.current_end == "2026-01-31"
+    assert result.sync_detail.target_end == "2026-02-10"
+    assert result.sync_detail.delta_start == "2026-02-01"
+    assert result.sync_detail.delta_end == "2026-02-10"
     assert result.sync_detail.requested_start == "2026-01-01"
     assert result.sync_detail.requested_end == "2026-02-10"
 
@@ -182,6 +187,11 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert captured["download_end"] == "2026-02-10"
     assert result.sync_detail.action == SyncAction.APPEND
     assert result.sync_detail.reason == "new_periods_available_for_append"
+    assert result.sync_detail.current_start == "2026-01-01"
+    assert result.sync_detail.current_end == "2026-01-31"
+    assert result.sync_detail.target_end == "2026-02-10"
+    assert result.sync_detail.delta_start == "2026-02-01"
+    assert result.sync_detail.delta_end == "2026-02-10"
     assert result.sync_detail.requested_start == "2026-01-01"
     assert result.sync_detail.latest_available_start == "2026-02-01"
 
@@ -373,6 +383,11 @@ def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: p
     assert result.sync_kind == SyncKind.TEMPORAL
     assert result.action == SyncAction.REMATERIALIZE
     assert result.reason == "new_periods_available"
+    assert result.current_start == "2026-01-01"
+    assert result.current_end == "2026-01-31"
+    assert result.target_end == "2026-02-10"
+    assert result.delta_start == "2026-02-01"
+    assert result.delta_end == "2026-02-10"
     assert result.requested_start == "2026-01-01"
     assert result.requested_end == "2026-02-10"
 
@@ -400,6 +415,11 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
         "sync_kind": "temporal",
         "action": "rematerialize",
         "reason": "new_periods_available",
+        "current_start": "2026-01-01",
+        "current_end": "2026-01-31",
+        "target_end": "2026-02-10",
+        "delta_start": "2026-02-01",
+        "delta_end": "2026-02-10",
         "requested_start": "2026-01-01",
         "requested_end": "2026-02-10",
         "latest_available_start": "2026-02-01",
