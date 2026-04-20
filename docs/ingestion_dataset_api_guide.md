@@ -443,6 +443,7 @@ Expected planning response:
 - `sync_kind` is `temporal`
 - `action` is `append`
 - `reason` is `new_periods_available_for_append`
+- `message` explains that existing data is present and which missing period range will be downloaded
 - `current_start` is `2024-01-01`
 - `current_end` is `2024-01-31`
 - `target_end` is `2024-02-10`
@@ -499,6 +500,7 @@ Expected:
 
 - `action` is `no_op`
 - `reason` is `no_new_period`
+- `message` explains that the requested target is already covered locally
 
 ### 7. Test release-style sync with WorldPop
 

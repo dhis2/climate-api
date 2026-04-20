@@ -304,6 +304,7 @@ class SyncDetail(BaseModel):
     sync_kind: SyncKind = Field(description="Sync planning mode declared by the dataset template.")
     action: SyncAction = Field(description="Planner-selected sync action.")
     reason: str = Field(description="Stable machine-readable reason for the selected action.")
+    message: str = Field(description="Human-readable summary of the planned sync outcome.")
     current_start: str | None = Field(
         default=None,
         description="First period currently covered by the managed dataset before sync.",

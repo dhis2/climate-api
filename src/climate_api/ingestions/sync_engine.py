@@ -60,6 +60,7 @@ def plan_sync(
             sync_kind=sync_kind,
             action=SyncAction.NOT_SYNCABLE,
             reason="static_dataset",
+            message="This dataset is static and is not syncable.",
             current_start=current_start,
             current_end=current_end,
             target_end=current_end,
@@ -74,6 +75,10 @@ def plan_sync(
                 sync_kind=sync_kind,
                 action=SyncAction.NO_OP,
                 reason="no_new_period",
+                message=(
+                    f"Data already exists through {current_end}; target {latest_available_end} "
+                    "does not require a new download."
+                ),
                 current_start=current_start,
                 current_end=current_end,
                 target_end=latest_available_end,
@@ -86,6 +91,13 @@ def plan_sync(
             sync_kind=sync_kind,
             action=action,
             reason=reason,
+            message=_sync_plan_message(
+                action=action,
+                current_end=current_end,
+                target_end=latest_available_end,
+                delta_start=next_period_start,
+                delta_end=latest_available_end,
+            ),
             current_start=current_start,
             current_end=current_end,
             target_end=latest_available_end,
@@ -100,6 +112,10 @@ def plan_sync(
             sync_kind=sync_kind,
             action=SyncAction.NO_OP,
             reason="no_new_release",
+            message=(
+                f"Release {current_end} is already available locally; target {latest_available_end} "
+                "does not require a new download."
+            ),
             current_start=current_start,
             current_end=current_end,
             target_end=latest_available_end,
@@ -111,6 +127,7 @@ def plan_sync(
         sync_kind=sync_kind,
         action=SyncAction.REMATERIALIZE,
         reason="new_release_available",
+        message=f"A newer release is available: {latest_available_end}. Sync will rematerialize the dataset.",
         current_start=current_start,
         current_end=current_end,
         target_end=latest_available_end,
@@ -226,6 +243,26 @@ def _sync_completed_message(action: SyncAction) -> str:
     if action == SyncAction.APPEND:
         return "Managed dataset was synced by downloading the missing period range and rebuilding the artifact."
     return "Managed dataset was rematerialized against the latest planned upstream state."
+
+
+def _sync_plan_message(
+    *,
+    action: SyncAction,
+    current_end: str,
+    target_end: str,
+    delta_start: str,
+    delta_end: str,
+) -> str:
+    """Return a human-readable sync plan summary."""
+    if action == SyncAction.APPEND:
+        return (
+            f"Data exists through {current_end}. Sync will download missing periods "
+            f"{delta_start} through {delta_end} and rebuild coverage through {target_end}."
+        )
+    return (
+        f"Data exists through {current_end}. Sync will rematerialize the dataset "
+        f"through {target_end}."
+    )
 
 
 def _next_period_start(latest_period_end: str, *, period_type: str) -> str:

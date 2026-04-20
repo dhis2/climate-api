@@ -110,6 +110,10 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.NO_OP
     assert result.sync_detail.reason == "no_new_period"
+    assert (
+        result.sync_detail.message
+        == "Data already exists through 2026-01-31; target 2026-01-31 does not require a new download."
+    )
 
 
 def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,6 +147,10 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.reason == "new_periods_available"
+    assert (
+        result.sync_detail.message
+        == "Data exists through 2026-01-31. Sync will rematerialize the dataset through 2026-02-10."
+    )
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
@@ -185,6 +193,11 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert captured["download_end"] == "2026-02-10"
     assert result.sync_detail.action == SyncAction.APPEND
     assert result.sync_detail.reason == "new_periods_available_for_append"
+    assert (
+        result.sync_detail.message
+        == "Data exists through 2026-01-31. Sync will download missing periods "
+        "2026-02-01 through 2026-02-10 and rebuild coverage through 2026-02-10."
+    )
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
@@ -408,6 +421,7 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
         "sync_kind": "temporal",
         "action": "rematerialize",
         "reason": "new_periods_available",
+        "message": "Data exists through 2026-01-31. Sync will rematerialize the dataset through 2026-02-10.",
         "current_start": "2026-01-01",
         "current_end": "2026-01-31",
         "target_end": "2026-02-10",
