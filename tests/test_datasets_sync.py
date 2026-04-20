@@ -148,8 +148,6 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.target_end == "2026-02-10"
     assert result.sync_detail.delta_start == "2026-02-01"
     assert result.sync_detail.delta_end == "2026-02-10"
-    assert result.sync_detail.requested_start == "2026-01-01"
-    assert result.sync_detail.requested_end == "2026-02-10"
 
 
 def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scope(
@@ -192,8 +190,6 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert result.sync_detail.target_end == "2026-02-10"
     assert result.sync_detail.delta_start == "2026-02-01"
     assert result.sync_detail.delta_end == "2026-02-10"
-    assert result.sync_detail.requested_start == "2026-01-01"
-    assert result.sync_detail.latest_available_start == "2026-02-01"
 
 
 def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
@@ -324,8 +320,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.status == "completed"
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert result.sync_detail.requested_end == "2025"
-    assert result.sync_detail.latest_available_end == "2025"
+    assert result.sync_detail.target_end == "2025"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(
@@ -388,8 +383,6 @@ def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: p
     assert result.target_end == "2026-02-10"
     assert result.delta_start == "2026-02-01"
     assert result.delta_end == "2026-02-10"
-    assert result.requested_start == "2026-01-01"
-    assert result.requested_end == "2026-02-10"
 
 
 def test_sync_plan_route_returns_plan_without_creating_artifact(
@@ -420,10 +413,6 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
         "target_end": "2026-02-10",
         "delta_start": "2026-02-01",
         "delta_end": "2026-02-10",
-        "requested_start": "2026-01-01",
-        "requested_end": "2026-02-10",
-        "latest_available_start": "2026-02-01",
-        "latest_available_end": "2026-02-10",
     }
 
 
@@ -458,7 +447,7 @@ def test_sync_route_executes_rematerialize_and_returns_structured_detail(
     assert payload["dataset"]["dataset_id"] == dataset_id
     assert payload["sync_detail"]["sync_kind"] == "temporal"
     assert payload["sync_detail"]["action"] == "rematerialize"
-    assert payload["sync_detail"]["requested_end"] == "2026-02-10"
+    assert payload["sync_detail"]["target_end"] == "2026-02-10"
 
 
 def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch: pytest.MonkeyPatch) -> None:

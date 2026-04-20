@@ -324,19 +324,3 @@ class SyncDetail(BaseModel):
         default=None,
         description="Last missing period planned for delta download, when applicable.",
     )
-    requested_start: str | None = Field(
-        default=None,
-        description="Start period EO API will use for the execution request.",
-    )
-    requested_end: str | None = Field(
-        default=None,
-        description="End period EO API will use for the execution request.",
-    )
-    latest_available_start: str | None = Field(
-        default=None,
-        description="Earliest upstream period considered by the planner, when applicable.",
-    )
-    latest_available_end: str | None = Field(
-        default=None,
-        description="Latest upstream period considered by the planner, when applicable.",
-    )

@@ -60,9 +60,6 @@ def plan_sync(
             current_start=current_start,
             current_end=current_end,
             target_end=current_end,
-            requested_start=current_start,
-            requested_end=current_end,
-            latest_available_end=current_end,
         )
 
     if sync_kind == SyncKind.TEMPORAL:
@@ -77,9 +74,6 @@ def plan_sync(
                 current_start=current_start,
                 current_end=current_end,
                 target_end=latest_available_end,
-                requested_start=current_start,
-                requested_end=current_end,
-                latest_available_end=latest_available_end,
             )
         action = SyncAction.APPEND if _supports_append(source_dataset) else SyncAction.REMATERIALIZE
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
@@ -94,10 +88,6 @@ def plan_sync(
             target_end=latest_available_end,
             delta_start=next_period_start,
             delta_end=latest_available_end,
-            requested_start=current_start,
-            requested_end=latest_available_end,
-            latest_available_start=next_period_start,
-            latest_available_end=latest_available_end,
         )
 
     if current_end >= latest_available_end:
@@ -110,9 +100,6 @@ def plan_sync(
             current_start=current_start,
             current_end=current_end,
             target_end=latest_available_end,
-            requested_start=current_start,
-            requested_end=current_end,
-            latest_available_end=latest_available_end,
         )
 
     return SyncDetail(
@@ -126,9 +113,6 @@ def plan_sync(
         target_end=latest_available_end,
         delta_start=latest_available_end,
         delta_end=latest_available_end,
-        requested_start=current_start,
-        requested_end=latest_available_end,
-        latest_available_end=latest_available_end,
     )
 
 
@@ -180,14 +164,15 @@ def run_sync(
     # Execution always goes through the ingestion materialization path so sync
     # does not grow a second downloader/storage implementation. APPEND is a V1
     # delta-download plus canonical rebuild, not in-place Zarr mutation.
-    assert sync_detail.requested_end is not None
-    download_start = sync_detail.latest_available_start if sync_detail.action == SyncAction.APPEND else None
+    assert sync_detail.current_start is not None
+    assert sync_detail.target_end is not None
+    download_start = sync_detail.delta_start if sync_detail.action == SyncAction.APPEND else None
     artifact = create_artifact_fn(
         dataset=source_dataset,
-        start=sync_detail.requested_start or latest_artifact.request_scope.start,
-        end=sync_detail.requested_end,
+        start=sync_detail.current_start,
+        end=sync_detail.target_end,
         download_start=download_start,
-        download_end=sync_detail.requested_end if download_start is not None else None,
+        download_end=sync_detail.delta_end if download_start is not None else None,
         extent_id=latest_artifact.request_scope.extent_id,
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         country_code=None,
