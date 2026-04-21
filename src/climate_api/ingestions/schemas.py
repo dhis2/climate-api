@@ -278,19 +278,6 @@ class SyncDatasetRequest(BaseModel):
     publish: bool = Field(default=True, description="Whether to publish the resulting dataset version.")
 
 
-class SyncResponse(BaseModel):
-    """Public response returned after planning and optionally running a sync."""
-
-    sync_id: str | None = Field(
-        default=None,
-        description="Identifier of the sync-created version when a new version was written.",
-    )
-    status: str = Field(description="Execution status, for example completed or up_to_date.")
-    message: str | None = Field(default=None, description="Human-readable explanation of the sync outcome.")
-    dataset: DatasetDetailRecord = Field(description="Current dataset detail after the sync operation.")
-    sync_detail: "SyncDetail" = Field(description="Planner output describing how EO API interpreted the sync request.")
-
-
 class SyncDetail(BaseModel):
     """Structured planner output for one managed dataset sync decision.
 
@@ -330,4 +317,19 @@ class SyncDetail(BaseModel):
     delta_end: str | None = Field(
         default=None,
         description="Last missing period planned for delta download, when applicable.",
+    )
+
+
+class SyncResponse(BaseModel):
+    """Public response returned after planning and optionally running a sync."""
+
+    sync_id: str | None = Field(
+        default=None,
+        description="Identifier of the sync-created version when a new version was written.",
+    )
+    status: str = Field(description="Execution status, for example completed or up_to_date.")
+    message: str | None = Field(default=None, description="Human-readable explanation of the sync outcome.")
+    dataset: DatasetDetailRecord = Field(description="Current dataset detail after the sync operation.")
+    sync_detail: SyncDetail = Field(
+        description="Planner output describing how Climate API interpreted the sync request."
     )

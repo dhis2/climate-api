@@ -20,6 +20,7 @@ from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.publications.services import managed_dataset_id_for
+from climate_api.shared.time import datetime_to_period_string
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +280,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     """
     if period_type == "hourly":
         timestamp = datetime.fromisoformat(latest_period_end)
-        return (timestamp + timedelta(hours=1)).isoformat()
+        return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
     if period_type == "daily":
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
@@ -298,7 +299,7 @@ def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
     today = date.today()
     if period_type == "hourly":
-        return datetime.now(UTC).replace(minute=0, second=0, microsecond=0).isoformat()
+        return datetime_to_period_string(datetime.now(UTC), period_type)
     if period_type == "daily":
         return today.isoformat()
     if period_type == "monthly":

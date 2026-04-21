@@ -57,7 +57,7 @@ def test_lagged_latest_available_formats_hourly_lag(monkeypatch: pytest.MonkeyPa
         requested_end="2026-04-21T12:00:00",
     )
 
-    assert result == "2026-04-21T07:00:00+00:00"
+    assert result == "2026-04-21T07"
 
 
 def test_lagged_latest_available_formats_daily_lag(monkeypatch: pytest.MonkeyPatch) -> None:

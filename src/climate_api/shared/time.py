@@ -1,8 +1,22 @@
 """Time helpers shared across Climate API modules."""
 
+from datetime import datetime
 from typing import Any
 
 import numpy as np
+
+
+def datetime_to_period_string(value: datetime, period_type: str) -> str:
+    """Convert a datetime to the dataset-native period string format."""
+    if period_type == "hourly":
+        return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
+    if period_type == "daily":
+        return value.date().isoformat()
+    if period_type == "monthly":
+        return f"{value.year:04d}-{value.month:02d}"
+    if period_type == "yearly":
+        return str(value.year)
+    return value.isoformat()
 
 
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:

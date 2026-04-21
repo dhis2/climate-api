@@ -182,12 +182,21 @@ def create_artifact(
     )
     logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
-    if prefer_zarr:
+    requires_canonical_zarr = download_start is not None
+    if prefer_zarr or requires_canonical_zarr:
         try:
             logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
             downloader.build_dataset_zarr(dataset, start=start, end=end)
             logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
-        except Exception:
+        except Exception as exc:
+            if requires_canonical_zarr:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Append sync requires Zarr materialization so the canonical artifact can be "
+                        "rebuilt for the full requested scope."
+                    ),
+                ) from exc
             # Fall back to NetCDF when Zarr materialization is not viable.
             logger.warning(
                 "Zarr materialization failed for dataset '%s'; falling back to NetCDF",
@@ -196,7 +205,16 @@ def create_artifact(
             )
 
     zarr_path = downloader.get_zarr_path(dataset)
-    cache_files = downloaded_files or downloader.get_cache_files(dataset)
+    if requires_canonical_zarr and zarr_path is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Append sync requires a canonical Zarr artifact, but no Zarr store was produced.",
+        )
+    cache_files = (
+        downloader.get_cache_files(dataset)
+        if requires_canonical_zarr
+        else downloaded_files or downloader.get_cache_files(dataset)
+    )
     primary_path: str | None
 
     if zarr_path is not None:

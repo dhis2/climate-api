@@ -350,7 +350,13 @@ def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch)
 
     result = sync_engine._default_target_end(period_type="hourly")
 
-    assert result == "2026-04-21T13:00:00+00:00"
+    assert result == "2026-04-21T13"
+
+
+def test_next_period_start_preserves_hourly_period_format() -> None:
+    result = sync_engine._next_period_start("2026-04-21T13", period_type="hourly")
+
+    assert result == "2026-04-21T14"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(

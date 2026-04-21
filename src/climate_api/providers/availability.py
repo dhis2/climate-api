@@ -11,6 +11,8 @@ from calendar import monthrange
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from climate_api.shared.time import datetime_to_period_string
+
 
 def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
     """Return latest complete CHIRPS3 daily period available for safe sync.
@@ -41,7 +43,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
             latest = datetime.now(UTC) - timedelta(hours=lag_hours)
-            return latest.replace(minute=0, second=0, microsecond=0).isoformat()
+            return datetime_to_period_string(latest, period_type)
         return requested_end
 
     lag_days = availability.get("lag_days")
