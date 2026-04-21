@@ -214,9 +214,7 @@ def _select_time_range(
     time_dim = get_time_dim(ds)
     selected = ds.sel({time_dim: slice(start, end)})
     if selected.sizes.get(time_dim, 0) == 0:
-        raise ValueError(
-            f"No cached data for dataset '{dataset['id']}' intersects requested time range {start}..{end}"
-        )
+        raise ValueError(f"No cached data for dataset '{dataset['id']}' intersects requested time range {start}..{end}")
     logger.info(
         "Clipped dataset '%s' to requested time range %s..%s (%d steps)",
         dataset["id"],

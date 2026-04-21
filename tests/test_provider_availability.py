@@ -86,4 +86,3 @@ def test_worldpop_release_latest_available_allows_configured_future_projection()
     )
 
     assert result == "2030"
-

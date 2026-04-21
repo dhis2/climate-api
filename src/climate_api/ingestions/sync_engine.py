@@ -270,10 +270,7 @@ def _sync_plan_message(
             f"Data exists through {current_end}. Sync will download missing periods "
             f"{delta_start} through {delta_end} and rebuild coverage through {target_end}."
         )
-    return (
-        f"Data exists through {current_end}. Sync will rematerialize the dataset "
-        f"through {target_end}."
-    )
+    return f"Data exists through {current_end}. Sync will rematerialize the dataset through {target_end}."
 
 
 def _next_period_start(latest_period_end: str, *, period_type: str) -> str:

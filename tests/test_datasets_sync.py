@@ -195,8 +195,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert result.sync_detail.action == SyncAction.APPEND
     assert result.sync_detail.reason == "new_periods_available_for_append"
     assert (
-        result.sync_detail.message
-        == "Data exists through 2026-01-31. Sync will download missing periods "
+        result.sync_detail.message == "Data exists through 2026-01-31. Sync will download missing periods "
         "2026-02-01 through 2026-02-10 and rebuild coverage through 2026-02-10."
     )
     assert result.sync_detail.current_start == "2026-01-01"

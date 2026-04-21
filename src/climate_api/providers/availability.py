@@ -46,10 +46,10 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
 
     lag_days = availability.get("lag_days")
     if period_type in {"daily", "monthly"} and isinstance(lag_days, int) and lag_days > 0:
-        latest = date.today() - timedelta(days=lag_days)
+        latest_date = date.today() - timedelta(days=lag_days)
         if period_type == "monthly":
-            return f"{latest.year:04d}-{latest.month:02d}"
-        return latest.isoformat()
+            return f"{latest_date.year:04d}-{latest_date.month:02d}"
+        return latest_date.isoformat()
 
     if period_type == "yearly":
         latest_year_offset = availability.get("latest_year_offset")
@@ -84,4 +84,3 @@ def _add_months(value: date, offset: int) -> date:
     year = month_index // 12
     month = month_index % 12 + 1
     return date(year, month, 1)
-
