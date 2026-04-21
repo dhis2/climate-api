@@ -147,6 +147,28 @@ def test_managed_dataset_id_prefers_extent_id_when_present() -> None:
     assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily_sle"
 
 
+def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+    stale_artifact = _artifact(artifact_id="stale", end="2026-02-29")
+    stale_artifact.request_scope = request_scope
+    valid_artifact = _artifact(artifact_id="valid", end="2026-02-10")
+    valid_artifact.request_scope = request_scope
+
+    result = services._find_existing_artifact_in_records(
+        records=[stale_artifact, valid_artifact],
+        dataset_id="chirps3_precipitation_daily",
+        request_scope=request_scope,
+        prefer_zarr=True,
+    )
+
+    assert result == valid_artifact
+
+
 def test_create_artifact_computes_coverage_from_created_artifact_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

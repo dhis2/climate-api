@@ -476,10 +476,29 @@ def _find_existing_artifact_in_records(
             continue
         if record.request_scope != request_scope:
             continue
+        if not _artifact_coverage_matches_request_scope(record):
+            logger.warning(
+                "Ignoring existing artifact '%s' because coverage %s..%s does not match request scope %s..%s",
+                record.artifact_id,
+                record.coverage.temporal.start,
+                record.coverage.temporal.end,
+                record.request_scope.start,
+                record.request_scope.end,
+            )
+            continue
         if prefer_zarr and record.format != ArtifactFormat.ZARR:
             continue
         return record
     return None
+
+
+def _artifact_coverage_matches_request_scope(record: ArtifactRecord) -> bool:
+    """Return whether an existing artifact is safe to reuse for its request scope."""
+    if record.coverage.temporal.start != record.request_scope.start:
+        return False
+    if record.request_scope.end is not None and record.coverage.temporal.end != record.request_scope.end:
+        return False
+    return True
 
 
 def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:
