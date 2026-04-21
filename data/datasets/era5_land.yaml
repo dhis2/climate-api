@@ -5,6 +5,9 @@
   period_type: hourly
   sync_kind: temporal
   sync_execution: append
+  sync_availability:
+    latest_available_function: climate_api.providers.availability.lagged_latest_available
+    lag_hours: 120
   cache_info: 
     eo_function: dhis2eo.data.cds.era5_land.hourly.download
     default_params:
@@ -22,6 +25,9 @@
   period_type: hourly
   sync_kind: temporal
   sync_execution: append
+  sync_availability:
+    latest_available_function: climate_api.providers.availability.lagged_latest_available
+    lag_hours: 120
   cache_info: 
     eo_function: dhis2eo.data.cds.era5_land.hourly.download
     default_params:

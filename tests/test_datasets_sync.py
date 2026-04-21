@@ -336,7 +336,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.target_end == "2025"
-    assert result.sync_detail.target_end_source == "request"
+    assert result.sync_detail.target_end_source == "request_clamped_by_availability"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(
@@ -513,6 +513,30 @@ def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPat
     assert result.target_end_source == "default_today"
     assert result.delta_start == "2024-03-01"
     assert result.delta_end == "2026-04-20"
+
+
+def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-03-31")
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "sync_execution": "append",
+            "cache_info": {},
+            "sync_availability": {
+                "latest_available_function": "climate_api.providers.availability.chirps3_daily_latest_available"
+            },
+        },
+        latest_artifact=_artifact(artifact_id="a1", end="2026-02-28"),
+        requested_end="2026-04-21",
+    )
+
+    assert result.target_end == "2026-03-31"
+    assert result.target_end_source == "request_clamped_by_availability"
+    assert result.delta_start == "2026-03-01"
+    assert result.delta_end == "2026-03-31"
 
 
 def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:

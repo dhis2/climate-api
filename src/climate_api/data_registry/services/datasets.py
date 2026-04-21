@@ -61,11 +61,29 @@ def _validate_dataset_template(dataset: object, *, file_path: Path) -> None:
         )
 
     sync_execution = dataset.get("sync_execution")
-    if sync_execution is None:
-        return
-    if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
-        supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
+    if sync_execution is not None:
+        if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
+            supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
+            raise ValueError(
+                f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_execution "
+                f"'{sync_execution}'. Supported values: {supported}"
+            )
+
+    sync_availability = dataset.get("sync_availability")
+    if sync_availability is not None:
+        _validate_sync_availability(sync_availability, dataset_id=dataset_id, file_path=file_path)
+
+
+def _validate_sync_availability(sync_availability: object, *, dataset_id: str, file_path: Path) -> None:
+    """Validate optional source availability policy metadata."""
+    if not isinstance(sync_availability, dict):
+        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid sync_availability")
+
+    latest_available_function = sync_availability.get("latest_available_function")
+    if latest_available_function is not None and (
+        not isinstance(latest_available_function, str) or not latest_available_function
+    ):
         raise ValueError(
-            f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_execution "
-            f"'{sync_execution}'. Supported values: {supported}"
+            f"Dataset template '{dataset_id}' in {file_path.name} has invalid "
+            "sync_availability.latest_available_function"
         )

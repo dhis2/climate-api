@@ -104,3 +104,50 @@ def test_dataset_registry_accepts_supported_sync_execution(
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     assert datasets.list_datasets()[0]["sync_execution"] == "append"
+
+
+def test_dataset_registry_rejects_invalid_sync_availability_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_sync_availability.yaml"
+    registry_file.write_text(
+        """
+- id: invalid_sync_availability
+  name: Invalid sync availability
+  variable: value
+  period_type: daily
+  sync_kind: temporal
+  sync_availability:
+    latest_available_function: 42
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="invalid sync_availability.latest_available_function"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_accepts_sync_availability_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "valid_sync_availability.yaml"
+    registry_file.write_text(
+        """
+- id: valid_sync_availability
+  name: Valid sync availability
+  variable: value
+  period_type: daily
+  sync_kind: temporal
+  sync_availability:
+    latest_available_function: climate_api.providers.availability.lagged_latest_available
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    assert datasets.list_datasets()[0]["sync_availability"]["latest_available_function"].endswith(
+        "lagged_latest_available"
+    )

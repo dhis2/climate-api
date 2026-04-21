@@ -4,6 +4,9 @@
   variable: pop_total
   period_type: yearly
   sync_kind: release
+  sync_availability:
+    latest_available_function: climate_api.providers.availability.worldpop_release_latest_available
+    allow_future: true
   cache_info:
     eo_function: dhis2eo.data.worldpop.pop_total.yearly.download
     multiscales:

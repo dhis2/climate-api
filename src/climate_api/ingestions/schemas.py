@@ -318,7 +318,10 @@ class SyncDetail(BaseModel):
         description="Resolved target period after applying request defaults and availability constraints.",
     )
     target_end_source: str = Field(
-        description="Where target_end came from, for example request or default_today.",
+        description=(
+            "Where target_end came from, for example request, default_today, "
+            "request_clamped_by_availability, default_today_clamped_by_availability, or current_coverage."
+        ),
     )
     delta_start: str | None = Field(
         default=None,

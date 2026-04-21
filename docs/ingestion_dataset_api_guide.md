@@ -372,7 +372,13 @@ Implemented behavior:
 Current limitations:
 
 - append execution is a delta-download plus canonical rebuild, not in-place Zarr mutation
-- upstream availability can use a provider-specific `sync_availability.latest_available_function`; otherwise it falls back to template metadata such as lag days
+- upstream availability is delegated to provider-specific `sync_availability.latest_available_function` adapters or conservative template metadata such as lag days/hours
+
+Configured availability policies:
+
+- CHIRPS3 daily uses `climate_api.providers.availability.chirps3_daily_latest_available`; this clamps sync targets to the latest complete released source month
+- ERA5-Land hourly uses `climate_api.providers.availability.lagged_latest_available` with a YAML-declared `lag_hours`
+- WorldPop yearly uses `climate_api.providers.availability.worldpop_release_latest_available`; this can allow configured future projection years
 
 Example dry-run plan:
 
@@ -458,15 +464,35 @@ Where these timestamps come from:
 
 - `current_start` and `current_end` come from the latest stored artifact coverage
 - `target_end` comes from the explicit `end` query parameter, or defaults to today in the dataset-native period format when omitted
-- `target_end_source` tells you whether `target_end` came from `request`, `default_today`, or `current_coverage`
+- `target_end_source` tells you whether `target_end` came from `request`, `default_today`, `current_coverage`, or was clamped by source availability
 - `delta_start` is the first period after `current_end`
 - `delta_end` is the resolved target period after any availability clamping
 
 If `end` is omitted, the planner defaults to the current date. For example, calling
 `/sync/chirps3_precipitation_daily_sle/plan` on `2026-04-20` after ingesting
-through `2024-01-31` plans an append from `2024-02-01` through `2026-04-20`.
-In that response, `target_end_source` will be `default_today`. For controlled
-tests, always pass an explicit `end`.
+through `2024-01-31` first resolves the target from today's date, then applies
+CHIRPS3 availability. Because CHIRPS3 daily sync is configured to use complete
+released source months, the target may be clamped below today's date and
+`target_end_source` will be `default_today_clamped_by_availability`.
+
+For controlled tests, always pass an explicit `end`. If the explicit `end`
+extends beyond the configured provider availability, `target_end_source` will be
+`request_clamped_by_availability`.
+
+### Availability clamping example
+
+If CHIRPS3 currently has complete released data through `2026-03-31` and you ask
+for:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2026-04-21" | jq
+```
+
+Expected:
+
+- `target_end` is `2026-03-31`
+- `target_end_source` is `request_clamped_by_availability`
+- the sync does not ask the upstream downloader for unavailable April daily data
 
 ### 5. Execute the CHIRPS3 sync
 
