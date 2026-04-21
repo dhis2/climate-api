@@ -185,6 +185,7 @@ Implemented sync behavior:
 - append V1 downloads only the missing range, then rebuilds the canonical artifact from local cache
 - Zarr materialization clips cached upstream data to the requested artifact scope
 - artifact reuse ignores records whose stored coverage does not match the requested scope
+- newly materialized artifacts are rejected when realized temporal coverage does not match the requested scope
 
 ## How The Current Flow Works
 

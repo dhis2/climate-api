@@ -369,6 +369,7 @@ Implemented behavior:
 - `append` execution downloads only the missing period range, then rebuilds the canonical artifact from the local cache
 - `rematerialize` execution downloads the full original request range through the requested end period
 - return the updated dataset view plus structured `sync_detail`
+- reject a rebuilt artifact before storing or publishing it if realized temporal coverage does not match the requested scope
 
 Current sync constraints:
 
