@@ -473,6 +473,30 @@ def test_sync_plan_route_returns_400_for_invalid_end_period(
     assert response.status_code == 400
 
 
+def test_plan_sync_treats_blank_end_as_default_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> "FixedDate":
+            return cls(2026, 4, 20)
+
+    monkeypatch.setattr(sync_engine, "date", FixedDate)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "sync_execution": "append",
+            "cache_info": {},
+        },
+        latest_artifact=_artifact(artifact_id="a1", end="2024-02-29"),
+        requested_end="",
+    )
+
+    assert result.target_end == "2026-04-20"
+    assert result.target_end_source == "default_today"
+
+
 def test_sync_route_executes_rematerialize_and_returns_structured_detail(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -630,3 +654,20 @@ def test_latest_available_end_clamps_provider_availability_to_requested_end(monk
     )
 
     assert result == "2026-02-10"
+
+
+def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_import(_: str) -> object:
+        raise ImportError("missing provider")
+
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", fail_import)
+
+    with pytest.raises(ValueError, match="Latest availability function 'provider.latest_available' failed"):
+        sync_engine._latest_available_end(
+            source_dataset={
+                "id": "provider_dataset",
+                "period_type": "daily",
+                "sync_availability": {"latest_available_function": "provider.latest_available"},
+            },
+            requested_end="2026-02-10",
+        )

@@ -49,9 +49,11 @@ def plan_sync(
         raise ValueError("source_dataset must define sync_kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     period_type = str(source_dataset["period_type"])
-    requested_target_end_source = "request" if requested_end is not None else "default_today"
-    if requested_end:
-        resolved_end = normalize_period_string(requested_end, period_type)
+    normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
+    normalized_requested_end = normalized_requested_end or None
+    requested_target_end_source = "request" if normalized_requested_end is not None else "default_today"
+    if normalized_requested_end is not None:
+        resolved_end = normalize_period_string(normalized_requested_end, period_type)
     else:
         resolved_end = _default_target_end(period_type=period_type)
     current_start = latest_artifact.request_scope.start
@@ -379,14 +381,19 @@ def _provider_latest_available_end(
     if not isinstance(function_path, str) or not function_path:
         return None
 
-    latest_available_fn = _get_dynamic_function(function_path)
-    params: dict[str, Any] = {}
-    signature = inspect.signature(latest_available_fn)
-    if "dataset" in signature.parameters:
-        params["dataset"] = source_dataset
-    if "requested_end" in signature.parameters:
-        params["requested_end"] = requested_end
-    result = latest_available_fn(**params)
+    try:
+        latest_available_fn = _get_dynamic_function(function_path)
+        params: dict[str, Any] = {}
+        signature = inspect.signature(latest_available_fn)
+        if "dataset" in signature.parameters:
+            params["dataset"] = source_dataset
+        if "requested_end" in signature.parameters:
+            params["requested_end"] = requested_end
+        result = latest_available_fn(**params)
+    except ValueError:
+        raise
+    except (AttributeError, ImportError, TypeError) as exc:
+        raise ValueError(f"Latest availability function '{function_path}' failed: {exc}") from exc
     if not isinstance(result, str):
         raise ValueError(f"Latest availability function '{function_path}' must return a period string")
     return result
