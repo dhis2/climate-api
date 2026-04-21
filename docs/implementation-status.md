@@ -20,6 +20,7 @@ The branch now centers on one narrow vertical slice:
 3. ingest data into a managed dataset for one dataset template plus one extent
 4. publish that managed dataset through `pygeoapi` under `/ogcapi`
 5. expose native metadata under `/datasets` and raw Zarr access under `/zarr`
+6. sync existing managed datasets forward through `/sync`
 
 The public surface is intentionally small:
 
@@ -32,21 +33,25 @@ The public surface is intentionally small:
 
 ## Main Code References
 
-- [src/climate_api/main.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/main.py)
+- [src/climate_api/main.py](../src/climate_api/main.py)
   - app assembly and router mounting
-- [src/climate_api/ingestions/routes.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/routes.py)
+- [src/climate_api/ingestions/routes.py](../src/climate_api/ingestions/routes.py)
   - ingestion, dataset, zarr, and sync routes
-- [src/climate_api/ingestions/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/services.py)
-  - internal artifact persistence, dataset grouping, sync behavior, Zarr browsing
-- [src/climate_api/ingestions/schemas.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/ingestions/schemas.py)
+- [src/climate_api/ingestions/services.py](../src/climate_api/ingestions/services.py)
+  - internal artifact persistence, dataset grouping, sync service wiring, Zarr browsing
+- [src/climate_api/ingestions/sync_engine.py](../src/climate_api/ingestions/sync_engine.py)
+  - sync planning and execution engine
+- [src/climate_api/ingestions/schemas.py](../src/climate_api/ingestions/schemas.py)
   - public ingestion, dataset, and sync contracts
-- [src/climate_api/extents/routes.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/extents/routes.py)
+- [src/climate_api/providers/availability.py](../src/climate_api/providers/availability.py)
+  - provider-specific sync availability policies
+- [src/climate_api/extents/routes.py](../src/climate_api/extents/routes.py)
   - extent discovery endpoints
-- [src/climate_api/extents/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/extents/services.py)
+- [src/climate_api/extents/services.py](../src/climate_api/extents/services.py)
   - YAML-backed extent registry
-- [src/climate_api/publications/services.py](/home/abyot/coding/EO/climate-api-pygeoapi-publication/src/climate_api/publications/services.py)
+- [src/climate_api/publications/services.py](../src/climate_api/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
-- [data/extents.yaml](/home/abyot/coding/EO/climate-api-pygeoapi-publication/data/extents.yaml)
+- [data/extents.yaml](../data/extents.yaml)
   - configured extents for the Climate API instance
 
 ## What Was Achieved
@@ -162,6 +167,25 @@ This internal model remains necessary for provenance and sync behavior, but it i
 
 The current JSON-backed store is still an interim persistence layer. Record mutations now use file locking to avoid lost updates during concurrent writes, but the long-term direction should be a proper transactional store.
 
+### 8. `/sync` is now a testable managed dataset update path
+
+The sync API now exposes:
+
+- `GET /sync/{dataset_id}/plan?end={period}`
+- `POST /sync/{dataset_id}`
+
+The plan endpoint returns a dry-run `SyncDetail` without downloading or writing data. The post endpoint executes the same plan through the existing artifact creation path when work is required.
+
+Implemented sync behavior:
+
+- temporal datasets can append missing periods
+- release datasets rematerialize when a newer requested release exists
+- static datasets return `not_syncable`
+- provider availability policies clamp unsafe future targets before execution
+- append V1 downloads only the missing range, then rebuilds the canonical artifact from local cache
+- Zarr materialization clips cached upstream data to the requested artifact scope
+- artifact reuse ignores records whose stored coverage does not match the requested scope
+
 ## How The Current Flow Works
 
 ### Ingestion
@@ -190,6 +214,15 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 2. `/zarr/{dataset_id}` exposes the raw Zarr store layout when the latest version is Zarr-backed
 3. `/ogcapi/collections/{dataset_id}/coverage` exposes standards-facing coverage access
 
+### Sync
+
+1. `GET /sync/{dataset_id}/plan` resolves the latest local artifact and source template
+2. `sync_engine.plan_sync(...)` computes the action, target, and delta range
+3. provider availability metadata clamps unsupported future targets
+4. `POST /sync/{dataset_id}` returns `up_to_date` or `not_syncable` without writes when applicable
+5. otherwise, sync calls the existing artifact creation path
+6. the new version is optionally published under the same stable managed dataset id
+
 ## Current Public Surface
 
 ### Native FastAPI
@@ -205,6 +238,7 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 - `GET /zarr/{dataset_id}`
 - `GET /zarr/{dataset_id}/{relative_path}`
 - `POST /sync/{dataset_id}`
+- `GET /sync/{dataset_id}/plan`
 
 ### Standards-facing
 
@@ -214,16 +248,12 @@ The current JSON-backed store is still an interim persistence layer. Record muta
 
 ## What Is Still Deferred
 
-1. refined `/sync` behavior and policy
-2. a final decision on how much version history to expose publicly
-3. richer extent configuration shapes beyond `id + bbox + optional metadata`
-4. any runtime write API for extents
-5. multi-version publication resolution behind one dataset id
-
-Recent refinement:
-
-- `/sync/{dataset_id}` now rematerializes a new managed dataset version from the dataset's original request start through the requested sync end period, instead of creating a latest-only delta slice
-- sync now re-resolves `extent_id` configuration so extent-backed `country_code` inputs continue to work during sync
+1. a final decision on how much version history to expose publicly
+2. richer extent configuration shapes beyond `id + bbox + optional metadata`
+3. any runtime write API for extents
+4. multi-version publication resolution behind one dataset id
+5. true in-place Zarr append, if storage semantics require it later
+6. upstream `dhis2eo` improvements so provider download boundaries can respect partial months directly
 
 ## Short Summary
 
@@ -233,6 +263,7 @@ The branch now presents a much cleaner product story:
 2. return datasets, not artifacts
 3. discover managed data under `/datasets`
 4. access raw Zarr under `/zarr/{dataset_id}`
-5. browse published collections only under `/ogcapi`
+5. sync managed datasets through `/sync/{dataset_id}`
+6. browse published collections only under `/ogcapi`
 
 Internal artifacts still exist, but only as a storage and provenance model.

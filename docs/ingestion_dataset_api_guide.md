@@ -29,6 +29,7 @@ Operational note:
 - `GET /datasets/{dataset_id}/download`
 - `GET /zarr/{dataset_id}`
 - `GET /zarr/{dataset_id}/{relative_path}`
+- `GET /sync/{dataset_id}/plan`
 - `POST /sync/{dataset_id}`
 - `GET /ogcapi/collections`
 - `GET /ogcapi/collections/{dataset_id}`
@@ -369,7 +370,7 @@ Implemented behavior:
 - `rematerialize` execution downloads the full original request range through the requested end period
 - return the updated dataset view plus structured `sync_detail`
 
-Current limitations:
+Current sync constraints:
 
 - append execution is a delta-download plus canonical rebuild, not in-place Zarr mutation
 - upstream availability is delegated to provider-specific `sync_availability.latest_available_function` adapters or conservative template metadata such as lag days/hours
@@ -516,13 +517,34 @@ Expected:
 - `sync_detail.target_end` is `2024-02-10`
 - the returned `dataset.dataset_id` is still `chirps3_precipitation_daily_sle`
 - the returned dataset has a newer version in `versions`
+- the returned dataset coverage ends at `2024-02-10`, even if the upstream downloader cached the full February source month
+
+You can then extend the same managed dataset again:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2024-02-20",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `sync_detail.current_end` was `2024-02-10`
+- `sync_detail.delta_start` is `2024-02-11`
+- `sync_detail.delta_end` is `2024-02-20`
+- returned dataset coverage ends at `2024-02-20`
+- execution may be fast when the provider cache already contains the needed source files
 
 ### 6. Confirm no-op behavior
 
-Run the same plan again with the same end:
+Run the same plan again with the current end:
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-20" | jq
 ```
 
 Expected:
