@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, tzinfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -336,6 +336,21 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.target_end == "2025"
     assert result.sync_detail.target_end_source == "request_clamped_by_availability"
+    assert result.sync_detail.delta_start is None
+    assert result.sync_detail.delta_end is None
+
+
+def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> "FixedDateTime":
+            return cls(2026, 4, 21, 13, 47, 31, tzinfo=tz if tz is UTC else None)
+
+    monkeypatch.setattr(sync_engine, "datetime", FixedDateTime)
+
+    result = sync_engine._default_target_end(period_type="hourly")
+
+    assert result == "2026-04-21T13:00:00+00:00"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(

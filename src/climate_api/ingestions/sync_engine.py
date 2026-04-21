@@ -15,7 +15,7 @@ import importlib
 import inspect
 import logging
 from collections.abc import Callable
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
@@ -142,8 +142,6 @@ def plan_sync(
         current_end=current_end,
         target_end=latest_available_end,
         target_end_source=target_end_source,
-        delta_start=latest_available_end,
-        delta_end=latest_available_end,
     )
 
 
@@ -300,7 +298,7 @@ def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
     today = date.today()
     if period_type == "hourly":
-        return datetime.now().replace(minute=0, second=0, microsecond=0).isoformat()
+        return datetime.now(UTC).replace(minute=0, second=0, microsecond=0).isoformat()
     if period_type == "daily":
         return today.isoformat()
     if period_type == "monthly":
