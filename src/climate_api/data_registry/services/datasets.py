@@ -62,6 +62,8 @@ def _validate_dataset_template(dataset: object, *, file_path: Path) -> None:
 
     sync_execution = dataset.get("sync_execution")
     if sync_execution is not None:
+        if not isinstance(sync_execution, str) or not sync_execution:
+            raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid sync_execution")
         if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
             supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
             raise ValueError(

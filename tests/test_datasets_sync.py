@@ -455,6 +455,24 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
     }
 
 
+def test_sync_plan_route_returns_400_for_invalid_end_period(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+    )
+
+    response = client.get(f"/sync/{dataset_id}/plan", params={"end": "not-a-period"})
+
+    assert response.status_code == 400
+
+
 def test_sync_route_executes_rematerialize_and_returns_structured_detail(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

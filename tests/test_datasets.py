@@ -225,6 +225,69 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     assert artifact.coverage.temporal.end == "2020"
 
 
+def test_create_artifact_normalizes_request_scope_to_dataset_period(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+    }
+    created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    captured_download: dict[str, object] = {}
+
+    def fake_download_dataset(
+        dataset_arg: dict[str, object],
+        *,
+        start: str,
+        end: str | None,
+        **_: object,
+    ) -> list[Path]:
+        captured_download["dataset_id"] = dataset_arg["id"]
+        captured_download["start"] = start
+        captured_download["end"] = end
+        return [created_file]
+
+    monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-04-21T12", "end": "2026-04-21T13"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-04-21T12:15:00",
+        end="2026-04-21T13:45:00",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured_download == {
+        "dataset_id": "era5land_temperature_hourly",
+        "start": "2026-04-21T12",
+        "end": "2026-04-21T13",
+    }
+    assert artifact.request_scope.start == "2026-04-21T12"
+    assert artifact.request_scope.end == "2026-04-21T13"
+
+
 def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

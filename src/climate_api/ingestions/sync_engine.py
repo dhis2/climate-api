@@ -20,7 +20,7 @@ from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.publications.services import managed_dataset_id_for
-from climate_api.shared.time import datetime_to_period_string
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,10 @@ def plan_sync(
     sync_kind = SyncKind(sync_kind_value)
     period_type = str(source_dataset["period_type"])
     requested_target_end_source = "request" if requested_end is not None else "default_today"
-    resolved_end = requested_end or _default_target_end(period_type=period_type)
+    if requested_end:
+        resolved_end = normalize_period_string(requested_end, period_type)
+    else:
+        resolved_end = _default_target_end(period_type=period_type)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
     latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)

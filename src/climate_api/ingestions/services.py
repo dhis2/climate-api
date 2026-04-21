@@ -42,6 +42,7 @@ from climate_api.ingestions.schemas import (
 )
 from climate_api.ingestions.sync_engine import plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
+from climate_api.shared.time import normalize_period_string
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,13 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
+    period_type = str(dataset["period_type"])
+    start = _normalize_request_period(start, period_type=period_type, field_name="start")
+    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    download_start = _normalize_optional_request_period(
+        download_start, period_type=period_type, field_name="download_start"
+    )
+    download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
@@ -310,15 +318,18 @@ def sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-    return run_sync(
-        latest_artifact=latest_artifact,
-        source_dataset=source_dataset,
-        requested_end=end,
-        prefer_zarr=prefer_zarr,
-        publish=publish,
-        create_artifact_fn=create_artifact,
-        get_dataset_fn=get_dataset_or_404,
-    )
+    try:
+        return run_sync(
+            latest_artifact=latest_artifact,
+            source_dataset=source_dataset,
+            requested_end=end,
+            prefer_zarr=prefer_zarr,
+            publish=publish,
+            create_artifact_fn=create_artifact,
+            get_dataset_fn=get_dataset_or_404,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def plan_sync_dataset(
@@ -331,11 +342,14 @@ def plan_sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-    return plan_sync(
-        latest_artifact=latest_artifact,
-        source_dataset=source_dataset,
-        requested_end=end,
-    )
+    try:
+        return plan_sync(
+            latest_artifact=latest_artifact,
+            source_dataset=source_dataset,
+            requested_end=end,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
@@ -488,6 +502,21 @@ def _find_existing_artifact(
         request_scope=request_scope,
         prefer_zarr=prefer_zarr,
     )
+
+
+def _normalize_request_period(value: str, *, period_type: str, field_name: str) -> str:
+    """Normalize a required request period or raise a clear client error."""
+    try:
+        return normalize_period_string(value, period_type)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name} period '{value}'") from exc
+
+
+def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
+    """Normalize an optional request period or raise a clear client error."""
+    if value is None:
+        return None
+    return _normalize_request_period(value, period_type=period_type, field_name=field_name)
 
 
 def _find_existing_artifact_in_records(

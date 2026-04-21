@@ -85,6 +85,29 @@ def test_dataset_registry_rejects_unsupported_sync_execution(
         datasets.list_datasets()
 
 
+def test_dataset_registry_rejects_non_string_sync_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_sync_execution_type.yaml"
+    registry_file.write_text(
+        """
+- id: invalid_sync_execution_type
+  name: Invalid sync execution type
+  variable: value
+  period_type: daily
+  sync_kind: temporal
+  sync_execution:
+    - append
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="invalid sync_execution"):
+        datasets.list_datasets()
+
+
 def test_dataset_registry_accepts_supported_sync_execution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
