@@ -239,6 +239,15 @@ def create_artifact(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
     )
+    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Materialized artifact coverage does not match the requested scope: "
+                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
+                f"request={request_scope.start}..{request_scope.end}"
+            ),
+        )
 
     record = ArtifactRecord(
         artifact_id=str(uuid4()),
@@ -512,9 +521,17 @@ def _find_existing_artifact_in_records(
 
 def _artifact_coverage_matches_request_scope(record: ArtifactRecord) -> bool:
     """Return whether an existing artifact is safe to reuse for its request scope."""
-    if record.coverage.temporal.start != record.request_scope.start:
+    return _temporal_coverage_matches_request_scope(record.coverage.temporal, record.request_scope)
+
+
+def _temporal_coverage_matches_request_scope(
+    temporal: CoverageTemporal,
+    request_scope: ArtifactRequestScope,
+) -> bool:
+    """Return whether temporal coverage exactly matches the requested temporal scope."""
+    if temporal.start != request_scope.start:
         return False
-    if record.request_scope.end is not None and record.coverage.temporal.end != record.request_scope.end:
+    if request_scope.end is not None and temporal.end != request_scope.end:
         return False
     return True
 
