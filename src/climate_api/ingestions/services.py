@@ -560,6 +560,8 @@ def _temporal_coverage_matches_request_scope(
     """Return whether temporal coverage exactly matches the requested temporal scope."""
     if temporal.start != request_scope.start:
         return False
+    # Open-ended requests intentionally reuse the latest artifact for the same
+    # logical start/scope even though the realized end is time-dependent.
     if request_scope.end is not None and temporal.end != request_scope.end:
         return False
     return True

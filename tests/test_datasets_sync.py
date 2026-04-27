@@ -16,6 +16,7 @@ from climate_api.ingestions.schemas import (
     DatasetPublication,
     PublicationStatus,
     SyncAction,
+    SyncDetail,
     SyncKind,
 )
 
@@ -207,7 +208,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
 
 
 def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dataset_id = "worldpop_population_yearly_sle"
     latest = _artifact(
@@ -240,14 +241,21 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
             end="2025",
         )
 
+    warnings: list[str] = []
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
 
     result = services.sync_dataset(dataset_id=dataset_id, end="2025", prefer_zarr=True, publish=True)
 
     assert "download_start" in captured
     assert captured["download_start"] is None
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
+    assert any("falling back to rematerialize" in message for message in warnings)
 
 
 def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -351,6 +359,11 @@ def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch)
     result = sync_engine._default_target_end(period_type="hourly")
 
     assert result == "2026-04-21T13"
+
+
+def test_default_target_end_rejects_unsupported_period_type() -> None:
+    with pytest.raises(ValueError, match="Unsupported period_type 'weekly' for sync"):
+        sync_engine._default_target_end(period_type="weekly")
 
 
 def test_next_period_start_preserves_hourly_period_format() -> None:
@@ -537,7 +550,7 @@ def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch:
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 15)
 
-    monkeypatch.setattr(sync_engine, "date", FixedDate)
+    monkeypatch.setattr(sync_engine.provider_availability, "date", FixedDate)
 
     result = sync_engine._latest_available_end(
         source_dataset={
@@ -607,7 +620,7 @@ def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: py
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 15)
 
-    monkeypatch.setattr(sync_engine, "date", FixedDate)
+    monkeypatch.setattr(sync_engine.provider_availability, "date", FixedDate)
 
     result = sync_engine._latest_available_end(
         source_dataset={
@@ -670,4 +683,40 @@ def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.M
                 "sync_availability": {"latest_available_function": "provider.latest_available"},
             },
             requested_end="2026-02-10",
+        )
+
+
+def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    latest_artifact = _artifact(
+        artifact_id="a1",
+        source_dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-02-10",
+    )
+
+    broken_plan = SyncDetail(
+        source_dataset_id="chirps3_precipitation_daily",
+        extent_id="sle",
+        sync_kind=SyncKind.TEMPORAL,
+        action=SyncAction.APPEND,
+        reason="new_periods_available_for_append",
+        message="broken test plan",
+        current_start=None,
+        current_end="2026-02-10",
+        target_end="2026-02-11",
+        target_end_source="request",
+        delta_start="2026-02-11",
+        delta_end="2026-02-11",
+    )
+    monkeypatch.setattr(sync_engine, "plan_sync", lambda **_: broken_plan)
+
+    with pytest.raises(ValueError, match="Sync execution requires current_start"):
+        sync_engine.run_sync(
+            latest_artifact=latest_artifact,
+            source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
+            requested_end="2026-02-11",
+            prefer_zarr=True,
+            publish=True,
+            create_artifact_fn=lambda **_: pytest.fail("create_artifact should not be called"),
+            get_dataset_fn=lambda _: pytest.fail("get_dataset should not be called"),
         )

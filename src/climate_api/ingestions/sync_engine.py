@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
+from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
 from climate_api.shared.time import datetime_to_period_string, normalize_period_string
 
@@ -212,8 +213,10 @@ def run_sync(
     # Execution always goes through the ingestion materialization path so sync
     # does not grow a second downloader/storage implementation. APPEND is a V1
     # delta-download plus canonical rebuild, not in-place Zarr mutation.
-    assert sync_detail.current_start is not None
-    assert sync_detail.target_end is not None
+    if sync_detail.current_start is None:
+        raise ValueError("Sync execution requires current_start for rematerialize or append actions")
+    if sync_detail.target_end is None:
+        raise ValueError("Sync execution requires target_end for rematerialize or append actions")
     download_start = sync_detail.delta_start if sync_detail.action == SyncAction.APPEND else None
     logger.info(
         "Sync executing for dataset '%s': action=%s artifact_scope=%s..%s download_scope=%s..%s publish=%s",
@@ -311,7 +314,7 @@ def _default_target_end(*, period_type: str) -> str:
         return f"{today.year:04d}-{today.month:02d}"
     if period_type == "yearly":
         return str(today.year)
-    return today.isoformat()
+    raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
 
 def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str) -> str:
@@ -332,30 +335,13 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     )
     if provider_latest is not None:
         return min(requested_end, provider_latest)
-
-    period_type = str(source_dataset["period_type"])
-    if period_type in {"hourly", "daily", "monthly"}:
-        lag_days = availability.get("lag_days")
-        if isinstance(lag_days, int) and lag_days > 0:
-            latest_by_lag = _format_lagged_period_end(date.today() - timedelta(days=lag_days), period_type=period_type)
-            return min(requested_end, latest_by_lag)
-        return requested_end
-
-    if period_type == "yearly":
-        latest_year_offset = availability.get("latest_year_offset")
-        if isinstance(latest_year_offset, int) and latest_year_offset >= 0:
-            latest_year = date.today().year - latest_year_offset
-            return str(min(int(requested_end), latest_year))
-        return requested_end
-
-    return requested_end
-
-
-def _format_lagged_period_end(lagged_date: date, *, period_type: str) -> str:
-    """Return lag-derived availability in the dataset-native period format."""
-    if period_type == "monthly":
-        return f"{lagged_date.year:04d}-{lagged_date.month:02d}"
-    return lagged_date.isoformat()
+    # Keep the legacy metadata-only lag fallback for templates that do not yet
+    # declare a latest_available_function, but delegate to the provider helper
+    # so lag logic lives in one place.
+    return min(requested_end, provider_availability.lagged_latest_available(
+        dataset=source_dataset,
+        requested_end=requested_end,
+    ))
 
 
 def _supports_append(source_dataset: dict[str, Any]) -> bool:
@@ -367,7 +353,13 @@ def _supports_append(source_dataset: dict[str, Any]) -> bool:
         return False
     # Multiscale stores are rebuilt as pyramids today; keep append opt-in to flat
     # canonical stores until pyramid delta behavior is explicitly designed.
-    return not bool(cache_info.get("multiscales"))
+    if cache_info.get("multiscales"):
+        logger.warning(
+            "Sync append execution is not supported for multiscale dataset '%s'; falling back to rematerialize",
+            source_dataset.get("id", "<unknown>"),
+        )
+        return False
+    return True
 
 
 def _provider_latest_available_end(
@@ -377,7 +369,7 @@ def _provider_latest_available_end(
     requested_end: str,
 ) -> str | None:
     """Call an optional provider-specific latest-availability function."""
-    function_path = availability.get("latest_available_function") or availability.get("eo_function")
+    function_path = availability.get("latest_available_function")
     if not isinstance(function_path, str) or not function_path:
         return None
 

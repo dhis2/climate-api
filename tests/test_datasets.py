@@ -169,6 +169,20 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     assert result == valid_artifact
 
 
+def test_temporal_coverage_matches_request_scope_allows_open_ended_reuse() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end=None,
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    assert services._temporal_coverage_matches_request_scope(
+        CoverageTemporal(start="2026-01-01", end="2026-02-10"),
+        request_scope,
+    )
+
+
 def test_create_artifact_computes_coverage_from_created_artifact_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

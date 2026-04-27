@@ -86,3 +86,22 @@ def test_worldpop_release_latest_available_allows_configured_future_projection()
     )
 
     assert result == "2030"
+
+
+def test_lagged_latest_available_formats_yearly_offset(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> "FixedDate":
+            return cls(2026, 4, 21)
+
+    monkeypatch.setattr(availability, "date", FixedDate)
+
+    result = availability.lagged_latest_available(
+        dataset={
+            "period_type": "yearly",
+            "sync_availability": {"latest_year_offset": 1},
+        },
+        requested_end="2028",
+    )
+
+    assert result == "2025"

@@ -22,19 +22,31 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
     if period_type == "hourly":
-        return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        try:
+            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        except ValueError as exc:
+            raise ValueError(f"Invalid hourly period '{value}'; expected ISO datetime") from exc
     if period_type == "daily":
-        return datetime.fromisoformat(value).date().isoformat()
+        try:
+            return datetime.fromisoformat(value).date().isoformat()
+        except ValueError as exc:
+            raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
     if period_type == "monthly":
-        if len(value) == 7:
-            datetime.fromisoformat(f"{value}-01")
-            return value
-        return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        try:
+            if len(value) == 7:
+                datetime.fromisoformat(f"{value}-01")
+                return value
+            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        except ValueError as exc:
+            raise ValueError(f"Invalid monthly period '{value}'; expected YYYY-MM or ISO datetime") from exc
     if period_type == "yearly":
-        if len(value) == 4:
-            int(value)
-            return value
-        return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        try:
+            if len(value) == 4:
+                int(value)
+                return value
+            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+        except ValueError as exc:
+            raise ValueError(f"Invalid yearly period '{value}'; expected YYYY or ISO datetime") from exc
     return value
 
 
