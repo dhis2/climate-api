@@ -1,6 +1,10 @@
 # DHIS2 Climate API
 
-DHIS2 Climate API extracts, transforms, and loads climate and Earth Observation data into DHIS2 and the CHAP modelling platform.
+Climate and Earth Observation data is distributed across dozens of providers — each with different APIs, data formats, and access mechanisms. The Climate API unifies this fragmented landscape behind a single, consistent interface.
+
+Each instance is configured for a specific country or region, and all data extraction, processing, and storage is scoped to that spatial extent. It abstracts data access across heterogeneous sources (CHIRPS, ERA5, WorldPop, and others), stores outputs as GeoZarr, and exposes them through standards-based endpoints.
+
+The platform is designed to operate independently of DHIS2 and can be deployed on local, cloud-hosted, or sovereign country infrastructure. See [docs/project_description.md](docs/project_description.md) for a full description of the vision and technical architecture, and [docs/roadmap.md](docs/roadmap.md) for the planned development steps.
 
 > **Status: active development.** Current focus is on dataset ingestion, sync workflows, and GeoZarr storage. APIs and data models may change without notice.
 
@@ -52,27 +56,27 @@ uvicorn climate_api.main:app --reload
 
 Common Makefile targets:
 
-| Target | Description |
-|---|---|
-| `make sync` | Install dependencies with uv |
-| `make run` | Start the app with uvicorn (hot reload) |
-| `make lint` | Check linting, formatting, and types |
-| `make fix` | Autofix ruff lint and format issues |
-| `make test` | Run the test suite with pytest |
-| `make openapi` | Regenerate the pygeoapi OpenAPI spec |
-| `make start` | Build and start the Docker stack |
+| Target         | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `make sync`    | Install dependencies with uv                     |
+| `make run`     | Start the app with uvicorn (hot reload)          |
+| `make lint`    | Check linting, formatting, and types             |
+| `make fix`     | Autofix ruff lint and format issues              |
+| `make test`    | Run the test suite with pytest                   |
+| `make openapi` | Regenerate the pygeoapi OpenAPI spec             |
+| `make start`   | Build and start the Docker stack                 |
 | `make restart` | Tear down, rebuild, and restart the Docker stack |
 
 ## Endpoints
 
 Once running, the API is available at:
 
-| Endpoint | Description |
-|---|---|
-| `http://localhost:8000/` | Welcome / health check |
-| `http://localhost:8000/docs` | Interactive API documentation (Swagger UI) |
-| `http://localhost:8000/ogcapi` | OGC API root |
-| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset |
+| Endpoint                                  | Description                                |
+| ----------------------------------------- | ------------------------------------------ |
+| `http://localhost:8000/`                  | Welcome / health check                     |
+| `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
+| `http://localhost:8000/ogcapi`            | OGC API root                               |
+| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset      |
 
 ## pygeoapi
 
