@@ -522,7 +522,10 @@ def _normalize_request_period(value: str, *, period_type: str, field_name: str) 
     try:
         return normalize_period_string(value, period_type)
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name} period '{value}'") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name} period '{value}': {exc}",
+        ) from exc
 
 
 def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
