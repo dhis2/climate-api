@@ -49,22 +49,8 @@ def plan_sync(
     if not isinstance(sync_kind_value, str) or not sync_kind_value:
         raise ValueError("source_dataset must define sync_kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
-    period_type = str(source_dataset["period_type"])
-    normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
-    normalized_requested_end = normalized_requested_end or None
-    requested_target_end_source = "request" if normalized_requested_end is not None else "default_today"
-    if normalized_requested_end is not None:
-        resolved_end = normalize_period_string(normalized_requested_end, period_type)
-    else:
-        resolved_end = _default_target_end(period_type=period_type)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
-    latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
-    target_end_source = (
-        requested_target_end_source
-        if latest_available_end == resolved_end
-        else f"{requested_target_end_source}_clamped_by_availability"
-    )
 
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
@@ -79,6 +65,21 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
+
+    period_type = str(source_dataset["period_type"])
+    normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
+    normalized_requested_end = normalized_requested_end or None
+    requested_target_end_source = "request" if normalized_requested_end is not None else "default_today"
+    if normalized_requested_end is not None:
+        resolved_end = normalize_period_string(normalized_requested_end, period_type)
+    else:
+        resolved_end = _default_target_end(period_type=period_type)
+    latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
+    target_end_source = (
+        requested_target_end_source
+        if latest_available_end == resolved_end
+        else f"{requested_target_end_source}_clamped_by_availability"
+    )
 
     if sync_kind == SyncKind.TEMPORAL:
         next_period_start = _next_period_start(current_end, period_type=period_type)

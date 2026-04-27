@@ -411,6 +411,25 @@ def test_plan_sync_requires_sync_kind() -> None:
         )
 
 
+def test_plan_sync_static_policy_ignores_period_normalization() -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        source_dataset_id="static_dataset",
+        managed_dataset_id="static_dataset_sle",
+        end="static-release",
+    )
+
+    result = sync_engine.plan_sync(
+        source_dataset={"id": "static_dataset", "period_type": "unsupported-static-period", "sync_kind": "static"},
+        latest_artifact=latest,
+        requested_end=None,
+    )
+
+    assert result.sync_kind == SyncKind.STATIC
+    assert result.action == SyncAction.NOT_SYNCABLE
+    assert result.reason == "static_dataset"
+
+
 def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
     dataset_id = "chirps3_precipitation_daily_sle"
     latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
