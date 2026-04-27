@@ -105,8 +105,8 @@ def download_dataset(
     return changed_files
 
 
-def build_dataset_zarr(dataset: dict[str, Any]) -> None:
-    """Collect all dataset files into a single optimised zarr archive."""
+def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end: str | None = None) -> None:
+    """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
     cache_info = dataset["cache_info"]
@@ -124,6 +124,7 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
     keep_coords = [get_time_dim(ds)] + dims
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
+    ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
 
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
@@ -197,6 +198,31 @@ def build_dataset_zarr(dataset: dict[str, Any]) -> None:
 
     ds.close()
     logger.info("Finished cache optimization")
+
+
+def _select_time_range(
+    ds: xr.Dataset,
+    *,
+    dataset: dict[str, Any],
+    start: str | None,
+    end: str | None,
+) -> xr.Dataset:
+    """Clip a cached dataset to the managed artifact's requested temporal scope."""
+    if start is None and end is None:
+        return ds
+
+    time_dim = get_time_dim(ds)
+    selected = ds.sel({time_dim: slice(start, end)})
+    if selected.sizes.get(time_dim, 0) == 0:
+        raise ValueError(f"No cached data for dataset '{dataset['id']}' intersects requested time range {start}..{end}")
+    logger.info(
+        "Clipped dataset '%s' to requested time range %s..%s (%d steps)",
+        dataset["id"],
+        start,
+        end,
+        selected.sizes[time_dim],
+    )
+    return selected
 
 
 def _compute_time_space_chunks(

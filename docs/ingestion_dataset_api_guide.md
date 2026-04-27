@@ -29,6 +29,7 @@ Operational note:
 - `GET /datasets/{dataset_id}/download`
 - `GET /zarr/{dataset_id}`
 - `GET /zarr/{dataset_id}/{relative_path}`
+- `GET /sync/{dataset_id}/plan`
 - `POST /sync/{dataset_id}`
 - `GET /ogcapi/collections`
 - `GET /ogcapi/collections/{dataset_id}`
@@ -351,43 +352,255 @@ What this means:
 
 ## 9. `/sync`
 
-`POST /sync/{dataset_id}` exists and is part of the intended public product shape, but its behavior is still the main refinement area.
+`/sync` advances an existing managed dataset from its latest local coverage toward a requested upstream period.
 
-Current intent:
+Available operations:
 
-- sync a managed dataset forward from its latest available period
+- `GET /sync/{dataset_id}/plan?end={period}` returns the planned sync action without downloading or writing data
+- `POST /sync/{dataset_id}` executes the plan when a new version is needed
+
+Implemented behavior:
+
+- `temporal` datasets compare the next missing period with the requested or metadata-clamped latest period
+- `release` datasets compare the current materialized release with the requested or metadata-clamped latest release
+- `static` datasets return `not_syncable`
 - preserve stable managed dataset identity
-- rematerialize a fresh version covering the managed dataset's original start through the requested end period
-- return the updated dataset view
+- use template-level `sync_execution`
+- `append` execution downloads only the missing period range, then rebuilds the canonical artifact from the local cache
+- `rematerialize` execution downloads the full original request range through the requested end period
+- return the updated dataset view plus structured `sync_detail`
+- reject a rebuilt artifact before storing or publishing it if realized temporal coverage does not match the requested scope
 
-This route should be treated as present but still under active behavioral design.
+Current sync constraints:
+
+- append execution is a delta-download plus canonical rebuild, not in-place Zarr mutation
+- upstream availability is delegated to provider-specific `sync_availability.latest_available_function` adapters or conservative template metadata such as lag days/hours
+
+Configured availability policies:
+
+- CHIRPS3 daily uses `climate_api.providers.availability.chirps3_daily_latest_available`; this clamps sync targets to the latest complete released source month
+- ERA5-Land hourly uses `climate_api.providers.availability.lagged_latest_available` with a YAML-declared `lag_hours`
+- WorldPop yearly uses `climate_api.providers.availability.worldpop_release_latest_available`; this can allow configured future projection years
+
+Example dry-run plan:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+```
+
+Example execution:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{"end":"2024-02-10","prefer_zarr":true,"publish":true}' | jq
+```
 
 ## Manual Test Sequence
 
-For a clean manual test, this is the best sequence to run:
+These commands assume the API is running on `http://127.0.0.1:8000` and that
+`jq` is available.
 
-1. `GET /extents`
-2. `POST /ingestions` with CHIRPS3
-3. `GET /datasets`
-4. `GET /datasets/{dataset_id}`
-5. `GET /zarr/{dataset_id}`
-6. `GET /ogcapi/collections`
-7. `GET /ogcapi/collections/{dataset_id}`
-8. `GET /ogcapi/collections/{dataset_id}/coverage`
-9. `POST /ingestions` with WorldPop
+### 1. Confirm configured extents
 
-Good demo payloads:
+```bash
+curl -s "http://127.0.0.1:8000/extents" | jq
+```
 
-- CHIRPS3:
-  - `dataset_id = "chirps3_precipitation_daily"`
-  - `extent_id = "sle"`
-  - `start = "2024-01-01"`
-  - `end = "2024-01-31"`
-- WorldPop:
-  - `dataset_id = "worldpop_population_yearly"`
-  - `extent_id = "sle"`
-  - `start = "2020"`
-  - `end = "2020"`
+Use an extent that has enough spatial metadata for the selected dataset. The
+examples below use `sle`.
+
+### 2. Create an initial CHIRPS3 managed dataset
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/ingestions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "chirps3_precipitation_daily",
+    "extent_id": "sle",
+    "start": "2024-01-01",
+    "end": "2024-01-31",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `dataset.dataset_id` is `chirps3_precipitation_daily_sle`
+- `dataset.extent.temporal.end` is `2024-01-31`
+
+### 3. Inspect the managed dataset and publication
+
+```bash
+curl -s "http://127.0.0.1:8000/datasets/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle/coverage?f=json" | jq
+```
+
+### 4. Dry-run a CHIRPS3 append sync
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+```
+
+Expected planning response:
+
+- `sync_kind` is `temporal`
+- `action` is `append`
+- `reason` is `new_periods_available_for_append`
+- `message` explains that existing data is present and which missing period range will be downloaded
+- `current_start` is `2024-01-01`
+- `current_end` is `2024-01-31`
+- `target_end` is `2024-02-10`
+- `target_end_source` is `request`
+- `delta_start` is `2024-02-01`
+- `delta_end` is `2024-02-10`
+
+`append` here means Climate API downloads only the missing period range and then
+rebuilds the canonical artifact from local cache. It is not in-place Zarr mutation.
+
+Where these timestamps come from:
+
+- `current_start` and `current_end` come from the latest stored artifact coverage
+- `target_end` comes from the explicit `end` query parameter, or defaults to today in the dataset-native period format when omitted
+- `target_end_source` tells you whether `target_end` came from `request`, `default_today`, `current_coverage`, or was clamped by source availability
+- `delta_start` is the first period after `current_end`
+- `delta_end` is the resolved target period after any availability clamping
+
+If `end` is omitted, the planner defaults to the current date. For example, calling
+`/sync/chirps3_precipitation_daily_sle/plan` on `2026-04-20` after ingesting
+through `2024-01-31` first resolves the target from today's date, then applies
+CHIRPS3 availability. Because CHIRPS3 daily sync is configured to use complete
+released source months, the target may be clamped below today's date and
+`target_end_source` will be `default_today_clamped_by_availability`.
+
+For controlled tests, always pass an explicit `end`. If the explicit `end`
+extends beyond the configured provider availability, `target_end_source` will be
+`request_clamped_by_availability`.
+
+### Availability clamping example
+
+If CHIRPS3 currently has complete released data through `2026-03-31` and you ask
+for:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2026-04-21" | jq
+```
+
+Expected:
+
+- `target_end` is `2026-03-31`
+- `target_end_source` is `request_clamped_by_availability`
+- the sync does not ask the upstream downloader for unavailable April daily data
+
+### 5. Execute the CHIRPS3 sync
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2024-02-10",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `sync_detail.action` is `append`
+- `sync_detail.current_end` was `2024-01-31`
+- `sync_detail.delta_start` is `2024-02-01`
+- `sync_detail.delta_end` is `2024-02-10`
+- `sync_detail.target_end` is `2024-02-10`
+- the returned `dataset.dataset_id` is still `chirps3_precipitation_daily_sle`
+- the returned dataset has a newer version in `versions`
+- the returned dataset coverage ends at `2024-02-10`, even if the upstream downloader cached the full February source month
+
+You can then extend the same managed dataset again:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2024-02-20",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `sync_detail.current_end` was `2024-02-10`
+- `sync_detail.delta_start` is `2024-02-11`
+- `sync_detail.delta_end` is `2024-02-20`
+- returned dataset coverage ends at `2024-02-20`
+- execution may be fast when the provider cache already contains the needed source files
+
+### 6. Confirm no-op behavior
+
+Run the same plan again with the current end:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-20" | jq
+```
+
+Expected:
+
+- `action` is `no_op`
+- `reason` is `no_new_period`
+- `message` explains that the requested target is already covered locally
+
+### 7. Test release-style sync with WorldPop
+
+Create an initial WorldPop managed dataset:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/ingestions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "worldpop_population_yearly",
+    "extent_id": "sle",
+    "start": "2020",
+    "end": "2020",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Plan a later release:
+
+```bash
+curl -s "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle/plan?end=2021" | jq
+```
+
+Expected:
+
+- `sync_kind` is `release`
+- `action` is `rematerialize`
+- `reason` is `new_release_available`
+- `target_end` is `2021`
+
+Execute the release sync:
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "end": "2021",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+Expected:
+
+- `status` is `completed`
+- `sync_detail.action` is `rematerialize`
+- the managed dataset id remains `worldpop_population_yearly_sle`
 
 ## Summary
 

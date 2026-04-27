@@ -8,7 +8,7 @@ import logging
 import mimetypes
 import os
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -37,9 +37,12 @@ from climate_api.ingestions.schemas import (
     IngestionListResponse,
     IngestionResponse,
     PublicationStatus,
+    SyncDetail,
     SyncResponse,
 )
+from climate_api.ingestions.sync_engine import SyncConfigurationError, plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +135,27 @@ def create_artifact(
     overwrite: bool,
     prefer_zarr: bool,
     publish: bool,
+    download_start: str | None = None,
+    download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
+    period_type = str(dataset["period_type"])
+    start = _normalize_request_period(start, period_type=period_type, field_name="start")
+    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    download_start = _normalize_optional_request_period(
+        download_start, period_type=period_type, field_name="download_start"
+    )
+    download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
+    _validate_download_scope(
+        start=start,
+        end=end,
+        download_start=download_start,
+        download_end=download_end,
+    )
+    requires_canonical_zarr = download_start is not None
+    resolved_download_end = download_end if download_end is not None else end
+    if resolved_download_end is None:
+        resolved_download_end = _default_request_end(period_type)
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
@@ -143,27 +165,57 @@ def create_artifact(
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr,
+        prefer_zarr=prefer_zarr or requires_canonical_zarr,
     )
     if existing is not None and not overwrite:
+        logger.info(
+            "Reusing existing artifact '%s' for dataset '%s' scope=%s..%s",
+            existing.artifact_id,
+            dataset["id"],
+            start,
+            end,
+        )
         if publish and existing.publication.status != PublicationStatus.PUBLISHED:
             return publish_artifact_record(existing.artifact_id)
         return existing
 
+    logger.info(
+        "Downloading dataset '%s': request_scope=%s..%s download_scope=%s..%s prefer_zarr=%s publish=%s",
+        dataset["id"],
+        start,
+        end,
+        download_start or start,
+        resolved_download_end,
+        prefer_zarr,
+        publish,
+    )
     downloaded_files = downloader.download_dataset(
         dataset,
-        start=start,
-        end=end,
+        start=download_start or start,
+        end=resolved_download_end,
         bbox=bbox,
         country_code=country_code,
         overwrite=overwrite,
         background_tasks=None,
     )
+    logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
-    if prefer_zarr:
+    if prefer_zarr or requires_canonical_zarr:
         try:
-            downloader.build_dataset_zarr(dataset)
-        except Exception:
+            logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
+            downloader.build_dataset_zarr(dataset, start=start, end=end)
+            logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
+        except Exception as exc:
+            if requires_canonical_zarr:
+                if isinstance(exc, ValueError):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Append sync canonical Zarr rebuild failed for requested scope: {exc}",
+                    ) from exc
+                raise HTTPException(
+                    status_code=500,
+                    detail="Append sync canonical Zarr rebuild failed unexpectedly.",
+                ) from exc
             # Fall back to NetCDF when Zarr materialization is not viable.
             logger.warning(
                 "Zarr materialization failed for dataset '%s'; falling back to NetCDF",
@@ -172,7 +224,16 @@ def create_artifact(
             )
 
     zarr_path = downloader.get_zarr_path(dataset)
-    cache_files = downloaded_files or downloader.get_cache_files(dataset)
+    if requires_canonical_zarr and zarr_path is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Append sync requires a canonical Zarr artifact, but no Zarr store was produced.",
+        )
+    cache_files = (
+        downloader.get_cache_files(dataset)
+        if requires_canonical_zarr
+        else downloaded_files or downloader.get_cache_files(dataset)
+    )
     primary_path: str | None
 
     if zarr_path is not None:
@@ -197,6 +258,15 @@ def create_artifact(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
     )
+    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Materialized artifact coverage does not match the requested scope: "
+                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
+                f"request={request_scope.start}..{request_scope.end}"
+            ),
+        )
 
     record = ArtifactRecord(
         artifact_id=str(uuid4()),
@@ -213,7 +283,16 @@ def create_artifact(
         publication=ArtifactPublication(),
     )
     stored_record = _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+    logger.info(
+        "Stored artifact '%s' for dataset '%s': format=%s coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.format,
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
     if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
 
@@ -240,37 +319,52 @@ def sync_dataset(
     prefer_zarr: bool,
     publish: bool,
 ) -> SyncResponse:
-    """Sync a managed dataset by fetching data after its latest covered period."""
+    """Resolve sync inputs and delegate managed-dataset sync to the sync engine.
+
+    The service layer stays thin on purpose: it validates that the requested
+    public dataset id resolves to a managed dataset plus a source template, then
+    hands execution to `sync_engine.run_sync(...)`.
+    """
     latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    try:
+        return run_sync(
+            latest_artifact=latest_artifact,
+            source_dataset=source_dataset,
+            requested_end=end,
+            prefer_zarr=prefer_zarr,
+            publish=publish,
+            create_artifact_fn=create_artifact,
+            get_dataset_fn=get_dataset_or_404,
+        )
+    except SyncConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    resolved_end = end or date.today().isoformat()
-    next_start = _next_period_start(
-        latest_artifact.coverage.temporal.end,
-        period_type=str(source_dataset["period_type"]),
-    )
 
-    if next_start > resolved_end:
-        return SyncResponse(sync_id=None, status="up_to_date", dataset=get_dataset_or_404(dataset_id))
-
-    artifact = create_artifact(
-        dataset=source_dataset,
-        start=next_start,
-        end=resolved_end,
-        extent_id=latest_artifact.request_scope.extent_id,
-        bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
-        country_code=None,
-        overwrite=False,
-        prefer_zarr=prefer_zarr,
-        publish=publish,
-    )
-    return SyncResponse(
-        sync_id=artifact.artifact_id,
-        status="completed",
-        dataset=get_dataset_or_404(managed_dataset_id_for(artifact)),
-    )
+def plan_sync_dataset(
+    *,
+    dataset_id: str,
+    end: str | None,
+) -> SyncDetail:
+    """Return the sync plan for a managed dataset without downloading or writing artifacts."""
+    latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+    source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
+    if source_dataset is None:
+        raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    try:
+        return plan_sync(
+            latest_artifact=latest_artifact,
+            source_dataset=source_dataset,
+            requested_end=end,
+        )
+    except SyncConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
@@ -425,6 +519,61 @@ def _find_existing_artifact(
     )
 
 
+def _normalize_request_period(value: str, *, period_type: str, field_name: str) -> str:
+    """Normalize a required request period or raise a clear client error."""
+    try:
+        return normalize_period_string(value, period_type)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name} period '{value}': {exc}",
+        ) from exc
+
+
+def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
+    """Normalize an optional request period or raise a clear client error."""
+    if value is None:
+        return None
+    return _normalize_request_period(value, period_type=period_type, field_name=field_name)
+
+
+def _default_request_end(period_type: str) -> str:
+    """Return the current dataset-native period string for omitted ingestion end values."""
+    if period_type == "hourly":
+        return datetime_to_period_string(utc_now(), period_type)
+    if period_type == "daily":
+        return utc_today().isoformat()
+    if period_type == "monthly":
+        today = utc_today()
+        return f"{today.year:04d}-{today.month:02d}"
+    if period_type == "yearly":
+        return str(utc_today().year)
+    raise HTTPException(status_code=400, detail=f"Invalid period_type '{period_type}' for request end defaulting")
+
+
+def _validate_download_scope(
+    *,
+    start: str,
+    end: str | None,
+    download_start: str | None,
+    download_end: str | None,
+) -> None:
+    """Validate optional delta download scope against the normalized request scope."""
+    if (download_start is None) != (download_end is None):
+        raise HTTPException(
+            status_code=400,
+            detail="download_start and download_end must either both be provided or both be omitted",
+        )
+    if download_start is None or download_end is None:
+        return
+    if download_start < start:
+        raise HTTPException(status_code=400, detail="download_start must be greater than or equal to start")
+    if download_end < download_start:
+        raise HTTPException(status_code=400, detail="download_end must be greater than or equal to download_start")
+    if end is not None and download_end > end:
+        raise HTTPException(status_code=400, detail="download_end must be less than or equal to end")
+
+
 def _find_existing_artifact_in_records(
     *,
     records: list[ArtifactRecord],
@@ -438,10 +587,39 @@ def _find_existing_artifact_in_records(
             continue
         if record.request_scope != request_scope:
             continue
+        if not _artifact_coverage_matches_request_scope(record):
+            logger.warning(
+                "Ignoring existing artifact '%s' because coverage %s..%s does not match request scope %s..%s",
+                record.artifact_id,
+                record.coverage.temporal.start,
+                record.coverage.temporal.end,
+                record.request_scope.start,
+                record.request_scope.end,
+            )
+            continue
         if prefer_zarr and record.format != ArtifactFormat.ZARR:
             continue
         return record
     return None
+
+
+def _artifact_coverage_matches_request_scope(record: ArtifactRecord) -> bool:
+    """Return whether an existing artifact is safe to reuse for its request scope."""
+    return _temporal_coverage_matches_request_scope(record.coverage.temporal, record.request_scope)
+
+
+def _temporal_coverage_matches_request_scope(
+    temporal: CoverageTemporal,
+    request_scope: ArtifactRequestScope,
+) -> bool:
+    """Return whether temporal coverage exactly matches the requested temporal scope."""
+    if temporal.start != request_scope.start:
+        return False
+    # Open-ended requests intentionally reuse the latest artifact for the same
+    # logical start/scope even though the realized end is time-dependent.
+    if request_scope.end is not None and temporal.end != request_scope.end:
+        return False
+    return True
 
 
 def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:
@@ -499,24 +677,6 @@ def _group_datasets() -> dict[str, list[ArtifactRecord]]:
     for record in _load_records():
         grouped.setdefault(managed_dataset_id_for(record), []).append(record)
     return grouped
-
-
-def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
-    """Compute the next expected period start for supported source period types."""
-    if period_type == "hourly":
-        timestamp = datetime.fromisoformat(latest_period_end)
-        return (timestamp + timedelta(hours=1)).isoformat()
-    if period_type == "daily":
-        current = date.fromisoformat(latest_period_end)
-        return (current + timedelta(days=1)).isoformat()
-    if period_type == "monthly":
-        current = date.fromisoformat(f"{latest_period_end}-01")
-        year = current.year + (1 if current.month == 12 else 0)
-        month = 1 if current.month == 12 else current.month + 1
-        return f"{year:04d}-{month:02d}"
-    if period_type == "yearly":
-        return f"{int(latest_period_end) + 1:04d}"
-    raise HTTPException(status_code=400, detail=f"Sync is not implemented for period type '{period_type}'")
 
 
 def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:

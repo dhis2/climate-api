@@ -20,6 +20,27 @@ class PublicationStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class SyncKind(StrEnum):
+    """Supported sync planning modes declared by dataset templates."""
+
+    TEMPORAL = "temporal"
+    RELEASE = "release"
+    STATIC = "static"
+
+
+class SyncAction(StrEnum):
+    """Planner-selected sync action.
+
+    APPEND is V1 delta-download execution followed by canonical artifact rebuild;
+    it is not in-place Zarr mutation.
+    """
+
+    REMATERIALIZE = "rematerialize"
+    APPEND = "append"
+    NO_OP = "no_op"
+    NOT_SYNCABLE = "not_syncable"
+
+
 class CoverageSpatial(BaseModel):
     """Spatial extent summary."""
 
@@ -257,12 +278,58 @@ class SyncDatasetRequest(BaseModel):
     publish: bool = Field(default=True, description="Whether to publish the resulting dataset version.")
 
 
+class SyncDetail(BaseModel):
+    """Structured planner output for one managed dataset sync decision.
+
+    This record exists so callers can see both the operational outcome and the
+    reasoning that led to it without needing to infer that logic from status
+    strings alone.
+    """
+
+    source_dataset_id: str = Field(description="Source dataset template id used to plan the sync.")
+    extent_id: str | None = Field(default=None, description="Configured extent id used to scope the managed dataset.")
+    sync_kind: SyncKind = Field(description="Sync planning mode declared by the dataset template.")
+    action: SyncAction = Field(description="Planner-selected sync action.")
+    reason: str = Field(description="Stable machine-readable reason for the selected action.")
+    message: str = Field(description="Human-readable summary of the planned sync outcome.")
+    current_start: str | None = Field(
+        default=None,
+        description="First period currently covered by the managed dataset before sync.",
+    )
+    current_end: str | None = Field(
+        default=None,
+        description="Last period currently covered by the managed dataset before sync.",
+    )
+    target_end: str | None = Field(
+        default=None,
+        description="Resolved target period after applying request defaults and availability constraints.",
+    )
+    target_end_source: str = Field(
+        description=(
+            "Where target_end came from, for example request, default_today, "
+            "request_clamped_by_availability, default_today_clamped_by_availability, or current_coverage."
+        ),
+    )
+    delta_start: str | None = Field(
+        default=None,
+        description="First missing period planned for delta download, when applicable.",
+    )
+    delta_end: str | None = Field(
+        default=None,
+        description="Last missing period planned for delta download, when applicable.",
+    )
+
+
 class SyncResponse(BaseModel):
-    """Response returned after syncing or checking a managed dataset."""
+    """Public response returned after planning and optionally running a sync."""
 
     sync_id: str | None = Field(
         default=None,
         description="Identifier of the sync-created version when a new version was written.",
     )
     status: str = Field(description="Execution status, for example completed or up_to_date.")
+    message: str | None = Field(default=None, description="Human-readable explanation of the sync outcome.")
     dataset: DatasetDetailRecord = Field(description="Current dataset detail after the sync operation.")
+    sync_detail: SyncDetail = Field(
+        description="Planner output describing how Climate API interpreted the sync request."
+    )

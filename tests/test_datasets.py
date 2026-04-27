@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 
 import pytest
@@ -141,60 +141,46 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
     assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily_sle"
 
 
-def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    monkeypatch.setattr(
-        services,
-        "get_latest_artifact_for_dataset_or_404",
-        lambda _: _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31"),
-    )
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily"},
-    )
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", prefer_zarr=True, publish=True)
-
-    assert result.sync_id is None
-    assert result.status == "up_to_date"
-    assert result.dataset.dataset_id == dataset_id
-
-
-def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily"},
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
-        captured.update(kwargs)
-        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
-
-    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
-
-    assert captured["start"] == "2026-02-01"
-    assert captured["end"] == "2026-02-10"
-    assert captured["extent_id"] == "sle"
-    assert captured["bbox"] == [1.0, 2.0, 3.0, 4.0]
-    assert captured["country_code"] is None
-    assert result.sync_id == "a2"
-    assert result.status == "completed"
-
-
 def test_managed_dataset_id_prefers_extent_id_when_present() -> None:
     artifact = _artifact(artifact_id="a1")
 
     assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily_sle"
+
+
+def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+    stale_artifact = _artifact(artifact_id="stale", end="2026-02-29")
+    stale_artifact.request_scope = request_scope
+    valid_artifact = _artifact(artifact_id="valid", end="2026-02-10")
+    valid_artifact.request_scope = request_scope
+
+    result = services._find_existing_artifact_in_records(
+        records=[stale_artifact, valid_artifact],
+        dataset_id="chirps3_precipitation_daily",
+        request_scope=request_scope,
+        prefer_zarr=True,
+    )
+
+    assert result == valid_artifact
+
+
+def test_temporal_coverage_matches_request_scope_allows_open_ended_reuse() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end=None,
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    assert services._temporal_coverage_matches_request_scope(
+        CoverageTemporal(start="2026-01-01", end="2026-02-10"),
+        request_scope,
+    )
 
 
 def test_create_artifact_computes_coverage_from_created_artifact_paths(
@@ -253,6 +239,137 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     assert artifact.coverage.temporal.end == "2020"
 
 
+def test_create_artifact_normalizes_request_scope_to_dataset_period(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+    }
+    created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    captured_download: dict[str, object] = {}
+
+    def fake_download_dataset(
+        dataset_arg: dict[str, object],
+        *,
+        start: str,
+        end: str | None,
+        **_: object,
+    ) -> list[Path]:
+        captured_download["dataset_id"] = dataset_arg["id"]
+        captured_download["start"] = start
+        captured_download["end"] = end
+        return [created_file]
+
+    monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-04-21T12", "end": "2026-04-21T13"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-04-21T12:15:00",
+        end="2026-04-21T13:45:00",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured_download == {
+        "dataset_id": "era5land_temperature_hourly",
+        "start": "2026-04-21T12",
+        "end": "2026-04-21T13",
+    }
+    assert artifact.request_scope.start == "2026-04-21T12"
+    assert artifact.request_scope.end == "2026-04-21T13"
+
+
+def test_create_artifact_defaults_omitted_end_to_dataset_native_period_for_download(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+    }
+    created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    captured_download: dict[str, object] = {}
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> "FixedDateTime":
+            return cls(2026, 4, 21, 13, 47, 31, tzinfo=tz if tz is UTC else None)
+
+    def fake_download_dataset(
+        dataset_arg: dict[str, object],
+        *,
+        start: str,
+        end: str | None,
+        **_: object,
+    ) -> list[Path]:
+        captured_download["dataset_id"] = dataset_arg["id"]
+        captured_download["start"] = start
+        captured_download["end"] = end
+        return [created_file]
+
+    monkeypatch.setattr(services, "utc_now", lambda: FixedDateTime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
+    monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-04-21T12", "end": "2026-04-21T13"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-04-21T12:15:00",
+        end=None,
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured_download == {
+        "dataset_id": "era5land_temperature_hourly",
+        "start": "2026-04-21T12",
+        "end": "2026-04-21T13",
+    }
+    assert artifact.request_scope.end is None
+
+
 def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -295,3 +412,342 @@ def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Downloaded artifact contains no data for the requested scope"
+
+
+def test_create_artifact_can_download_delta_while_recording_full_request_scope(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    captured_download: dict[str, object] = {}
+
+    def fake_download_dataset(
+        dataset_arg: dict[str, object],
+        *,
+        start: str,
+        end: str | None,
+        **_: object,
+    ) -> list[Path]:
+        captured_download["dataset_id"] = dataset_arg["id"]
+        captured_download["start"] = start
+        captured_download["end"] = end
+        return [created_file]
+
+    monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: tmp_path / "chirps3_precipitation_daily.zarr")
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-02-10"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-02-10",
+        download_start="2026-02-01",
+        download_end="2026-02-10",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=True,
+        publish=False,
+    )
+
+    assert captured_download == {
+        "dataset_id": "chirps3_precipitation_daily",
+        "start": "2026-02-01",
+        "end": "2026-02-10",
+    }
+    assert artifact.request_scope.start == "2026-01-01"
+    assert artifact.request_scope.end == "2026-02-10"
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-02-10"
+
+
+def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start=None,
+            download_end="2026-02-10",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "download_start and download_end must either both be provided or both be omitted" in str(
+        exc_info.value.detail
+    )
+
+
+def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start="2026-02-01",
+            download_end="2026-02-11",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "download_end must be less than or equal to end" in str(exc_info.value.detail)
+
+
+def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zarr_is_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+
+    netcdf_existing = _artifact(artifact_id="existing", end="2026-02-10")
+    netcdf_existing.format = ArtifactFormat.NETCDF
+    netcdf_existing.path = str(created_file)
+    netcdf_existing.asset_paths = [str(created_file)]
+    netcdf_existing.request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    lookup_preferences: list[bool] = []
+
+    def fake_find_existing_artifact(**kwargs: object) -> ArtifactRecord | None:
+        lookup_preferences.append(bool(kwargs["prefer_zarr"]))
+        return None if kwargs["prefer_zarr"] else netcdf_existing
+
+    monkeypatch.setattr(services, "_find_existing_artifact", fake_find_existing_artifact)
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-02-10"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-02-10",
+        download_start="2026-02-01",
+        download_end="2026-02-10",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert lookup_preferences == [True]
+    assert artifact.format == ArtifactFormat.ZARR
+
+
+def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+
+    captured_build: dict[str, object] = {}
+
+    def fake_build_dataset_zarr(dataset_arg: dict[str, object], *, start: str | None, end: str | None) -> None:
+        captured_build["dataset_id"] = dataset_arg["id"]
+        captured_build["start"] = start
+        captured_build["end"] = end
+
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", fake_build_dataset_zarr)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-02-10"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-02-10",
+        download_start="2026-02-01",
+        download_end="2026-02-10",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured_build == {
+        "dataset_id": "chirps3_precipitation_daily",
+        "start": "2026-01-01",
+        "end": "2026-02-10",
+    }
+    assert artifact.format == ArtifactFormat.ZARR
+
+
+def test_create_artifact_delta_fails_when_canonical_zarr_build_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    def fail_build_dataset_zarr(*_: object, **__: object) -> None:
+        raise ValueError("zarr failed")
+
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", fail_build_dataset_zarr)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start="2026-02-01",
+            download_end="2026-02-10",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "Append sync canonical Zarr rebuild failed for requested scope: zarr failed" in str(exc_info.value.detail)
+
+
+def test_create_artifact_delta_rejects_short_rebuilt_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-02-01", "end": "2026-02-10"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start="2026-02-01",
+            download_end="2026-02-10",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "coverage=2026-02-01..2026-02-10" in str(exc_info.value.detail)
+    assert "request=2026-01-01..2026-02-10" in str(exc_info.value.detail)
