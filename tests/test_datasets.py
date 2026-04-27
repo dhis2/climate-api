@@ -634,8 +634,8 @@ def test_create_artifact_delta_fails_when_canonical_zarr_build_fails(
             publish=False,
         )
 
-    assert exc_info.value.status_code == 500
-    assert "Append sync requires Zarr materialization" in str(exc_info.value.detail)
+    assert exc_info.value.status_code == 409
+    assert "Append sync canonical Zarr rebuild failed for requested scope: zarr failed" in str(exc_info.value.detail)
 
 
 def test_create_artifact_delta_rejects_short_rebuilt_coverage(

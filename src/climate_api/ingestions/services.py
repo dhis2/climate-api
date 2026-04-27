@@ -207,12 +207,14 @@ def create_artifact(
             logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
         except Exception as exc:
             if requires_canonical_zarr:
+                if isinstance(exc, ValueError):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Append sync canonical Zarr rebuild failed for requested scope: {exc}",
+                    ) from exc
                 raise HTTPException(
                     status_code=500,
-                    detail=(
-                        "Append sync requires Zarr materialization so the canonical artifact can be "
-                        "rebuilt for the full requested scope."
-                    ),
+                    detail="Append sync canonical Zarr rebuild failed unexpectedly.",
                 ) from exc
             # Fall back to NetCDF when Zarr materialization is not viable.
             logger.warning(

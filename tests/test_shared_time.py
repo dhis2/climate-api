@@ -26,3 +26,8 @@ def test_datetime_to_period_string_converts_aware_monthly_datetime_to_utc_period
     value = datetime.fromisoformat("2026-05-01T00:30:00+02:00")
 
     assert datetime_to_period_string(value, "monthly") == "2026-04"
+
+
+def test_normalize_period_string_rejects_unsupported_period_type() -> None:
+    with pytest.raises(ValueError, match="Unsupported period_type 'weekly'"):
+        normalize_period_string("2026-W17", "weekly")

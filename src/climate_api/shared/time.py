@@ -72,7 +72,7 @@ def normalize_period_string(value: str, period_type: str) -> str:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid yearly period '{value}'; expected YYYY or ISO datetime") from exc
-    return value
+    raise ValueError(f"Unsupported period_type '{period_type}'")
 
 
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
