@@ -42,7 +42,7 @@ from climate_api.ingestions.schemas import (
 )
 from climate_api.ingestions.sync_engine import SyncConfigurationError, plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
-from climate_api.shared.time import normalize_period_string
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,15 @@ def create_artifact(
         download_start, period_type=period_type, field_name="download_start"
     )
     download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
+    _validate_download_scope(
+        start=start,
+        end=end,
+        download_start=download_start,
+        download_end=download_end,
+    )
+    resolved_download_end = download_end if download_end is not None else end
+    if resolved_download_end is None:
+        resolved_download_end = _default_request_end(period_type)
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
@@ -175,14 +184,14 @@ def create_artifact(
         start,
         end,
         download_start or start,
-        download_end if download_end is not None else end,
+        resolved_download_end,
         prefer_zarr,
         publish,
     )
     downloaded_files = downloader.download_dataset(
         dataset,
         start=download_start or start,
-        end=download_end if download_end is not None else end,
+        end=resolved_download_end,
         bbox=bbox,
         country_code=country_code,
         overwrite=overwrite,
@@ -521,6 +530,43 @@ def _normalize_optional_request_period(value: str | None, *, period_type: str, f
     if value is None:
         return None
     return _normalize_request_period(value, period_type=period_type, field_name=field_name)
+
+
+def _default_request_end(period_type: str) -> str:
+    """Return the current dataset-native period string for omitted ingestion end values."""
+    if period_type == "hourly":
+        return datetime_to_period_string(utc_now(), period_type)
+    if period_type == "daily":
+        return utc_today().isoformat()
+    if period_type == "monthly":
+        today = utc_today()
+        return f"{today.year:04d}-{today.month:02d}"
+    if period_type == "yearly":
+        return str(utc_today().year)
+    raise HTTPException(status_code=400, detail=f"Invalid period_type '{period_type}' for request end defaulting")
+
+
+def _validate_download_scope(
+    *,
+    start: str,
+    end: str | None,
+    download_start: str | None,
+    download_end: str | None,
+) -> None:
+    """Validate optional delta download scope against the normalized request scope."""
+    if (download_start is None) != (download_end is None):
+        raise HTTPException(
+            status_code=400,
+            detail="download_start and download_end must either both be provided or both be omitted",
+        )
+    if download_start is None or download_end is None:
+        return
+    if download_start < start:
+        raise HTTPException(status_code=400, detail="download_start must be greater than or equal to start")
+    if download_end < download_start:
+        raise HTTPException(status_code=400, detail="download_end must be greater than or equal to download_start")
+    if end is not None and download_end > end:
+        raise HTTPException(status_code=400, detail="download_end must be less than or equal to end")
 
 
 def _find_existing_artifact_in_records(

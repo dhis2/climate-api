@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 
 import pytest
@@ -302,6 +302,74 @@ def test_create_artifact_normalizes_request_scope_to_dataset_period(
     assert artifact.request_scope.end == "2026-04-21T13"
 
 
+def test_create_artifact_defaults_omitted_end_to_dataset_native_period_for_download(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+    }
+    created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+
+    captured_download: dict[str, object] = {}
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> "FixedDateTime":
+            return cls(2026, 4, 21, 13, 47, 31, tzinfo=tz if tz is UTC else None)
+
+    def fake_download_dataset(
+        dataset_arg: dict[str, object],
+        *,
+        start: str,
+        end: str | None,
+        **_: object,
+    ) -> list[Path]:
+        captured_download["dataset_id"] = dataset_arg["id"]
+        captured_download["start"] = start
+        captured_download["end"] = end
+        return [created_file]
+
+    monkeypatch.setattr(services, "utc_now", lambda: FixedDateTime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
+    monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-04-21T12", "end": "2026-04-21T13"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-04-21T12:15:00",
+        end=None,
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert captured_download == {
+        "dataset_id": "era5land_temperature_hourly",
+        "start": "2026-04-21T12",
+        "end": "2026-04-21T13",
+    }
+    assert artifact.request_scope.end is None
+
+
 def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -412,6 +480,62 @@ def test_create_artifact_can_download_delta_while_recording_full_request_scope(
     assert artifact.request_scope.end == "2026-02-10"
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-02-10"
+
+
+def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start=None,
+            download_end="2026-02-10",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "download_start and download_end must either both be provided or both be omitted" in str(
+        exc_info.value.detail
+    )
+
+
+def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-10",
+            download_start="2026-02-01",
+            download_end="2026-02-11",
+            extent_id="sle",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "download_end must be less than or equal to end" in str(exc_info.value.detail)
 
 
 def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false(
