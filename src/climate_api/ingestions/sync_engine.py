@@ -338,10 +338,13 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     # Keep the legacy metadata-only lag fallback for templates that do not yet
     # declare a latest_available_function, but delegate to the provider helper
     # so lag logic lives in one place.
-    return min(requested_end, provider_availability.lagged_latest_available(
-        dataset=source_dataset,
-        requested_end=requested_end,
-    ))
+    return min(
+        requested_end,
+        provider_availability.lagged_latest_available(
+            dataset=source_dataset,
+            requested_end=requested_end,
+        ),
+    )
 
 
 def _supports_append(source_dataset: dict[str, Any]) -> bool:

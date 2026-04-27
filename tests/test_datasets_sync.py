@@ -208,7 +208,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
 
 
 def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dataset_id = "worldpop_population_yearly_sle"
     latest = _artifact(
