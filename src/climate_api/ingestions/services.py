@@ -152,6 +152,7 @@ def create_artifact(
         download_start=download_start,
         download_end=download_end,
     )
+    requires_canonical_zarr = download_start is not None
     resolved_download_end = download_end if download_end is not None else end
     if resolved_download_end is None:
         resolved_download_end = _default_request_end(period_type)
@@ -164,7 +165,7 @@ def create_artifact(
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr,
+        prefer_zarr=prefer_zarr or requires_canonical_zarr,
     )
     if existing is not None and not overwrite:
         logger.info(
@@ -199,7 +200,6 @@ def create_artifact(
     )
     logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
-    requires_canonical_zarr = download_start is not None
     if prefer_zarr or requires_canonical_zarr:
         try:
             logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])

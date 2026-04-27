@@ -538,6 +538,71 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
     assert "download_end must be less than or equal to end" in str(exc_info.value.detail)
 
 
+def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zarr_is_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+    }
+    created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
+    created_file.write_text("dummy", encoding="utf-8")
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+
+    netcdf_existing = _artifact(artifact_id="existing", end="2026-02-10")
+    netcdf_existing.format = ArtifactFormat.NETCDF
+    netcdf_existing.path = str(created_file)
+    netcdf_existing.asset_paths = [str(created_file)]
+    netcdf_existing.request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    lookup_preferences: list[bool] = []
+
+    def fake_find_existing_artifact(**kwargs: object) -> ArtifactRecord | None:
+        lookup_preferences.append(bool(kwargs["prefer_zarr"]))
+        return None if kwargs["prefer_zarr"] else netcdf_existing
+
+    monkeypatch.setattr(services, "_find_existing_artifact", fake_find_existing_artifact)
+    monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
+    monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *_, **__: {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-02-10"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+    monkeypatch.setattr(services, "_store_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-02-10",
+        download_start="2026-02-01",
+        download_end="2026-02-10",
+        extent_id="sle",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=False,
+        publish=False,
+    )
+
+    assert lookup_preferences == [True]
+    assert artifact.format == ArtifactFormat.ZARR
+
+
 def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

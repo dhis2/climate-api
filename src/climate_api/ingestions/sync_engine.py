@@ -396,7 +396,7 @@ def _provider_latest_available_end(
         if "requested_end" in signature.parameters:
             params["requested_end"] = requested_end
         result = latest_available_fn(**params)
-    except (AttributeError, ImportError, TypeError) as exc:
+    except (AttributeError, ImportError, TypeError, ValueError) as exc:
         raise SyncConfigurationError(f"Latest availability function '{function_path}' failed: {exc}") from exc
     if not isinstance(result, str):
         raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
@@ -412,6 +412,8 @@ def _provider_latest_available_end(
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     """Import and return a function given its dotted module path."""
     parts = full_path.split(".")
+    if len(parts) < 2 or any(not part for part in parts):
+        raise ValueError(f"Invalid dotted function path '{full_path}'")
     module_path = ".".join(parts[:-1])
     function_name = parts[-1]
     module = importlib.import_module(module_path)

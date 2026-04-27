@@ -725,6 +725,18 @@ def test_latest_available_end_rejects_invalid_provider_period_string(monkeypatch
         )
 
 
+def test_latest_available_end_wraps_invalid_provider_function_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(sync_engine.SyncConfigurationError, match="Latest availability function 'invalid_path' failed"):
+        sync_engine._latest_available_end(
+            source_dataset={
+                "id": "provider_dataset",
+                "period_type": "daily",
+                "sync_availability": {"latest_available_function": "invalid_path"},
+            },
+            requested_end="2026-02-10",
+        )
+
+
 def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
