@@ -19,13 +19,20 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
     return value.isoformat()
 
 
+def parse_hourly_period_string(value: str) -> datetime:
+    """Parse a dataset-native hourly period string or full ISO datetime."""
+    if len(value) == 13:
+        return datetime.strptime(value, "%Y-%m-%dT%H")
+    return datetime.fromisoformat(value)
+
+
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
     if period_type == "hourly":
         try:
-            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+            return datetime_to_period_string(parse_hourly_period_string(value), period_type)
         except ValueError as exc:
-            raise ValueError(f"Invalid hourly period '{value}'; expected ISO datetime") from exc
+            raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
     if period_type == "daily":
         try:
             return datetime.fromisoformat(value).date().isoformat()

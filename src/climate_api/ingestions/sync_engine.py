@@ -21,7 +21,7 @@ from typing import Any
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
-from climate_api.shared.time import datetime_to_period_string, normalize_period_string
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string, parse_hourly_period_string
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     whether another period could exist beyond the current materialized coverage.
     """
     if period_type == "hourly":
-        timestamp = datetime.fromisoformat(latest_period_end)
+        timestamp = parse_hourly_period_string(latest_period_end)
         return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
     if period_type == "daily":
         current = date.fromisoformat(latest_period_end)
