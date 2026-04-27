@@ -400,7 +400,13 @@ def _provider_latest_available_end(
         raise SyncConfigurationError(f"Latest availability function '{function_path}' failed: {exc}") from exc
     if not isinstance(result, str):
         raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
-    return result
+    try:
+        return normalize_period_string(result, period_type=str(source_dataset["period_type"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SyncConfigurationError(
+            f"Latest availability function '{function_path}' returned invalid period "
+            f"'{result}' for dataset period_type '{source_dataset.get('period_type')}'"
+        ) from exc
 
 
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:

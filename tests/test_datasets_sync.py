@@ -708,6 +708,23 @@ def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.M
         )
 
 
+def test_latest_available_end_rejects_invalid_provider_period_string(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-31-99")
+
+    with pytest.raises(
+        sync_engine.SyncConfigurationError,
+        match="Latest availability function 'provider.latest_available' returned invalid period",
+    ):
+        sync_engine._latest_available_end(
+            source_dataset={
+                "id": "provider_dataset",
+                "period_type": "daily",
+                "sync_availability": {"latest_available_function": "provider.latest_available"},
+            },
+            requested_end="2026-02-10",
+        )
+
+
 def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
