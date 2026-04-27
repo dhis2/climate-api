@@ -1,6 +1,6 @@
 import pytest
 
-from climate_api.shared.time import normalize_period_string
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string
 
 
 def test_normalize_period_string_raises_targeted_monthly_error() -> None:
@@ -10,3 +10,19 @@ def test_normalize_period_string_raises_targeted_monthly_error() -> None:
 
 def test_normalize_period_string_accepts_dataset_native_hourly_period() -> None:
     assert normalize_period_string("2026-04-21T13", "hourly") == "2026-04-21T13"
+
+
+def test_normalize_period_string_converts_aware_hourly_datetime_to_utc_period() -> None:
+    assert normalize_period_string("2026-04-21T13:30:00+02:00", "hourly") == "2026-04-21T11"
+
+
+def test_normalize_period_string_converts_aware_daily_datetime_to_utc_period() -> None:
+    assert normalize_period_string("2026-04-21T00:30:00+02:00", "daily") == "2026-04-20"
+
+
+def test_datetime_to_period_string_converts_aware_monthly_datetime_to_utc_period() -> None:
+    from datetime import datetime
+
+    value = datetime.fromisoformat("2026-05-01T00:30:00+02:00")
+
+    assert datetime_to_period_string(value, "monthly") == "2026-04"
