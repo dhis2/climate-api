@@ -40,7 +40,7 @@ from climate_api.ingestions.schemas import (
     SyncDetail,
     SyncResponse,
 )
-from climate_api.ingestions.sync_engine import plan_sync, run_sync
+from climate_api.ingestions.sync_engine import SyncConfigurationError, plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
 from climate_api.shared.time import normalize_period_string
 
@@ -328,6 +328,8 @@ def sync_dataset(
             create_artifact_fn=create_artifact,
             get_dataset_fn=get_dataset_or_404,
         )
+    except SyncConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -348,6 +350,8 @@ def plan_sync_dataset(
             source_dataset=source_dataset,
             requested_end=end,
         )
+    except SyncConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

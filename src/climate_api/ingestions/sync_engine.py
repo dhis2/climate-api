@@ -15,15 +15,25 @@ import importlib
 import inspect
 import logging
 from collections.abc import Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
-from climate_api.shared.time import datetime_to_period_string, normalize_period_string, parse_hourly_period_string
+from climate_api.shared.time import (
+    datetime_to_period_string,
+    normalize_period_string,
+    parse_hourly_period_string,
+    utc_now,
+    utc_today,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class SyncConfigurationError(RuntimeError):
+    """Raised when server-side sync configuration is invalid."""
 
 
 def plan_sync(
@@ -306,9 +316,9 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
 
 def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
-    today = date.today()
+    today = utc_today()
     if period_type == "hourly":
-        return datetime_to_period_string(datetime.now(UTC), period_type)
+        return datetime_to_period_string(utc_now(), period_type)
     if period_type == "daily":
         return today.isoformat()
     if period_type == "monthly":
@@ -386,12 +396,10 @@ def _provider_latest_available_end(
         if "requested_end" in signature.parameters:
             params["requested_end"] = requested_end
         result = latest_available_fn(**params)
-    except ValueError:
-        raise
     except (AttributeError, ImportError, TypeError) as exc:
-        raise ValueError(f"Latest availability function '{function_path}' failed: {exc}") from exc
+        raise SyncConfigurationError(f"Latest availability function '{function_path}' failed: {exc}") from exc
     if not isinstance(result, str):
-        raise ValueError(f"Latest availability function '{function_path}' must return a period string")
+        raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
     return result
 
 

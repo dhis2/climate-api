@@ -309,7 +309,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
 
             return _Today()
 
-    monkeypatch.setattr(sync_engine, "date", FakeDateTime)
+    monkeypatch.setattr(sync_engine.provider_availability, "date", FakeDateTime)
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
@@ -354,7 +354,7 @@ def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch)
         def now(cls, tz: tzinfo | None = None) -> "FixedDateTime":
             return cls(2026, 4, 21, 13, 47, 31, tzinfo=tz if tz is UTC else None)
 
-    monkeypatch.setattr(sync_engine, "datetime", FixedDateTime)
+    monkeypatch.setattr(sync_engine, "utc_now", lambda: FixedDateTime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
 
     result = sync_engine._default_target_end(period_type="hourly")
 
@@ -511,7 +511,7 @@ def test_plan_sync_treats_blank_end_as_default_target(monkeypatch: pytest.Monkey
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 20)
 
-    monkeypatch.setattr(sync_engine, "date", FixedDate)
+    monkeypatch.setattr(sync_engine, "utc_today", lambda: FixedDate(2026, 4, 20))
 
     result = sync_engine.plan_sync(
         source_dataset={
@@ -569,7 +569,7 @@ def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch:
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 15)
 
-    monkeypatch.setattr(sync_engine.provider_availability, "date", FixedDate)
+    monkeypatch.setattr(sync_engine.provider_availability, "utc_today", lambda: FixedDate(2026, 4, 15))
 
     result = sync_engine._latest_available_end(
         source_dataset={
@@ -589,7 +589,7 @@ def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPat
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 20)
 
-    monkeypatch.setattr(sync_engine, "date", FixedDate)
+    monkeypatch.setattr(sync_engine, "utc_today", lambda: FixedDate(2026, 4, 20))
 
     result = sync_engine.plan_sync(
         source_dataset={
@@ -639,7 +639,7 @@ def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: py
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 15)
 
-    monkeypatch.setattr(sync_engine.provider_availability, "date", FixedDate)
+    monkeypatch.setattr(sync_engine.provider_availability, "utc_today", lambda: FixedDate(2026, 4, 15))
 
     result = sync_engine._latest_available_end(
         source_dataset={
@@ -694,7 +694,10 @@ def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.M
 
     monkeypatch.setattr(sync_engine, "_get_dynamic_function", fail_import)
 
-    with pytest.raises(ValueError, match="Latest availability function 'provider.latest_available' failed"):
+    with pytest.raises(
+        sync_engine.SyncConfigurationError,
+        match="Latest availability function 'provider.latest_available' failed",
+    ):
         sync_engine._latest_available_end(
             source_dataset={
                 "id": "provider_dataset",
@@ -703,6 +706,35 @@ def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.M
             },
             requested_end="2026-02-10",
         )
+
+
+def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync_kind": "temporal",
+            "sync_availability": {"latest_available_function": "provider.latest_available"},
+        },
+    )
+
+    def fail_import(_: str) -> object:
+        raise ImportError("missing provider")
+
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", fail_import)
+
+    response = client.get(f"/sync/{dataset_id}/plan", params={"end": "2026-02-10"})
+
+    assert response.status_code == 500
+    assert "Latest availability function 'provider.latest_available' failed" in response.json()["detail"]
 
 
 def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:

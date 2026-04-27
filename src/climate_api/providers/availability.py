@@ -8,10 +8,10 @@ choose the right policy per upstream provider.
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
-from climate_api.shared.time import datetime_to_period_string
+from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
 
 
 def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
@@ -27,7 +27,7 @@ def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: st
     if not isinstance(threshold_day, int):
         threshold_day = 20
 
-    today = date.today()
+    today = utc_today()
     months_back = 1 if today.day > threshold_day else 2
     available_month = _add_months(today.replace(day=1), -months_back)
     latest_day = monthrange(available_month.year, available_month.month)[1]
@@ -42,13 +42,13 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     if period_type == "hourly":
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
-            latest = datetime.now(UTC) - timedelta(hours=lag_hours)
+            latest = utc_now() - timedelta(hours=lag_hours)
             return datetime_to_period_string(latest, period_type)
         return requested_end
 
     lag_days = availability.get("lag_days")
     if period_type in {"daily", "monthly"} and isinstance(lag_days, int) and lag_days > 0:
-        latest_date = date.today() - timedelta(days=lag_days)
+        latest_date = utc_today() - timedelta(days=lag_days)
         if period_type == "monthly":
             return f"{latest_date.year:04d}-{latest_date.month:02d}"
         return latest_date.isoformat()
@@ -56,7 +56,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     if period_type == "yearly":
         latest_year_offset = availability.get("latest_year_offset")
         if isinstance(latest_year_offset, int) and latest_year_offset >= 0:
-            return str(date.today().year - latest_year_offset)
+            return str(utc_today().year - latest_year_offset)
 
     return requested_end
 

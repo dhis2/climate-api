@@ -1,6 +1,6 @@
 """Time helpers shared across Climate API modules."""
 
-from datetime import datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import numpy as np
@@ -17,6 +17,16 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
     if period_type == "yearly":
         return str(value.year)
     return value.isoformat()
+
+
+def utc_now() -> datetime:
+    """Return the current UTC datetime."""
+    return datetime.now(UTC)
+
+
+def utc_today() -> date:
+    """Return the current UTC calendar date."""
+    return utc_now().date()
 
 
 def parse_hourly_period_string(value: str) -> datetime:

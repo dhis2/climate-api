@@ -13,7 +13,7 @@ def test_chirps3_daily_latest_available_uses_previous_complete_month_after_thres
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 21)
 
-    monkeypatch.setattr(availability, "date", FixedDate)
+    monkeypatch.setattr(availability, "utc_today", lambda: FixedDate(2026, 4, 21))
 
     result = availability.chirps3_daily_latest_available(
         dataset={"sync_availability": {"complete_month_after_day": 20}},
@@ -31,7 +31,7 @@ def test_chirps3_daily_latest_available_uses_month_before_previous_on_threshold_
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 20)
 
-    monkeypatch.setattr(availability, "date", FixedDate)
+    monkeypatch.setattr(availability, "utc_today", lambda: FixedDate(2026, 4, 20))
 
     result = availability.chirps3_daily_latest_available(
         dataset={"sync_availability": {"complete_month_after_day": 20}},
@@ -47,7 +47,7 @@ def test_lagged_latest_available_formats_hourly_lag(monkeypatch: pytest.MonkeyPa
         def now(cls, tz: object = None) -> "FixedDateTime":  # noqa: ANN401
             return cls(2026, 4, 21, 12, 34, tzinfo=UTC)
 
-    monkeypatch.setattr(availability, "datetime", FixedDateTime)
+    monkeypatch.setattr(availability, "utc_now", lambda: FixedDateTime(2026, 4, 21, 12, 34, tzinfo=UTC))
 
     result = availability.lagged_latest_available(
         dataset={
@@ -66,7 +66,7 @@ def test_lagged_latest_available_formats_daily_lag(monkeypatch: pytest.MonkeyPat
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 21)
 
-    monkeypatch.setattr(availability, "date", FixedDate)
+    monkeypatch.setattr(availability, "utc_today", lambda: FixedDate(2026, 4, 21))
 
     result = availability.lagged_latest_available(
         dataset={
@@ -94,7 +94,7 @@ def test_lagged_latest_available_formats_yearly_offset(monkeypatch: pytest.Monke
         def today(cls) -> "FixedDate":
             return cls(2026, 4, 21)
 
-    monkeypatch.setattr(availability, "date", FixedDate)
+    monkeypatch.setattr(availability, "utc_today", lambda: FixedDate(2026, 4, 21))
 
     result = availability.lagged_latest_available(
         dataset={
