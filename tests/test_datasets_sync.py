@@ -294,22 +294,11 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
         end="2024",
     )
     monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
-
-    class FakeDateTime:
-        @staticmethod
-        def today() -> object:
-            class _Today:
-                year = 2026
-
-                def isoformat(self) -> str:
-                    return "2026-04-15"
-
-                def __sub__(self, other: object) -> object:
-                    raise AssertionError("date subtraction is not expected in this yearly sync test")
-
-            return _Today()
-
-    monkeypatch.setattr(sync_engine.provider_availability, "date", FakeDateTime)
+    monkeypatch.setattr(
+        sync_engine.provider_availability,
+        "utc_today",
+        lambda: date(2026, 4, 15),
+    )
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
