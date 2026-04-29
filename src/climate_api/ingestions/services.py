@@ -63,6 +63,14 @@ def list_artifacts() -> ArtifactListResponse:
     return ArtifactListResponse(items=_load_records())
 
 
+def group_datasets() -> dict[str, list[ArtifactRecord]]:
+    """Return artifact records grouped by stable managed dataset id."""
+    grouped: dict[str, list[ArtifactRecord]] = {}
+    for record in list_artifacts().items:
+        grouped.setdefault(managed_dataset_id_for(record), []).append(record)
+    return grouped
+
+
 def list_ingestions() -> IngestionListResponse:
     """Return ingestion run records for operational/admin use."""
     records = sorted(_load_records(), key=lambda record: record.created_at, reverse=True)
@@ -88,7 +96,7 @@ def get_dataset_summary_for_artifact_or_404(artifact_id: str) -> DatasetRecord:
     """Return the managed dataset summary corresponding to an internal artifact id."""
     artifact = get_artifact_or_404(artifact_id)
     dataset_id = managed_dataset_id_for(artifact)
-    artifacts = _group_datasets().get(dataset_id)
+    artifacts = group_datasets().get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
     return _build_dataset_record(dataset_id, artifacts)
@@ -101,14 +109,14 @@ def get_ingestion_or_404(artifact_id: str) -> IngestionResponse:
 
 def list_datasets() -> DatasetListResponse:
     """Return managed datasets grouped by stable dataset id."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     items = [_build_dataset_record(dataset_id, artifacts) for dataset_id, artifacts in sorted(grouped.items())]
     return DatasetListResponse(items=items)
 
 
 def get_dataset_or_404(dataset_id: str) -> DatasetDetailRecord:
     """Return one managed dataset or raise 404."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     artifacts = grouped.get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
@@ -117,7 +125,7 @@ def get_dataset_or_404(dataset_id: str) -> DatasetDetailRecord:
 
 def get_latest_artifact_for_dataset_or_404(dataset_id: str) -> ArtifactRecord:
     """Return the latest artifact backing a managed dataset."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     artifacts = grouped.get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
@@ -672,18 +680,13 @@ def _build_dataset_detail_record(dataset_id: str, artifacts: list[ArtifactRecord
     )
 
 
-def _group_datasets() -> dict[str, list[ArtifactRecord]]:
-    grouped: dict[str, list[ArtifactRecord]] = {}
-    for record in _load_records():
-        grouped.setdefault(managed_dataset_id_for(record), []).append(record)
-    return grouped
-
-
 def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:
     links = [
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
+    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format == ArtifactFormat.ZARR:
+        links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
     if latest.format == ArtifactFormat.NETCDF:
         links.append(
             DatasetAccessLink(href=f"/datasets/{dataset_id}/download", rel="download", title="Download NetCDF")

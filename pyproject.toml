@@ -12,12 +12,14 @@ dependencies = [
     "uvicorn>=0.41.0",
     "python-dotenv>=1.0.1",
     "pygeoapi>=0.22.0",
+    "pystac>=1.10,<2",
     "dhis2eo @ git+https://github.com/dhis2/dhis2eo.git@v1.1.0",
     "dhis2-client @ git+https://github.com/dhis2/dhis2-python-client.git@V0.3.0",
     "geojson-pydantic>=2.1.0",
     "httpx>=0.28.1",
     "earthkit-transforms==0.5.*",
     "metpy>=1.7,<2",
+    "xstac>=1.0,<2",
     "zarr>=3.1.6,<4",
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*"
@@ -64,7 +66,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit"]
+module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
 ignore_missing_imports = true
 
 [tool.pyright]

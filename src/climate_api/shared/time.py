@@ -75,6 +75,23 @@ def normalize_period_string(value: str, period_type: str) -> str:
     raise ValueError(f"Unsupported period_type '{period_type}'")
 
 
+def parse_period_string_to_datetime(value: str) -> datetime:
+    """Parse a dataset-native period string to a UTC datetime."""
+    normalized = value.strip()
+    if "T" not in normalized:
+        if len(normalized) == 4:
+            normalized = f"{normalized}-01-01T00:00:00"
+        elif len(normalized) == 7:
+            normalized = f"{normalized}-01T00:00:00"
+        else:
+            normalized = f"{normalized}T00:00:00"
+
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
     # TODO: this and numpy_period_string should be merged

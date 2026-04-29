@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This note captures the current implementation state of the branch after the API consolidation around ingestions, datasets, extents, raw Zarr access, and pygeoapi publication.
+This note captures the current implementation state of the branch after the API consolidation around ingestions, datasets, extents, raw Zarr access, STAC discovery, and pygeoapi publication.
 
 It is intended to answer:
 
@@ -19,7 +19,7 @@ The branch now centers on one narrow vertical slice:
 2. define configured extents for the Climate API instance
 3. ingest data into a managed dataset for one dataset template plus one extent
 4. publish that managed dataset through `pygeoapi` under `/ogcapi`
-5. expose native metadata under `/datasets` and raw Zarr access under `/zarr`
+5. expose native metadata under `/datasets`, STAC discovery under `/stac`, and raw Zarr access under `/zarr`
 6. sync existing managed datasets forward through `/sync`
 
 The public surface is intentionally small:
@@ -27,6 +27,7 @@ The public surface is intentionally small:
 - `/ingestions`
 - `/extents`
 - `/datasets`
+- `/stac/...`
 - `/zarr/{dataset_id}`
 - `/sync/{dataset_id}`
 - `/ogcapi/...`
@@ -139,9 +140,27 @@ The public Zarr listing response now avoids leaking internal artifact ids and ra
 
 Entry links point back into the canonical `/zarr/{dataset_id}/...` namespace.
 
-### 6. pygeoapi remains the only public collection surface
+### 6. STAC is now the public discovery surface for published Zarr datasets
 
-The branch no longer maintains a native `/collections` API.
+The branch exposes a dedicated STAC surface under:
+
+- `/stac`
+- `/stac/catalog.json`
+- `/stac/collections/{dataset_id}`
+
+Published Zarr-backed managed datasets appear there as one STAC Collection per dataset. The `zarr` asset points to the canonical native `/zarr/{dataset_id}` route.
+
+`xstac` derives Datacube metadata from the opened Zarr-backed dataset, while the Climate API service layer remains responsible for publication filtering, link construction, and Zarr asset metadata.
+
+Current STAC details:
+
+- multiscale datasets can expose `/zarr/{dataset_id}/0` as the canonical asset href when declared in template metadata
+- temporal extents are normalized to RFC 3339 in both STAC and Datacube temporal extent fields
+- STAC collection `license` currently defaults to `various`
+- spatial `step` values are rounded for readability while preserving axis direction
+- an opt-in live interoperability smoke test exists at `tests/integration/test_stac_interop.py`
+
+### 7. pygeoapi remains the OGC query and coverage surface
 
 Published datasets are exposed through:
 
@@ -151,7 +170,7 @@ Published datasets are exposed through:
 
 From the native FastAPI side, dataset responses include publication state and links to the OGC collection, but the collection resource itself is only public under `/ogcapi`.
 
-### 7. Internal artifacts still exist as a storage/provenance model
+### 8. Internal artifacts still exist as a storage/provenance model
 
 The branch still persists internal artifact records in `data/artifacts/records.json`.
 
@@ -167,7 +186,7 @@ This internal model remains necessary for provenance and sync behavior, but it i
 
 The current JSON-backed store is still an interim persistence layer. Record mutations now use file locking to avoid lost updates during concurrent writes, but the long-term direction should be a proper transactional store.
 
-### 8. `/sync` is now a testable managed dataset update path
+### 9. `/sync` is now a testable managed dataset update path
 
 The sync API now exposes:
 
@@ -206,14 +225,16 @@ Implemented sync behavior:
 
 1. publication derives a stable managed dataset id
 2. pygeoapi resources are regenerated from published internal artifacts
-3. the mounted pygeoapi sub-application is refreshed in process
-4. the dataset becomes available immediately under `/ogcapi/collections/{dataset_id}`
+3. STAC collection documents are derived dynamically from the same published artifact state
+4. the mounted pygeoapi sub-application is refreshed in process
+5. the dataset becomes available immediately under `/stac/collections/{dataset_id}` and `/ogcapi/collections/{dataset_id}`
 
 ### Raw data access
 
 1. `/datasets/{dataset_id}` exposes native metadata and version summary
-2. `/zarr/{dataset_id}` exposes the raw Zarr store layout when the latest version is Zarr-backed
-3. `/ogcapi/collections/{dataset_id}/coverage` exposes standards-facing coverage access
+2. `/stac/collections/{dataset_id}` exposes standards-friendly discovery metadata for direct Zarr-opening clients
+3. `/zarr/{dataset_id}` exposes the raw Zarr store layout when the latest version is Zarr-backed
+4. `/ogcapi/collections/{dataset_id}/coverage` exposes standards-facing coverage access
 
 ### Sync
 
@@ -243,6 +264,9 @@ Implemented sync behavior:
 
 ### Standards-facing
 
+- `GET /stac`
+- `GET /stac/catalog.json`
+- `GET /stac/collections/{dataset_id}`
 - `GET /ogcapi/collections`
 - `GET /ogcapi/collections/{dataset_id}`
 - `GET /ogcapi/collections/{dataset_id}/coverage`
@@ -263,8 +287,9 @@ The branch now presents a much cleaner product story:
 1. run ingestions through `/ingestions` as an execution and admin surface
 2. return datasets, not artifacts
 3. discover managed data under `/datasets`
-4. access raw Zarr under `/zarr/{dataset_id}`
-5. sync managed datasets through `/sync/{dataset_id}`
-6. browse published collections only under `/ogcapi`
+4. discover published Zarr-backed datasets under `/stac/catalog.json`
+5. access raw Zarr under `/zarr/{dataset_id}`
+6. sync managed datasets through `/sync/{dataset_id}`
+7. use `/ogcapi` for standards-facing query and coverage access
 
 Internal artifacts still exist, but only as a storage and provenance model.

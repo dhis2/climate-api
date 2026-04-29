@@ -112,6 +112,28 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
     assert dataset.extent.temporal.end == "2026-01-11"
     assert dataset.publication.status == PublicationStatus.PUBLISHED
     assert any(link.href == f"/zarr/{dataset.dataset_id}" for link in dataset.links)
+    assert any(link.href == f"/stac/collections/{dataset.dataset_id}" for link in dataset.links)
+
+
+def test_dataset_links_include_stac_for_published_zarr() -> None:
+    links = services._dataset_links("chirps3_precipitation_daily_sle", _artifact(artifact_id="a1"))
+
+    assert any(
+        link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily_sle" for link in links
+    )
+
+
+def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
+    unpublished = _artifact(artifact_id="a1")
+    unpublished.publication.status = PublicationStatus.UNPUBLISHED
+    netcdf = _artifact(artifact_id="a2")
+    netcdf.format = ArtifactFormat.NETCDF
+
+    unpublished_links = services._dataset_links("chirps3_precipitation_daily_sle", unpublished)
+    netcdf_links = services._dataset_links("chirps3_precipitation_daily_sle", netcdf)
+
+    assert all(link.rel != "stac" for link in unpublished_links)
+    assert all(link.rel != "stac" for link in netcdf_links)
 
 
 def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPatch) -> None:
