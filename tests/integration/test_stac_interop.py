@@ -80,6 +80,7 @@ def test_openeo_can_load_stac_collection() -> None:
     assert cube.metadata is not None
     assert cube.metadata.has_temporal_dimension()
     assert cube.metadata.temporal_dimension is not None
+    temporal_dimension_name = cube.metadata.temporal_dimension.name
     dimension_names = cube.metadata.dimension_names()
     assert dimension_names
-    assert "time" in dimension_names
+    assert temporal_dimension_name in dimension_names

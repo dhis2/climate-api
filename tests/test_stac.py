@@ -167,6 +167,7 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
         "_zarr_asset_metadata",
         lambda _: {"zarr:consolidated": True, "zarr:zarr_format": 3},
     )
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 
@@ -214,6 +215,7 @@ def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: py
         },
     )
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 
@@ -258,6 +260,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
         },
     )
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
     response = client.get("/stac/collections/era5land_temperature_hourly_sle")
 
@@ -293,6 +296,7 @@ def test_collection_uses_level0_href_for_multiscale_store(
         },
     )
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 
@@ -328,6 +332,7 @@ def test_collection_uses_level0_href_for_remote_multiscale_store(
         },
     )
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 
@@ -425,6 +430,25 @@ def test_build_collection_with_xstac_normalizes_pystac_collection(
     assert payload["id"] == "chirps3_precipitation_daily_sle"
 
 
+def test_zarr_consolidated_flag_detects_v3_and_v2_markers(tmp_path: Path) -> None:
+    v3_consolidated = tmp_path / "v3_consolidated.zarr"
+    v3_consolidated.mkdir()
+    (v3_consolidated / "zarr.json").write_text('{"consolidated_metadata": {}}', encoding="utf-8")
+
+    v3_unconsolidated = tmp_path / "v3_unconsolidated.zarr"
+    v3_unconsolidated.mkdir()
+    (v3_unconsolidated / "zarr.json").write_text("{}", encoding="utf-8")
+
+    v2_consolidated = tmp_path / "v2_consolidated.zarr"
+    v2_consolidated.mkdir()
+    (v2_consolidated / ".zmetadata").write_text("{}", encoding="utf-8")
+
+    assert stac_services._zarr_consolidated_flag(str(v3_consolidated)) is True
+    assert stac_services._zarr_consolidated_flag(str(v3_unconsolidated)) is False
+    assert stac_services._zarr_consolidated_flag(str(v2_consolidated)) is True
+    assert stac_services._zarr_consolidated_flag("s3://example-bucket/store.zarr") is None
+
+
 def test_collection_preserves_template_links_when_xstac_mutates_template(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -454,6 +478,7 @@ def test_collection_preserves_template_links_when_xstac_mutates_template(
 
     monkeypatch.setattr(stac_services, "xarray_to_stac", fake_xarray_to_stac)
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -94,6 +95,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     assets = collection_payload.setdefault("assets", {})
     zarr_from_xstac = assets.get("zarr", {}) if isinstance(assets, dict) else {}
     template_asset = _asset_to_dict(_required_zarr_asset(template))
+    xarray_open_kwargs = _zarr_open_kwargs(artifact)
     collection_payload["assets"]["zarr"] = {
         **zarr_from_xstac,
         **_zarr_asset_metadata(artifact),
@@ -101,7 +103,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
         "type": template_asset.get("type"),
         "title": template_asset.get("title"),
         "roles": template_asset.get("roles"),
-        "xarray:open_kwargs": template_asset["xarray:open_kwargs"],
+        "xarray:open_kwargs": xarray_open_kwargs,
     }
     collection_payload["license"] = template.license
     _remove_helper_variables(collection_payload)
@@ -168,7 +170,6 @@ def _build_collection_template(
             media_type="application/vnd+zarr",
             title="Zarr store",
             roles=["data"],
-            extra_fields={"xarray:open_kwargs": {"consolidated": True}},
         ),
     )
     return template
@@ -382,11 +383,11 @@ def _keywords(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> list[
 
 
 def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
-    metadata: dict[str, object] = {
-        "zarr:consolidated": True,
-        "zarr:node_type": "group",
-    }
+    metadata: dict[str, object] = {"zarr:node_type": "group"}
     artifact_path = _artifact_store_path(artifact)
+    consolidated = _zarr_consolidated_flag(artifact_path)
+    if consolidated is not None:
+        metadata["zarr:consolidated"] = consolidated
     if "://" in artifact_path:
         return metadata
     store_root = Path(artifact_path)
@@ -398,3 +399,27 @@ def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
         if zgroup.exists():
             metadata["zarr:zarr_format"] = 2
     return metadata
+
+
+def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, bool | None]:
+    return {"consolidated": _zarr_consolidated_flag(_artifact_store_path(artifact))}
+
+
+def _zarr_consolidated_flag(artifact_path: str) -> bool | None:
+    if "://" in artifact_path:
+        return None
+
+    store_root = Path(artifact_path)
+    zarr_json = store_root / "zarr.json"
+    if zarr_json.exists():
+        try:
+            payload = json.loads(zarr_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return "consolidated_metadata" in payload
+
+    if (store_root / ".zmetadata").exists():
+        return True
+    if (store_root / ".zgroup").exists():
+        return False
+    return None
