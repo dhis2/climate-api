@@ -9,9 +9,9 @@
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
   cache_info: 
-    eo_function: dhis2eo.data.cds.era5_land.hourly.download
+    eo_function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
-      variables: ['2m_temperature']
+      variables: ['t2m']
   units: kelvin
   convert_units: degC
   resolution: 9 km x 9 km
@@ -29,9 +29,9 @@
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
   cache_info: 
-    eo_function: dhis2eo.data.cds.era5_land.hourly.download
+    eo_function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
-      variables: ['total_precipitation']
+      variables: ['tp']
   pre_process: ['deaccumulate_era5']
   units: m
   convert_units: mm
