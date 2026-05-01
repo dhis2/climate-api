@@ -18,6 +18,7 @@ from climate_api.ingestions.schemas import (
     SyncAction,
     SyncDetail,
     SyncKind,
+    SyncResponse,
 )
 
 
@@ -141,7 +142,7 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert captured["end"] == "2026-02-10"
     assert captured["extent_id"] == "sle"
     assert captured["bbox"] == [1.0, 2.0, 3.0, 4.0]
-    assert captured["country_code"] is None
+    assert captured["country_code"] == "SLE"
     assert result.sync_id == "a2"
     assert result.status == "completed"
     assert result.message == "Managed dataset was rematerialized against the latest planned upstream state."
@@ -784,8 +785,59 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
             latest_artifact=latest_artifact,
             source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync_kind": "temporal"},
             requested_end="2026-02-11",
+            country_code=None,
             prefer_zarr=True,
             publish=True,
             create_artifact_fn=lambda **_: pytest.fail("create_artifact should not be called"),
             get_dataset_fn=lambda _: pytest.fail("get_dataset should not be called"),
         )
+
+
+def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset_id = "worldpop_population_yearly_sle"
+    latest = _artifact(
+        artifact_id="a1",
+        source_dataset_id="worldpop_population_yearly",
+        managed_dataset_id=dataset_id,
+        end="2020",
+    )
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "worldpop_population_yearly", "period_type": "yearly", "sync_kind": "release"},
+    )
+    monkeypatch.setattr(
+        services,
+        "get_extent_or_404",
+        lambda _: {"id": "sle", "bbox": [-13.5, 6.9, -10.1, 10.0], "country_code": "SLE"},
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_run_sync(**kwargs: object) -> SyncResponse:
+        captured.update(kwargs)
+        return SyncResponse(
+            sync_id="a2",
+            status="completed",
+            message="ok",
+            dataset=_dataset_detail(dataset_id),
+            sync_detail=SyncDetail(
+                source_dataset_id="worldpop_population_yearly",
+                extent_id="sle",
+                sync_kind=SyncKind.RELEASE,
+                action=SyncAction.REMATERIALIZE,
+                reason="new_release_available",
+                message="ok",
+                current_start="2020",
+                current_end="2020",
+                target_end="2021",
+                target_end_source="request",
+            ),
+        )
+
+    monkeypatch.setattr(services, "run_sync", fake_run_sync)
+
+    services.sync_dataset(dataset_id=dataset_id, end="2021", prefer_zarr=True, publish=True)
+
+    assert captured["country_code"] == "SLE"

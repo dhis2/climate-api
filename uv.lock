@@ -418,7 +418,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dhis2-client", git = "https://github.com/dhis2/dhis2-python-client.git?rev=V0.3.0" },
-    { name = "dhis2eo", git = "https://github.com/dhis2/dhis2eo.git?rev=v1.1.0" },
+    { name = "dhis2eo", git = "https://github.com/dhis2/dhis2eo.git?rev=v1.2.0" },
     { name = "earthkit-transforms", specifier = "==0.5.*" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "geojson-pydantic", specifier = ">=2.1.0" },
@@ -601,15 +601,19 @@ dependencies = [
 
 [[package]]
 name = "dhis2eo"
-version = "1.0.1"
-source = { git = "https://github.com/dhis2/dhis2eo.git?rev=v1.1.0#956b13a402a2d493f300084a20b498519ea1ffca" }
+version = "1.2.0"
+source = { git = "https://github.com/dhis2/dhis2eo.git?rev=v1.2.0#e6e62f2b9f916b840534a2cf8c4cc2b0368ad370" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "earthkit-data", extra = ["cds", "geopandas", "geotiff", "projection"] },
+    { name = "ecmwf-datastores-client" },
     { name = "geopandas" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "requests" },
     { name = "rioxarray" },
     { name = "xarray" },
+    { name = "zarr" },
 ]
 
 [[package]]
