@@ -1,5 +1,16 @@
 # Implementation Status
 
+## Purpose
+
+This note captures the current implementation state of the branch after the API consolidation around ingestions, datasets, extents, raw Zarr access, STAC discovery, and pygeoapi publication.
+
+It is intended to answer:
+
+1. what the main branch now exposes
+2. what is intentionally internal
+3. how the current pieces fit together
+4. what remains to be refined
+
 ## Current API surface
 
 The main branch now centers on one narrow vertical slice:
