@@ -1,0 +1,194 @@
+# Setup Guide
+
+This guide walks through configuring a new Climate API instance for a specific country, using Rwanda as the example.
+
+## Prerequisites
+
+- Python 3.11 or higher
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- Git
+
+## Step 1: Clone and install
+
+```bash
+git clone https://github.com/dhis2/climate-api.git
+cd climate-api
+make sync
+```
+
+## Step 2: Configure the spatial extent
+
+Each Climate API instance is scoped to one spatial extent. Open `data/extents.yaml` and replace the default entry with your country:
+
+```yaml
+extents:
+  - id: rwa
+    name: Rwanda
+    description: National extent for Rwanda.
+    bbox: [28.8, -2.9, 30.9, -1.0]
+    country_code: RWA
+```
+
+Field reference:
+
+| Field          | Required | Description |
+| -------------- | -------- | ----------- |
+| `id`           | Yes | Short identifier used in dataset IDs and API paths (e.g. `chirps3_precipitation_daily_rwa`) |
+| `name`         | No  | Human-readable name shown in API responses |
+| `description`  | No  | Optional descriptive text |
+| `bbox`         | Yes | Bounding box as `[xmin, ymin, xmax, ymax]` in WGS84 decimal degrees |
+| `country_code` | No  | ISO 3166-1 alpha-3 code — required for WorldPop downloads |
+
+To find the bounding box for a country, [bboxfinder.com](http://bboxfinder.com) is a useful tool.
+
+## Step 3: Configure environment variables
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+The defaults in `.env.example` are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
+
+For ERA5-Land downloads see [ERA5-Land setup](#era5-land-via-destine-earth-data-hub) below.
+
+## Step 4: Start the API
+
+```bash
+make run
+```
+
+The API starts on `http://127.0.0.1:8000`. Open `http://127.0.0.1:8000/docs` for the interactive API documentation.
+
+## Step 5: Verify the configured extent
+
+```bash
+curl -s http://127.0.0.1:8000/extents | jq
+```
+
+Expected response:
+
+```json
+{
+  "kind": "ExtentList",
+  "items": [
+    {
+      "extent_id": "rwa",
+      "name": "Rwanda",
+      "description": "National extent for Rwanda.",
+      "bbox": [28.8, -2.9, 30.9, -1.0]
+    }
+  ]
+}
+```
+
+## Step 6: Ingest your first dataset
+
+CHIRPS3 (daily precipitation) requires no API key and is a good first dataset to verify the setup.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/ingestions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "chirps3_precipitation_daily",
+    "start": "2024-01-01",
+    "end": "2024-01-31",
+    "extent_id": "rwa",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+A successful response returns `"status": "completed"` and a `dataset` object with `dataset_id` `chirps3_precipitation_daily_rwa`.
+
+## Step 7: Access the data
+
+Browse the STAC catalog to confirm the dataset is published:
+
+```bash
+curl -s http://127.0.0.1:8000/stac/catalog.json | jq
+```
+
+Open the dataset with xarray:
+
+```python
+import requests
+import xarray as xr
+
+collection = requests.get(
+    "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_rwa"
+).json()
+
+asset = collection["assets"]["zarr"]
+ds = xr.open_zarr(
+    asset["href"],
+    consolidated=asset["xarray:open_kwargs"]["consolidated"],
+)
+print(ds)
+```
+
+See [user_guide.md](user_guide.md) for more usage examples.
+
+---
+
+## ERA5-Land via DestinE Earth Data Hub
+
+ERA5-Land hourly temperature and precipitation data is downloaded from the [DestinE Earth Data Hub](https://earthdatahub.destine.eu). Access is free but requires registration.
+
+### 1. Register
+
+Create a free account at [earthdatahub.destine.eu](https://earthdatahub.destine.eu). Free accounts include a monthly request limit of 500,000 — sufficient for national-scale downloads.
+
+### 2. Configure authentication
+
+DestinE authentication uses a `.netrc` file in your home directory. Create or append to `~/.netrc`:
+
+```
+machine earthdatahub.destine.eu
+login your@email.com
+password your-password
+```
+
+Set the correct permissions:
+
+```bash
+chmod 600 ~/.netrc
+```
+
+### 3. Ingest ERA5-Land data
+
+Once authenticated, ingest ERA5-Land temperature for Rwanda:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/ingestions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_id": "era5land_temperature_hourly",
+    "start": "2024-01-01",
+    "end": "2024-01-31",
+    "extent_id": "rwa",
+    "prefer_zarr": true,
+    "publish": true
+  }' | jq
+```
+
+ERA5-Land data has approximately 15 days of lag — data for a given month becomes available around the 15th of the following month.
+
+---
+
+## Keeping datasets up to date
+
+Use the sync endpoint to advance an existing dataset to the latest available data:
+
+```bash
+# Check what would be downloaded without executing
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_rwa/plan" | jq
+
+# Execute the sync
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_rwa" \
+  -H "Content-Type: application/json" \
+  -d '{"prefer_zarr": true, "publish": true}' | jq
+```
+
+See [managed_data_api_guide.md](managed_data_api_guide.md) for the full sync API reference.
