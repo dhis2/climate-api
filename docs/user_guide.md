@@ -85,14 +85,15 @@ print(daily)
 Select a spatial point closest to a location (e.g. Freetown, Sierra Leone):
 
 ```python
+variable = list(ds.data_vars)[0]  # precip, t2m, tp, or pop_total depending on the dataset
 point = ds.sel({y_dim: 8.48, x_dim: -13.23}, method="nearest")
-print(point["precip"].values)
+print(point[variable].values)
 ```
 
 Compute the spatial mean over the full domain for each time step:
 
 ```python
-spatial_mean = ds["precip"].mean(dim=[y_dim, x_dim])
+spatial_mean = ds[variable].mean(dim=[y_dim, x_dim])
 print(spatial_mean.to_dataframe())
 ```
 
