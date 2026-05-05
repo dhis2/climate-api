@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,9 @@ DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.3.0/schema.j
 ZARR_EXTENSION = "https://stac-extensions.github.io/zarr/v1.1.0/schema.json"
 DEFAULT_STAC_LICENSE = "various"
 SPATIAL_STEP_DECIMALS = 8
+XSTAC_COLLECTION_CACHE_MAXSIZE = 128
 logger = logging.getLogger(__name__)
+_xstac_collection_cache: dict[str, dict[str, Any]] = {}
 
 
 def build_catalog(request: Request) -> dict[str, object]:
@@ -176,6 +179,10 @@ def _build_collection_template(
 
 
 def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.Collection) -> dict[str, Any]:
+    cached_payload = _xstac_collection_cache.get(artifact.artifact_id)
+    if cached_payload is not None:
+        return deepcopy(cached_payload)
+
     try:
         ds = open_zarr_dataset(_artifact_store_path(artifact))
     except HTTPException:
@@ -204,7 +211,8 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         # resolution attempts during to_dict().
         result.clear_links()
         payload: dict[str, Any] = result.to_dict(include_self_link=False)
-        return payload
+        _cache_xstac_collection_payload(artifact.artifact_id, payload)
+        return deepcopy(payload)
     except HTTPException:
         raise
     except Exception as exc:
@@ -215,6 +223,20 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         ) from exc
     finally:
         ds.close()
+
+
+def _cache_xstac_collection_payload(artifact_id: str, payload: dict[str, Any]) -> None:
+    if artifact_id in _xstac_collection_cache:
+        _xstac_collection_cache[artifact_id] = deepcopy(payload)
+        return
+    if len(_xstac_collection_cache) >= XSTAC_COLLECTION_CACHE_MAXSIZE:
+        oldest_artifact_id = next(iter(_xstac_collection_cache))
+        _xstac_collection_cache.pop(oldest_artifact_id, None)
+    _xstac_collection_cache[artifact_id] = deepcopy(payload)
+
+
+def _clear_xstac_collection_cache() -> None:
+    _xstac_collection_cache.clear()
 
 
 def _link_to_dict(link: pystac.Link) -> dict[str, Any]:
