@@ -1,5 +1,4 @@
-"""
-Discover published datasets via the STAC catalog and open one with xarray.
+"""Discover published datasets via the STAC catalog and open one with xarray.
 
 Requires a running Climate API instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
@@ -12,11 +11,13 @@ BASE_URL = "http://127.0.0.1:8000"
 
 
 def list_datasets() -> list[dict]:
+    """Return all child dataset links from the STAC catalog."""
     catalog = requests.get(f"{BASE_URL}/stac/catalog.json").json()
     return [link for link in catalog["links"] if link["rel"] == "child"]
 
 
 def open_dataset(dataset_id: str) -> xr.Dataset:
+    """Open a published dataset via its STAC collection asset."""
     collection = requests.get(f"{BASE_URL}/stac/collections/{dataset_id}").json()
     asset = collection["assets"]["zarr"]
     return xr.open_zarr(
@@ -26,6 +27,7 @@ def open_dataset(dataset_id: str) -> xr.Dataset:
 
 
 def main() -> None:
+    """Discover and open the first published dataset."""
     datasets = list_datasets()
 
     if not datasets:
@@ -58,9 +60,7 @@ def main() -> None:
     variable = list(ds.data_vars)[0]
     centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
     centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
-    sample = ds[variable].isel(time=0).sel(
-        {y_dim: centre_y, x_dim: centre_x}, method="nearest"
-    )
+    sample = ds[variable].isel(time=0).sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
     print(f"\n{variable} at domain centre, t=0: {float(sample.values):.4f}")
 
 

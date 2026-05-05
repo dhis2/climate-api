@@ -1,5 +1,4 @@
-"""
-Open a published GeoZarr dataset directly and demonstrate spatial and temporal subsetting.
+"""Open a published GeoZarr dataset directly and demonstrate spatial and temporal subsetting.
 
 Requires a running Climate API instance and a published CHIRPS3 dataset.
 Adjust BASE_URL and DATASET_ID for your instance.
@@ -13,6 +12,7 @@ DATASET_ID = "chirps3_precipitation_daily_sle"
 
 
 def main() -> None:
+    """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
     # Fetch open kwargs from the STAC collection to get the correct consolidated flag
     collection = requests.get(f"{BASE_URL}/stac/collections/{DATASET_ID}").json()
     asset = collection["assets"]["zarr"]
