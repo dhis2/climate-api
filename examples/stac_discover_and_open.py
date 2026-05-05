@@ -50,27 +50,16 @@ def main() -> None:
     ds = open_dataset(dataset_id)
     print(ds)
 
-    # Print temporal coverage (ERA5-Land uses valid_time; CHIRPS/WorldPop use time)
-    time_dim = "valid_time" if "valid_time" in ds.coords else "time"
-    print(f"\nTime range: {ds[time_dim].values[0]}  →  {ds[time_dim].values[-1]}")
-    print(f"Time steps: {ds.sizes[time_dim]}")
-
-    # Spatial coordinate names vary by dataset: lon/lat, longitude/latitude, or x/y
-    coords = set(ds.coords)
-    if "lat" in coords:
-        y_dim, x_dim = "lat", "lon"
-    elif "latitude" in coords:
-        y_dim, x_dim = "latitude", "longitude"
-    else:
-        y_dim, x_dim = "y", "x"
-    print(f"Latitude:  {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
-    print(f"Longitude: {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
+    print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
+    print(f"Time steps: {ds.sizes['time']}")
+    print(f"Latitude:  {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
+    print(f"Longitude: {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
 
     # Print a sample value at the spatial centre of the domain, first time step
     variable = list(ds.data_vars)[0]
-    centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
-    centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
-    sample = ds[variable].isel({time_dim: 0}).sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
+    centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
+    centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+    sample = ds[variable].isel(time=0).sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
     print(f"\n{variable} at domain centre, t=0: {float(sample.values):.4f}")
 
 

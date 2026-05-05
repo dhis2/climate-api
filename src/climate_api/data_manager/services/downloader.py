@@ -124,6 +124,16 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     keep_coords = [get_time_dim(ds)] + dims
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
+
+    # Normalise coordinate names to canonical form so all stored Zarr files are
+    # consistent regardless of what the upstream source uses.
+    time_dim = get_time_dim(ds)
+    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "longitude"), (lat_dim, "latitude")] if k != v}
+    if rename_map:
+        ds = ds.rename(rename_map)
+    lon_dim, lat_dim = "longitude", "latitude"
+    dims = [lon_dim, lat_dim]
+
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
 
     xmin = ds[lon_dim].min().item()

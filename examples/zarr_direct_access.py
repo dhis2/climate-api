@@ -32,39 +32,28 @@ def main() -> None:
     ds = xr.open_zarr(zarr_url, **open_kwargs)
     print(ds)
 
-    # Coordinate names are preserved from the source and vary by dataset.
-    time_dim = "valid_time" if "valid_time" in ds.coords else "time"
-    coords = set(ds.coords)
-    if "lat" in coords:
-        y_dim, x_dim = "lat", "lon"
-    elif "latitude" in coords:
-        y_dim, x_dim = "latitude", "longitude"
-    else:
-        y_dim, x_dim = "y", "x"
-
-    # Dimensions and coordinates
     print(f"\nDimensions:  {dict(ds.sizes)}")
-    print(f"Time range:  {ds[time_dim].values[0]}  →  {ds[time_dim].values[-1]}")
-    print(f"Latitude:    {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
-    print(f"Longitude:   {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
+    print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
+    print(f"Latitude:    {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
+    print(f"Longitude:   {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
 
     variable = list(ds.data_vars)[0]
 
     # Select a single time step
-    t0 = ds[time_dim].values[0]
-    snapshot = ds[variable].sel({time_dim: t0})
+    t0 = ds.time.values[0]
+    snapshot = ds[variable].sel(time=t0)
     print(f"\n{variable} snapshot at {t0}:")
     print(f"  shape: {snapshot.shape},  min: {float(snapshot.min()):.4f},  max: {float(snapshot.max()):.4f}")
 
     # Select the point closest to the spatial centre of the domain
-    centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
-    centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
-    point = ds[variable].sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
-    print(f"\n{variable} at domain centre ({centre_y:.2f}, {centre_x:.2f}):")
+    centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
+    centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+    point = ds[variable].sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
+    print(f"\n{variable} at domain centre ({centre_lat:.2f}, {centre_lon:.2f}):")
     print(point.to_dataframe()[[variable]].head(10))
 
     # Spatial mean over the full domain — a simple time series
-    spatial_mean = ds[variable].mean(dim=[y_dim, x_dim])
+    spatial_mean = ds[variable].mean(dim=["latitude", "longitude"])
     print(f"\nSpatial mean {variable} time series:")
     print(spatial_mean.to_dataframe()[[variable]])
 

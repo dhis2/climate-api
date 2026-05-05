@@ -264,6 +264,43 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
         result.close()
 
 
+def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Source coordinates (lat/lon, valid_time, x/y) are renamed to longitude/latitude/time."""
+    # Simulate ERA5-Land source with valid_time and lon/lat
+    ds_era5 = xr.Dataset(
+        {"t2m": (["valid_time", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
+        coords={
+            "valid_time": pd.date_range("2024-01-01", periods=2, freq="h"),
+            "lat": [10.0, 9.0, 8.0],
+            "lon": [30.0, 31.0, 32.0],
+        },
+    )
+    path = tmp_path / "era5_t2m_2024-01.nc"
+    ds_era5.to_netcdf(path)
+
+    dataset: dict[str, Any] = {
+        "id": "era5land_temperature_hourly",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "cache_info": {},
+    }
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+
+    downloader.build_dataset_zarr(dataset)
+
+    result = open_zarr_dataset(str(tmp_path / "era5land_temperature_hourly.zarr"))
+    try:
+        assert "time" in result.coords
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "valid_time" not in result.coords
+        assert "lat" not in result.coords
+        assert "lon" not in result.coords
+    finally:
+        result.close()
+
+
 def test_build_dataset_zarr_clips_to_requested_daily_range(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -298,7 +335,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
 def _make_fake_pyramid(ds: xr.Dataset, zarr_path: Path) -> Pyramid:
     """Return a Pyramid whose .dt.to_zarr writes a minimal two-level DataTree store."""
     level0 = ds
-    level1 = ds.coarsen(lat=2, lon=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
+    level1 = ds.coarsen(latitude=2, longitude=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
     dt = DataTree.from_dict({"0": level0, "1": level1})
     return Pyramid(datatree=dt, encoding={})
 

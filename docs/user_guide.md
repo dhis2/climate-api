@@ -54,28 +54,12 @@ ds = xr.open_zarr(
 print(ds)
 ```
 
-Each dataset has a time dimension, two spatial dimensions, and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature). Coordinate names are preserved from the source data and vary across datasets — always detect them at runtime rather than assuming a fixed name:
+Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
 
-- **Time**: `valid_time` (ERA5-Land) or `time` (all others)
-- **Spatial**: `lat`/`lon`, `latitude`/`longitude`, or `y`/`x` depending on the source
-
-Detect the actual names before selecting:
+Select the first time step:
 
 ```python
-time_dim = "valid_time" if "valid_time" in ds.coords else "time"
-coords = set(ds.coords)
-if "lat" in coords:
-    y_dim, x_dim = "lat", "lon"
-elif "latitude" in coords:
-    y_dim, x_dim = "latitude", "longitude"
-else:
-    y_dim, x_dim = "y", "x"
-```
-
-Select the first time step (works for daily, hourly, and yearly datasets):
-
-```python
-snapshot = ds.isel({time_dim: 0})
+snapshot = ds.isel(time=0)
 print(snapshot)
 ```
 
@@ -83,16 +67,16 @@ Select a spatial point by sampling the centre of the domain:
 
 ```python
 variable = list(ds.data_vars)[0]  # precip, t2m, tp, or pop_total depending on the dataset
-centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
-centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
-point = ds.sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
+centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
+centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+point = ds.sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
 print(point[variable].values)
 ```
 
 Compute the spatial mean over the full domain for each time step:
 
 ```python
-spatial_mean = ds[variable].mean(dim=[y_dim, x_dim])
+spatial_mean = ds[variable].mean(dim=["latitude", "longitude"])
 print(spatial_mean.to_dataframe())
 ```
 
