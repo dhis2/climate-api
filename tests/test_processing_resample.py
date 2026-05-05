@@ -1,0 +1,397 @@
+from datetime import UTC, datetime
+from pathlib import Path
+
+import numpy as np
+import pytest
+import xarray as xr
+
+from climate_api.ingestions import services as ingestion_services
+from climate_api.ingestions.schemas import (
+    ArtifactCoverage,
+    ArtifactFormat,
+    ArtifactPublication,
+    ArtifactRecord,
+    ArtifactRequestScope,
+    CoverageSpatial,
+    CoverageTemporal,
+    PublicationStatus,
+)
+from climate_api.processing import resample
+
+
+@pytest.fixture(autouse=True)
+def isolated_artifact_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    artifacts_dir = tmp_path / "artifacts"
+    monkeypatch.setattr(ingestion_services, "ARTIFACTS_DIR", artifacts_dir)
+    monkeypatch.setattr(ingestion_services, "ARTIFACTS_INDEX_PATH", artifacts_dir / "records.json")
+    monkeypatch.setattr(resample, "DERIVED_DATA_DIR", tmp_path / "derived")
+
+
+def _artifact(
+    *,
+    artifact_id: str,
+    dataset_id: str,
+    managed_dataset_id: str,
+    path: Path,
+    start: str,
+    end: str,
+) -> ArtifactRecord:
+    return ArtifactRecord(
+        artifact_id=artifact_id,
+        dataset_id=dataset_id,
+        dataset_name=dataset_id,
+        variable="value",
+        format=ArtifactFormat.ZARR,
+        path=str(path),
+        asset_paths=[str(path)],
+        variables=["value"],
+        request_scope=ArtifactRequestScope(
+            start=start,
+            end=end,
+            extent_id="sle",
+            bbox=(1.0, 2.0, 3.0, 4.0),
+        ),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start=start, end=end),
+            spatial=CoverageSpatial(xmin=1.0, ymin=2.0, xmax=3.0, ymax=4.0),
+        ),
+        created_at=datetime(2026, 1, 10, tzinfo=UTC),
+        publication=ArtifactPublication(
+            status=PublicationStatus.PUBLISHED,
+            collection_id=managed_dataset_id,
+            pygeoapi_path=f"/ogcapi/collections/{managed_dataset_id}",
+        ),
+    )
+
+
+def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_hourly.zarr"
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(48)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(48, dtype=float).reshape(48, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-hourly",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-02T23",
+    )
+    target_dataset = {
+        "id": "era5land_temperature_daily",
+        "name": "ERA5-Land daily temperature",
+        "variable": "value",
+        "period_type": "daily",
+        "resample": {"source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "hourly"} if dataset_id == "era5land_temperature_hourly" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-02",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.dataset_id == "era5land_temperature_daily"
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-01-02"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].shape == (2, 1, 1)
+        assert result["value"].values[:, 0, 0].tolist() == [11.5, 35.5]
+    finally:
+        result.close()
+
+
+def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily.zarr"
+    time = np.array("2026-01-05", dtype="datetime64[D]") + np.arange(10)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((10, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-05",
+        end="2026-01-14",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_weekly",
+        "name": "CHIRPS weekly precipitation",
+        "variable": "value",
+        "period_type": "weekly",
+        "resample": {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "method": "sum",
+            "week_start": "monday",
+        },
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-W02",
+        end="2026-W03",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.coverage.temporal.start == "2026-W02"
+    assert artifact.coverage.temporal.end == "2026-W02"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [7.0]
+    finally:
+        result.close()
+
+
+def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_monthly.zarr"
+    time = np.array("2026-01-01", dtype="datetime64[D]") + np.arange(31)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((31, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-monthly",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-01",
+        end="2026-01-31",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_monthly",
+        "name": "CHIRPS monthly precipitation",
+        "variable": "value",
+        "period_type": "monthly",
+        "resample": {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "method": "sum",
+        },
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01",
+        end="2026-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.coverage.temporal.start == "2026-01"
+    assert artifact.coverage.temporal.end == "2026-01"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [31.0]
+    finally:
+        result.close()
+
+
+def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_is_false(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_hourly.zarr"
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(24)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(24, dtype=float).reshape(24, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-hourly",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-01T23",
+    )
+    target_dataset = {
+        "id": "era5land_temperature_daily",
+        "name": "ERA5-Land daily temperature",
+        "variable": "value",
+        "period_type": "daily",
+        "resample": {"source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "hourly"} if dataset_id == "era5land_temperature_hourly" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    first = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: pytest.fail("existing derived artifact should be reused before resolving source artifact"),
+    )
+    second = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert second.artifact_id == first.artifact_id
+
+
+def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_hourly_overwrite.zarr"
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(24)
+    initial_ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(24, dtype=float).reshape(24, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    initial_ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-hourly-overwrite",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-01T23",
+    )
+    target_dataset = {
+        "id": "era5land_temperature_daily",
+        "name": "ERA5-Land daily temperature",
+        "variable": "value",
+        "period_type": "daily",
+        "resample": {"source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "hourly"} if dataset_id == "era5land_temperature_hourly" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    first = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    updated_ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), (np.arange(24, dtype=float) + 24).reshape(24, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    updated_ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    second = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=True,
+        publish=False,
+    )
+
+    assert second.artifact_id == first.artifact_id
+    result = xr.open_zarr(second.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [35.5]
+    finally:
+        result.close()

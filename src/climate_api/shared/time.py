@@ -16,6 +16,14 @@ def _normalize_datetime_for_period(value: datetime) -> datetime:
     return value
 
 
+def _coerce_numpy_datetime(value: object) -> datetime:
+    """Convert a numpy or Python datetime-like scalar to a datetime."""
+    if isinstance(value, datetime):
+        return value
+    np_value = np.datetime64(cast(Any, value))
+    return datetime.fromisoformat(np.datetime_as_string(np_value, unit="s"))
+
+
 def datetime_to_period_string(value: datetime, period_type: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
@@ -121,12 +129,9 @@ def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type
         lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
         return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
-    arr = np.asarray(datetimes)
+    arr = np.asarray(datetimes, dtype="datetime64[s]")
     to_period_string = np.vectorize(
-        lambda value: datetime_to_period_string(
-            datetime.fromisoformat(np.datetime_as_string(value, unit="s")),
-            period_type,
-        ),
+        lambda value: datetime_to_period_string(_coerce_numpy_datetime(value), period_type),
         otypes=[str],
     )
     result = to_period_string(arr)
