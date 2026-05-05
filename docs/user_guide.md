@@ -54,13 +54,10 @@ ds = xr.open_zarr(
 print(ds)
 ```
 
-Each dataset has a time dimension, two spatial dimensions, and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature). Coordinate names vary by source:
+Each dataset has a time dimension, two spatial dimensions, and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature). Coordinate names are preserved from the source data and vary across datasets — always detect them at runtime rather than assuming a fixed name:
 
-| Coordinate | CHIRPS / WorldPop | ERA5-Land |
-| ---------- | ----------------- | --------- |
-| Time       | `time`            | `valid_time` |
-| Latitude   | `y`               | `lat`     |
-| Longitude  | `x`               | `lon`     |
+- **Time**: `valid_time` (ERA5-Land) or `time` (all others)
+- **Spatial**: `lat`/`lon`, `latitude`/`longitude`, or `y`/`x` depending on the source
 
 Detect the actual names before selecting:
 
