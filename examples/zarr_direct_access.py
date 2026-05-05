@@ -13,13 +13,17 @@ BASE_URL = "http://127.0.0.1:8000"
 def main() -> None:
     """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
     # Discover the first published dataset from the catalog
-    catalog = requests.get(f"{BASE_URL}/stac/catalog.json").json()
+    catalog_response = requests.get(f"{BASE_URL}/stac/catalog.json")
+    catalog_response.raise_for_status()
+    catalog = catalog_response.json()
     collection_url = next((link["href"] for link in catalog["links"] if link["rel"] == "child"), None)
     if collection_url is None:
         print("No published datasets found. Run an ingestion first.")
         return
 
-    collection = requests.get(collection_url).json()
+    collection_response = requests.get(collection_url)
+    collection_response.raise_for_status()
+    collection = collection_response.json()
     asset = collection["assets"]["zarr"]
     zarr_url = asset["href"]
     open_kwargs = asset["xarray:open_kwargs"]
