@@ -51,7 +51,9 @@ def main() -> None:
     # Select a point (Freetown, Sierra Leone)
     freetown_lat, freetown_lon = 8.48, -13.23
     point = ds[variable].sel({y_dim: freetown_lat, x_dim: freetown_lon}, method="nearest")
-    print(f"\n{variable} at Freetown ({freetown_lat}N, {freetown_lon}E):")
+    lat_label = f"{abs(freetown_lat)}{'N' if freetown_lat >= 0 else 'S'}"
+    lon_label = f"{abs(freetown_lon)}{'E' if freetown_lon >= 0 else 'W'}"
+    print(f"\n{variable} at Freetown ({lat_label}, {lon_label}):")
     print(point.to_dataframe()[[variable]].head(10))
 
     # Spatial mean over the full domain — a simple time series
