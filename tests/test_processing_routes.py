@@ -81,7 +81,7 @@ def test_post_resample_returns_completed_response(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["process_id"] == "artifact-123"
+    assert payload["artifact_id"] == "artifact-123"
     assert payload["status"] == "completed"
     assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_weekly_sle"
 

@@ -126,6 +126,80 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         result.close()
 
 
+def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_invalid_hierarchy.zarr"
+    time = np.array("2026-01-01", dtype="datetime64[D]") + np.arange(2)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((2, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-invalid",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-01",
+        end="2026-01-02",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_hourly",
+        "name": "CHIRPS hourly precipitation",
+        "variable": "value",
+        "period_type": "hourly",
+        "resample": {"source_dataset_id": "chirps3_precipitation_daily", "method": "sum"},
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    with pytest.raises(resample.HTTPException, match="Resampling requires a coarser target period than source"):
+        resample.materialize_resampled_artifact(
+            target_dataset=target_dataset,
+            start="2026-01-01T00",
+            end="2026-01-01T23",
+            extent_id="sle",
+            bbox=None,
+            overwrite=False,
+            publish=False,
+        )
+
+
+def test_materialize_resampled_artifact_returns_404_when_source_dataset_template_is_missing() -> None:
+    target_dataset = {
+        "id": "chirps3_precipitation_weekly",
+        "name": "CHIRPS weekly precipitation",
+        "variable": "value",
+        "period_type": "weekly",
+        "resample": {"source_dataset_id": "missing_daily", "method": "sum", "week_start": "monday"},
+    }
+
+    with pytest.raises(resample.HTTPException, match="Source dataset template 'missing_daily' not found"):
+        resample.materialize_resampled_artifact(
+            target_dataset=target_dataset,
+            start="2026-W02",
+            end="2026-W03",
+            extent_id="sle",
+            bbox=None,
+            overwrite=False,
+            publish=False,
+        )
+
+
 def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -188,6 +262,66 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
     finally:
         result.close()
+
+
+def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_requested_range(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_empty_range.zarr"
+    time = np.array("2026-01-01", dtype="datetime64[D]") + np.arange(7)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((7, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-empty",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-01",
+        end="2026-01-07",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_weekly",
+        "name": "CHIRPS weekly precipitation",
+        "variable": "value",
+        "period_type": "weekly",
+        "resample": {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "method": "sum",
+            "week_start": "monday",
+        },
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    with pytest.raises(
+        resample.HTTPException,
+        match="Source artifact contains no data for the requested resample range",
+    ):
+        resample.materialize_resampled_artifact(
+            target_dataset=target_dataset,
+            start="2026-W10",
+            end="2026-W10",
+            extent_id="sle",
+            bbox=None,
+            overwrite=False,
+            publish=False,
+        )
 
 
 def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source(

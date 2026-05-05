@@ -93,7 +93,8 @@ def materialize_resampled_artifact(
         resampled = _resample_dataset(
             source_ds=source_ds,
             source_period_type=str(source_dataset["period_type"]),
-            target_dataset=target_dataset,
+            resample_config=resample,
+            target_period_type=str(target_dataset["period_type"]),
             start=normalized_start,
             end=normalized_end,
         )
@@ -155,12 +156,11 @@ def _resample_dataset(
     *,
     source_ds: xr.Dataset,
     source_period_type: str,
-    target_dataset: dict[str, Any],
+    resample_config: dict[str, Any],
+    target_period_type: str,
     start: str,
     end: str,
 ) -> xr.Dataset:
-    resample_config = _require_resample_config(target_dataset)
-    target_period_type = str(target_dataset["period_type"])
     time_dim = get_time_dim(source_ds)
     target_end_exclusive = parse_period_string_to_datetime(
         sync_engine._next_period_start(end, period_type=target_period_type)

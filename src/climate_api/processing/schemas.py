@@ -28,6 +28,6 @@ class ResampleProcessRequest(BaseModel):
 class ResampleProcessResponse(BaseModel):
     """Synchronous response returned after materializing a derived resampled dataset."""
 
-    process_id: str = Field(description="Identifier of the materialized derived artifact.")
+    artifact_id: str = Field(description="Identifier of the materialized derived artifact.")
     status: str = Field(description="Execution status of the resample request.")
     dataset: DatasetRecord = Field(description="Managed dataset summary produced or resolved by the resample request.")

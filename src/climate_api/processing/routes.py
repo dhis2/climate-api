@@ -13,7 +13,7 @@ router = APIRouter()
 def run_resample_process(request: ResampleProcessRequest) -> ResampleProcessResponse:
     """Materialize a derived dataset by resampling an existing managed source dataset."""
     dataset = _get_dataset_or_404(request.dataset_id)
-    process_id, dataset_summary = services.run_resample_process(
+    artifact_id, dataset_summary = services.run_resample_process(
         dataset=dataset,
         start=request.start,
         end=request.end,
@@ -21,4 +21,4 @@ def run_resample_process(request: ResampleProcessRequest) -> ResampleProcessResp
         overwrite=request.overwrite,
         publish=request.publish,
     )
-    return ResampleProcessResponse(process_id=process_id, status="completed", dataset=dataset_summary)
+    return ResampleProcessResponse(artifact_id=artifact_id, status="completed", dataset=dataset_summary)
