@@ -4,7 +4,7 @@ Climate and Earth Observation data is distributed across dozens of providers —
 
 Each instance is configured for a specific country or region, and all data extraction, processing, and storage is scoped to that spatial extent. It abstracts data access across heterogeneous sources (CHIRPS, ERA5, WorldPop, and others), stores outputs as GeoZarr, and exposes them through standards-based endpoints.
 
-The platform is designed to operate independently of DHIS2 and can be deployed on local, cloud-hosted, or sovereign country infrastructure. See [docs/project_description.md](docs/project_description.md) for a full description of the vision and technical architecture, [docs/setup_guide.md](docs/setup_guide.md) for a step-by-step setup walkthrough, [docs/user_guide.md](docs/user_guide.md) for data access examples, [docs/managed_data_api_guide.md](docs/managed_data_api_guide.md) for the full API reference, and [docs/roadmap.md](docs/roadmap.md) for the planned development steps.
+The platform is designed to operate independently of DHIS2 and can be deployed on local, cloud-hosted, or sovereign country infrastructure. See [docs/setup_guide.md](docs/setup_guide.md) for a step-by-step setup walkthrough, [docs/user_guide.md](docs/user_guide.md) for data access examples, [docs/managed_data_api_guide.md](docs/managed_data_api_guide.md) for the full API reference, and [docs/roadmap.md](docs/roadmap.md) for the planned development steps.
 
 > **Status: active development.** Current focus is on dataset ingestion, sync workflows, and GeoZarr storage. APIs and data models may change without notice.
 
