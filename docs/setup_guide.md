@@ -117,13 +117,13 @@ curl -s http://127.0.0.1:8000/stac/catalog.json | jq
 Open the dataset with xarray — the catalog discovery picks up whichever extent you configured:
 
 ```python
-import requests
+import httpx
 import xarray as xr
 
-catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
+catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
 collection_url = next(l["href"] for l in catalog["links"] if l["rel"] == "child")
 
-collection = requests.get(collection_url).json()
+collection = httpx.get(collection_url).json()
 asset = collection["assets"]["zarr"]
 ds = xr.open_zarr(
     asset["href"],

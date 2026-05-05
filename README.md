@@ -85,10 +85,10 @@ Discover available datasets and open one with xarray:
 The catalog is populated once at least one dataset has been ingested and published (see [docs/setup_guide.md](docs/setup_guide.md)).
 
 ```python
-import requests
+import httpx
 import xarray as xr
 
-catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
+catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
 children = [l for l in catalog["links"] if l["rel"] == "child"]
 
 if not children:
@@ -97,7 +97,7 @@ else:
     for link in children:
         print(link["title"], "—", link["href"])
 
-    collection = requests.get(children[0]["href"]).json()
+    collection = httpx.get(children[0]["href"]).json()
     asset = collection["assets"]["zarr"]
     ds = xr.open_zarr(
         asset["href"],

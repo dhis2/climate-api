@@ -4,7 +4,7 @@ Requires a running Climate API instance with at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
-import requests
+import httpx
 import xarray as xr
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -13,7 +13,7 @@ BASE_URL = "http://127.0.0.1:8000"
 def main() -> None:
     """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
     # Discover the first published dataset from the catalog
-    catalog_response = requests.get(f"{BASE_URL}/stac/catalog.json")
+    catalog_response = httpx.get(f"{BASE_URL}/stac/catalog.json")
     catalog_response.raise_for_status()
     catalog = catalog_response.json()
     collection_url = next((link["href"] for link in catalog["links"] if link["rel"] == "child"), None)
@@ -21,7 +21,7 @@ def main() -> None:
         print("No published datasets found. Run an ingestion first.")
         return
 
-    collection_response = requests.get(collection_url)
+    collection_response = httpx.get(collection_url)
     collection_response.raise_for_status()
     collection = collection_response.json()
     asset = collection["assets"]["zarr"]

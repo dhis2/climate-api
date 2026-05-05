@@ -4,7 +4,7 @@ Requires a running Climate API instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
-import requests
+import httpx
 import xarray as xr
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -12,7 +12,7 @@ BASE_URL = "http://127.0.0.1:8000"
 
 def list_datasets() -> list[dict]:
     """Return all child dataset links from the STAC catalog."""
-    response = requests.get(f"{BASE_URL}/stac/catalog.json")
+    response = httpx.get(f"{BASE_URL}/stac/catalog.json")
     response.raise_for_status()
     catalog = response.json()
     return [link for link in catalog["links"] if link["rel"] == "child"]
@@ -20,7 +20,7 @@ def list_datasets() -> list[dict]:
 
 def open_dataset(dataset_id: str) -> xr.Dataset:
     """Open a published dataset via its STAC collection asset."""
-    response = requests.get(f"{BASE_URL}/stac/collections/{dataset_id}")
+    response = httpx.get(f"{BASE_URL}/stac/collections/{dataset_id}")
     response.raise_for_status()
     collection = response.json()
     asset = collection["assets"]["zarr"]
