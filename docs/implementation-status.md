@@ -1,13 +1,5 @@
 # Implementation Status
 
-## Completed (merged to main)
-
-| Feature | PR |
-| ------- | -- |
-| Dataset ingestion and sync engine | #51 |
-| STAC catalog for published GeoZarr datasets | #54 |
-| ERA5-Land switched to DestinE downloaders (dhis2eo v1.2.0) | #55 |
-
 ## Current API surface
 
 The main branch now centers on one narrow vertical slice:

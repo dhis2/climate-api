@@ -54,7 +54,7 @@ ds = xr.open_zarr(
 print(ds)
 ```
 
-Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
+Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
 
 Select the first time step:
 
@@ -86,12 +86,12 @@ Dataset IDs follow the pattern `{source_dataset_id}_{extent_id}`, for example `c
 
 Available datasets in the built-in catalogue:
 
-| Dataset ID prefix              | Variable | Period | Source          |
-| ------------------------------ | -------- | ------ | --------------- |
-| `chirps3_precipitation_daily`  | `precip` | Daily  | CHIRPS v3       |
-| `era5land_temperature_hourly`  | `t2m`    | Hourly | ERA5-Land       |
-| `era5land_precipitation_hourly`| `tp`     | Hourly | ERA5-Land       |
-| `worldpop_population_yearly`   | `pop_total` | Yearly | WorldPop     |
+| Dataset ID prefix               | Variable    | Period | Source    |
+| ------------------------------- | ----------- | ------ | --------- |
+| `chirps3_precipitation_daily`   | `precip`    | Daily  | CHIRPS v3 |
+| `era5land_temperature_hourly`   | `t2m`       | Hourly | ERA5-Land |
+| `era5land_precipitation_hourly` | `tp`        | Hourly | ERA5-Land |
+| `worldpop_population_yearly`    | `pop_total` | Yearly | WorldPop  |
 
 ## What's next
 

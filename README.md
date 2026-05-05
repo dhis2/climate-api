@@ -23,7 +23,7 @@ Copy `.env.example` to `.env` and adjust values as needed. Environment variables
 Start the app:
 
 ```
-uv run python -m uvicorn climate_api.main:app --reload
+uv run uvicorn climate_api.main:app --reload
 ```
 
 ### Using pip
@@ -34,7 +34,7 @@ If you cannot use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m uvicorn climate_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
@@ -43,7 +43,7 @@ python -m uvicorn climate_api.main:app --reload
 conda create -n dhis2-climate-api python=3.13
 conda activate dhis2-climate-api
 pip install -e .
-python -m uvicorn climate_api.main:app --reload
+uvicorn climate_api.main:app --reload
 ```
 
 ## Development
