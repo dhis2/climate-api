@@ -20,6 +20,11 @@ from climate_api.ingestions.schemas import (
 from climate_api.stac import services as stac_services
 
 
+@pytest.fixture(autouse=True)
+def _clear_xstac_collection_cache() -> None:
+    stac_services._clear_xstac_collection_cache()
+
+
 def _artifact(
     *,
     artifact_id: str,
@@ -428,6 +433,52 @@ def test_build_collection_with_xstac_normalizes_pystac_collection(
     assert isinstance(payload, dict)
     assert payload["type"] == "Collection"
     assert payload["id"] == "chirps3_precipitation_daily_sle"
+
+
+def test_collection_reuses_cached_xstac_payload(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DummyDataset:
+        def close(self) -> None:
+            pass
+
+    open_count = 0
+
+    def fake_open(_: str) -> DummyDataset:
+        nonlocal open_count
+        open_count += 1
+        return DummyDataset()
+
+    def fake_xarray_to_stac(*args: object, **kwargs: object) -> pystac.Collection:
+        template = kwargs["template"] if "template" in kwargs else args[1]
+        assert isinstance(template, pystac.Collection)
+        template.extra_fields["cube:dimensions"] = {
+            "time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}
+        }
+        template.extra_fields["cube:variables"] = {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}}
+        return template
+
+    monkeypatch.setattr(
+        ingestion_services,
+        "list_artifacts",
+        lambda: SimpleNamespace(items=[_artifact(artifact_id="a1")]),
+    )
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services, "open_zarr_dataset", fake_open)
+    monkeypatch.setattr(stac_services, "get_lon_lat_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
+    monkeypatch.setattr(stac_services, "xarray_to_stac", fake_xarray_to_stac)
+    monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
+
+    first_response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    second_response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json() == second_response.json()
+    assert open_count == 1
 
 
 def test_zarr_consolidated_flag_detects_v3_and_v2_markers(tmp_path: Path) -> None:
