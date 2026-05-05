@@ -18,13 +18,7 @@ Install dependencies (requires [uv](https://docs.astral.sh/uv/)):
 uv sync
 ```
 
-Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime.
-
-Key environment variables:
-
-- `DHIS2_BASE_URL` — DHIS2 API base URL (defaults to play server in `.env.example`)
-- `DHIS2_USERNAME` — DHIS2 username
-- `DHIS2_PASSWORD` — DHIS2 password
+Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime. See `.env.example` for the full list of available options.
 
 Start the app:
 
@@ -75,31 +69,39 @@ Once running, the API is available at:
 | ----------------------------------------- | ------------------------------------------ |
 | `http://localhost:8000/`                  | Welcome / health check                     |
 | `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
+| `http://localhost:8000/extents`           | Configured spatial extents                 |
+| `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
 | `http://localhost:8000/stac/catalog.json` | STAC catalog for published GeoZarr data    |
-| `http://localhost:8000/ogcapi`            | OGC API root                               |
 | `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset      |
+| `http://localhost:8000/ogcapi`            | OGC API root                               |
 
 ## STAC
 
-Published Zarr-backed managed datasets are exposed under `/stac` as one STAC Collection per dataset.
+Published GeoZarr datasets are discoverable under `/stac` as one STAC Collection per dataset. Each collection includes a `zarr` asset with direct xarray-compatible access metadata derived from the live Zarr store.
 
-- `/stac/catalog.json` is the entrypoint catalog
-- `/stac/collections/{dataset_id}` exposes a Collection with a direct `/zarr/{dataset_id}` asset href
-- `xstac` derives Datacube metadata from the real Zarr-backed dataset
-- `pygeoapi` remains the OGC query layer under `/ogcapi`
-
-Minimal example:
+Discover available datasets and open one with xarray:
 
 ```python
 import requests
 import xarray as xr
 
+# List all published datasets
+catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
+for link in catalog["links"]:
+    if link["rel"] == "child":
+        print(link["title"], "—", link["href"])
+
+# Open a dataset directly via its STAC collection
 collection = requests.get(
     "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle"
 ).json()
 
 asset = collection["assets"]["zarr"]
-ds = xr.open_zarr(asset["href"], consolidated=asset["xarray:open_kwargs"]["consolidated"])
+ds = xr.open_zarr(
+    asset["href"],
+    consolidated=asset["xarray:open_kwargs"]["consolidated"],
+)
+print(ds)
 ```
 
 ## pygeoapi
