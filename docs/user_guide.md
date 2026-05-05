@@ -115,7 +115,7 @@ Available datasets in the built-in catalogue:
 | `chirps3_precipitation_daily`  | `precip` | Daily  | CHIRPS v3       |
 | `era5land_temperature_hourly`  | `t2m`    | Hourly | ERA5-Land       |
 | `era5land_precipitation_hourly`| `tp`     | Hourly | ERA5-Land       |
-| `worldpop_population_yearly`   | `pop`    | Yearly | WorldPop        |
+| `worldpop_population_yearly`   | `pop_total` | Yearly | WorldPop     |
 
 ## What's next
 
