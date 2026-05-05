@@ -88,6 +88,8 @@ Expected response:
 
 CHIRPS3 (daily precipitation) requires no API key and is a good first dataset to verify the setup.
 
+Replace `rwa` with the `id` you set in Step 2.
+
 ```bash
 curl -s -X POST http://127.0.0.1:8000/ingestions \
   -H "Content-Type: application/json" \
@@ -101,7 +103,7 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
   }' | jq
 ```
 
-A successful response returns `"status": "completed"` and a `dataset` object with `dataset_id` `chirps3_precipitation_daily_rwa`.
+A successful response returns `"status": "completed"` and a `dataset` object with `dataset_id` matching `chirps3_precipitation_daily_{extent_id}` (e.g. `chirps3_precipitation_daily_rwa`).
 
 ## Step 7: Access the data
 
