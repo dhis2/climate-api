@@ -166,8 +166,8 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
   -H "Content-Type: application/json" \
   -d '{
     "dataset_id": "era5land_temperature_hourly",
-    "start": "2024-01-01",
-    "end": "2024-01-31",
+    "start": "2024-01-01T00",
+    "end": "2024-01-31T23",
     "extent_id": "rwa",
     "prefer_zarr": true,
     "publish": true
