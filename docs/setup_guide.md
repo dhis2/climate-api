@@ -173,7 +173,7 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
   }' | jq
 ```
 
-ERA5-Land data has approximately 15 days of lag — data for a given month becomes available around the 15th of the following month.
+ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner will not request data from the last 120 hours. This can be adjusted via `lag_hours` in `data/datasets/era5_land.yaml`.
 
 ---
 
