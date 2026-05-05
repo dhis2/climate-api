@@ -113,16 +113,16 @@ Browse the STAC catalog to confirm the dataset is published:
 curl -s http://127.0.0.1:8000/stac/catalog.json | jq
 ```
 
-Open the dataset with xarray:
+Open the dataset with xarray — the catalog discovery picks up whichever extent you configured:
 
 ```python
 import requests
 import xarray as xr
 
-collection = requests.get(
-    "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_rwa"
-).json()
+catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
+collection_url = next(l["href"] for l in catalog["links"] if l["rel"] == "child")
 
+collection = requests.get(collection_url).json()
 asset = collection["assets"]["zarr"]
 ds = xr.open_zarr(
     asset["href"],
