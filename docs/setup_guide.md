@@ -183,7 +183,7 @@ ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner w
 
 ## Keeping datasets up to date
 
-Use the sync endpoint to advance an existing dataset to the latest available data:
+Use the sync endpoint to advance an existing dataset to the latest available data. Replace `rwa` with your extent `id` from Step 2:
 
 ```bash
 # Check what would be downloaded without executing
