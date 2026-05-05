@@ -414,7 +414,9 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
         result.close()
 
 
-def test_build_dataset_zarr_pyramid_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Pyramid zarr store uses canonical longitude/latitude/time coordinate names."""
     # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
     nc_files = _write_nc_files(tmp_path)
