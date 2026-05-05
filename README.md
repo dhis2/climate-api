@@ -82,24 +82,28 @@ Published GeoZarr datasets are discoverable under `/stac` as one STAC Collection
 
 Discover available datasets and open one with xarray:
 
+The catalog is populated once at least one dataset has been ingested and published (see [docs/setup_guide.md](docs/setup_guide.md)).
+
 ```python
 import requests
 import xarray as xr
 
-# List all published datasets
 catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
 children = [l for l in catalog["links"] if l["rel"] == "child"]
-for link in children:
-    print(link["title"], "—", link["href"])
 
-# Open the first available dataset
-collection = requests.get(children[0]["href"]).json()
-asset = collection["assets"]["zarr"]
-ds = xr.open_zarr(
-    asset["href"],
-    consolidated=asset["xarray:open_kwargs"]["consolidated"],
-)
-print(ds)
+if not children:
+    print("No published datasets found. Run an ingestion first.")
+else:
+    for link in children:
+        print(link["title"], "—", link["href"])
+
+    collection = requests.get(children[0]["href"]).json()
+    asset = collection["assets"]["zarr"]
+    ds = xr.open_zarr(
+        asset["href"],
+        consolidated=asset["xarray:open_kwargs"]["consolidated"],
+    )
+    print(ds)
 ```
 
 ## pygeoapi
