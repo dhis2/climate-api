@@ -16,7 +16,7 @@
   convert_units: degC
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
-  source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
+  source_url: https://earthdatahub.destine.eu/stac/v1/collections/reanalysis-era5-land-hourly
 
 - id: era5land_precipitation_hourly
   name: Total precipitation (ERA5-Land)
@@ -37,4 +37,4 @@
   convert_units: mm
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
-  source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
+  source_url: https://earthdatahub.destine.eu/stac/v1/collections/reanalysis-era5-land-hourly
