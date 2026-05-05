@@ -67,7 +67,8 @@ Once running, the API is available at:
 
 | Endpoint                                  | Description                                |
 | ----------------------------------------- | ------------------------------------------ |
-| `http://localhost:8000/`                  | Welcome / health check                     |
+| `http://localhost:8000/`                  | Navigation document                        |
+| `http://localhost:8000/health`            | Health check                               |
 | `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
 | `http://localhost:8000/extents`           | Configured spatial extents                 |
 | `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
