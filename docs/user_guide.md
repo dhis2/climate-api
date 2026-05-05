@@ -79,11 +79,13 @@ snapshot = ds.isel({time_dim: 0})
 print(snapshot)
 ```
 
-Select a spatial point closest to a location (e.g. Freetown, Sierra Leone):
+Select a spatial point by sampling the centre of the domain:
 
 ```python
 variable = list(ds.data_vars)[0]  # precip, t2m, tp, or pop_total depending on the dataset
-point = ds.sel({y_dim: 8.48, x_dim: -13.23}, method="nearest")
+centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
+centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
+point = ds.sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
 print(point[variable].values)
 ```
 
