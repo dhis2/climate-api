@@ -28,8 +28,7 @@ def main() -> None:
     ds = xr.open_zarr(zarr_url, **open_kwargs)
     print(ds)
 
-    # Coordinate names vary by dataset: ERA5-Land uses valid_time and lon/lat;
-    # CHIRPS and WorldPop use time and x/y (or longitude/latitude)
+    # Coordinate names are preserved from the source and vary by dataset.
     time_dim = "valid_time" if "valid_time" in ds.coords else "time"
     coords = set(ds.coords)
     if "lat" in coords:
