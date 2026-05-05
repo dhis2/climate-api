@@ -7,6 +7,7 @@ This guide walks through configuring a new Climate API instance for a specific c
 - Python 3.13 or higher
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Git
+- Make (`make` — available by default on macOS and most Linux distributions; on Windows use [WSL](https://learn.microsoft.com/en-us/windows/wsl/) or run the commands in the Makefile directly)
 
 ## Step 1: Clone and install
 
