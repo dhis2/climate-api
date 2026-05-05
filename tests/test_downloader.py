@@ -377,3 +377,39 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
         assert result.sizes["time"] == 2
     finally:
         result.close()
+
+
+def test_build_dataset_zarr_pyramid_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pyramid zarr store uses canonical longitude/latitude/time coordinate names."""
+    # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
+    nc_files = _write_nc_files(tmp_path)
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+
+    received: list[xr.Dataset] = []
+
+    def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
+        received.append(ds)
+        return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
+
+    monkeypatch.setattr(downloader, "create_pyramid", fake_create_pyramid)
+
+    downloader.build_dataset_zarr(_PYRAMID_DATASET)
+
+    # The dataset handed to create_pyramid must already carry canonical names.
+    assert len(received) == 1
+    ds_in = received[0]
+    assert "longitude" in ds_in.coords
+    assert "latitude" in ds_in.coords
+    assert "time" in ds_in.coords
+    assert "lon" not in ds_in.coords
+    assert "lat" not in ds_in.coords
+
+    # The written store must also expose canonical names when opened.
+    result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
+    try:
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "time" in result.coords
+    finally:
+        result.close()
