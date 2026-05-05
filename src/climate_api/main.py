@@ -11,6 +11,7 @@ import climate_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from climate_api.data_registry import routes as dataset_template_routes
 from climate_api.extents import routes as extent_routes
 from climate_api.ingestions import routes as ingestion_routes
+from climate_api.processing import routes as processing_routes
 from climate_api.pygeoapi_app import mount_pygeoapi
 from climate_api.stac import routes as stac_routes
 from climate_api.system import routes as system_routes
@@ -79,6 +80,7 @@ app.include_router(system_routes.router, tags=["System"])
 app.include_router(stac_routes.router, prefix="/stac", tags=["STAC"])
 app.include_router(extent_routes.router, prefix="/extents", tags=["Extents"])
 app.include_router(dataset_template_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
+app.include_router(processing_routes.router, prefix="/processes", tags=["Processes"])
 app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
 app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
 app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
