@@ -23,11 +23,16 @@ def main() -> None:
     ds = xr.open_zarr(zarr_url, **open_kwargs)
     print(ds)
 
-    # Coordinate names vary by dataset: ERA5-Land uses valid_time and x/y;
-    # CHIRPS and WorldPop use time and x/y (or latitude/longitude)
+    # Coordinate names vary by dataset: ERA5-Land uses valid_time and lon/lat;
+    # CHIRPS and WorldPop use time and x/y (or longitude/latitude)
     time_dim = "valid_time" if "valid_time" in ds.coords else "time"
-    y_dim = "latitude" if "latitude" in ds.coords else "y"
-    x_dim = "longitude" if "longitude" in ds.coords else "x"
+    coords = set(ds.coords)
+    if "lat" in coords:
+        y_dim, x_dim = "lat", "lon"
+    elif "latitude" in coords:
+        y_dim, x_dim = "latitude", "longitude"
+    else:
+        y_dim, x_dim = "y", "x"
 
     # Dimensions and coordinates
     print(f"\nDimensions:  {dict(ds.sizes)}")

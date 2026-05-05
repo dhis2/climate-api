@@ -51,9 +51,14 @@ def main() -> None:
     print(f"\nTime range: {ds[time_dim].values[0]}  →  {ds[time_dim].values[-1]}")
     print(f"Time steps: {ds.sizes[time_dim]}")
 
-    # Print spatial coverage (coordinates are named x/longitude and y/latitude)
-    y_dim = "latitude" if "latitude" in ds.coords else "y"
-    x_dim = "longitude" if "longitude" in ds.coords else "x"
+    # Spatial coordinate names vary by dataset: lon/lat, longitude/latitude, or x/y
+    coords = set(ds.coords)
+    if "lat" in coords:
+        y_dim, x_dim = "lat", "lon"
+    elif "latitude" in coords:
+        y_dim, x_dim = "latitude", "longitude"
+    else:
+        y_dim, x_dim = "y", "x"
     print(f"Latitude:  {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
     print(f"Longitude: {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
 
