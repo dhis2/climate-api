@@ -52,9 +52,9 @@ def main() -> None:
     print(f"\n{variable} at domain centre ({centre_lat:.2f}, {centre_lon:.2f}):")
     print(point.to_dataframe()[[variable]].head(10))
 
-    # Spatial mean over the full domain — a simple time series
-    spatial_mean = ds[variable].mean(dim=["latitude", "longitude"])
-    print(f"\nSpatial mean {variable} time series:")
+    # Spatial mean over the full domain — first 10 time steps
+    spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["latitude", "longitude"])
+    print(f"\nSpatial mean {variable} time series (first 10 steps):")
     print(spatial_mean.to_dataframe()[[variable]])
 
 
