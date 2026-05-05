@@ -87,15 +87,12 @@ import xarray as xr
 
 # List all published datasets
 catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
-for link in catalog["links"]:
-    if link["rel"] == "child":
-        print(link["title"], "—", link["href"])
+children = [l for l in catalog["links"] if l["rel"] == "child"]
+for link in children:
+    print(link["title"], "—", link["href"])
 
-# Open a dataset directly via its STAC collection
-collection = requests.get(
-    "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle"
-).json()
-
+# Open the first available dataset
+collection = requests.get(children[0]["href"]).json()
 asset = collection["assets"]["zarr"]
 ds = xr.open_zarr(
     asset["href"],
