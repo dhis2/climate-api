@@ -1,7 +1,7 @@
 """Open a published GeoZarr dataset directly and demonstrate spatial and temporal subsetting.
 
-Requires a running Climate API instance and a published CHIRPS3 dataset.
-Adjust BASE_URL and DATASET_ID for your instance.
+Requires a running Climate API instance with at least one published dataset.
+Adjust BASE_URL if the API is not running on the default local address.
 """
 
 import requests
