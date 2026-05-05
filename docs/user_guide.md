@@ -12,21 +12,11 @@ The STAC catalog is the starting point for data discovery. It lists all publishe
 curl -s http://127.0.0.1:8000/stac/catalog.json | jq
 ```
 
-Each entry in `links` with `"rel": "child"` points to one dataset collection:
-
-```json
-{
-  "rel": "child",
-  "href": "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle",
-  "title": "Total precipitation (CHIRPS3)",
-  "type": "application/json"
-}
-```
-
-Fetch a collection to see its full metadata, including spatial and temporal extent and the Zarr asset:
+Each entry in `links` with `"rel": "child"` points to one dataset collection. Use the `href` from the catalog to fetch it:
 
 ```bash
-curl -s http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle | jq
+# Replace the URL with the href of any child link from the catalog above
+curl -s http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_rwa | jq
 ```
 
 The `assets.zarr` field contains everything needed to open the dataset:
@@ -35,8 +25,8 @@ The `assets.zarr` field contains everything needed to open the dataset:
 {
   "assets": {
     "zarr": {
-      "href": "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle",
-      "xarray:open_kwargs": { "consolidated": false }
+      "href": "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_rwa",
+      "xarray:open_kwargs": { "consolidated": true }
     }
   }
 }
@@ -44,15 +34,17 @@ The `assets.zarr` field contains everything needed to open the dataset:
 
 ## Opening a dataset with xarray
 
-Use the STAC collection to open a dataset directly with xarray — no knowledge of internal paths or formats required:
+Use the `href` of any child link from the catalog to open a dataset with xarray:
 
 ```python
 import requests
 import xarray as xr
 
-collection = requests.get(
-    "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle"
-).json()
+# Get the first published dataset from the catalog
+catalog = requests.get("http://127.0.0.1:8000/stac/catalog.json").json()
+collection_url = next(l["href"] for l in catalog["links"] if l["rel"] == "child")
+
+collection = requests.get(collection_url).json()
 
 asset = collection["assets"]["zarr"]
 ds = xr.open_zarr(
