@@ -1,19 +1,16 @@
-# Implementation Status: Dataset Publication Slice
+# Implementation Status
 
-## Purpose
+## Completed (merged to main)
 
-This note captures the current implementation state of the branch after the API consolidation around ingestions, datasets, extents, raw Zarr access, STAC discovery, and pygeoapi publication.
+| Feature | PR |
+| ------- | -- |
+| Dataset ingestion and sync engine | #51 |
+| STAC catalog for published GeoZarr datasets | #54 |
+| ERA5-Land switched to DestinE downloaders (dhis2eo v1.2.0) | #55 |
 
-It is intended to answer:
+## Current API surface
 
-1. what the branch now exposes
-2. what is intentionally internal
-3. how the current pieces fit together
-4. what remains to be refined
-
-## Branch Direction
-
-The branch now centers on one narrow vertical slice:
+The main branch now centers on one narrow vertical slice:
 
 1. define dataset templates in the Climate API registry
 2. define configured extents for the Climate API instance
