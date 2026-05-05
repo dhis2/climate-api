@@ -73,7 +73,7 @@ Once running, the API is available at:
 | `http://localhost:8000/extents`           | Configured spatial extents                 |
 | `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
 | `http://localhost:8000/stac/catalog.json` | STAC catalog for published GeoZarr data    |
-| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset      |
+| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a managed dataset        |
 | `http://localhost:8000/ogcapi`            | OGC API root                               |
 
 ## STAC
