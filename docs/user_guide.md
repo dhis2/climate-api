@@ -73,10 +73,10 @@ point = ds.sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
 print(point[variable].values)
 ```
 
-Compute the spatial mean over the full domain for each time step:
+Compute the spatial mean over the first 10 time steps (slicing first avoids reading the full dataset over HTTP):
 
 ```python
-spatial_mean = ds[variable].mean(dim=["latitude", "longitude"])
+spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["latitude", "longitude"])
 print(spatial_mean.to_dataframe())
 ```
 
