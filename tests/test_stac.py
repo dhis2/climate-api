@@ -2,8 +2,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
+import pandas as pd
 import pystac
 import pytest
+import xarray as xr
 from fastapi.testclient import TestClient
 
 from climate_api.ingestions import services as ingestion_services
@@ -577,3 +580,39 @@ def test_collection_returns_503_when_zarr_store_cannot_be_opened(
 
     assert response.status_code == 503
     assert "temporarily unavailable" in response.json()["detail"]
+
+
+def test_build_collection_with_xstac_reads_normalised_zarr_coordinates(tmp_path: Path) -> None:
+    """STAC collection metadata is derived correctly from a normalised longitude/latitude/time store."""
+    zarr_path = tmp_path / "chirps3_precipitation_daily_sle.zarr"
+    ds = xr.Dataset(
+        {"precip": (["time", "latitude", "longitude"], np.ones((5, 3, 3), dtype="float32"))},
+        coords={
+            "time": pd.date_range("2026-01-01", periods=5, freq="D"),
+            "latitude": [4.0, 3.0, 2.0],
+            "longitude": [1.0, 2.0, 3.0],
+        },
+    )
+    ds.to_zarr(str(zarr_path), mode="w", consolidated=True)
+
+    artifact = _artifact(artifact_id="a1", path=str(zarr_path))
+
+    template = pystac.Collection(
+        id="chirps3_precipitation_daily_sle",
+        description="test",
+        extent=pystac.Extent(
+            spatial=pystac.SpatialExtent([[1.0, 2.0, 3.0, 4.0]]),
+            temporal=pystac.TemporalExtent([[datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 5, tzinfo=UTC)]]),
+        ),
+    )
+
+    payload = stac_services._build_collection_with_xstac(artifact=artifact, template=template)
+
+    assert payload["type"] == "Collection"
+    cube_dims = payload["cube:dimensions"]
+    assert "longitude" in cube_dims, f"expected 'longitude' in cube:dimensions, got {list(cube_dims)}"
+    assert "latitude" in cube_dims, f"expected 'latitude' in cube:dimensions, got {list(cube_dims)}"
+    assert "time" in cube_dims, f"expected 'time' in cube:dimensions, got {list(cube_dims)}"
+    assert cube_dims["longitude"]["axis"] == "x"
+    assert cube_dims["latitude"]["axis"] == "y"
+    assert cube_dims["time"]["type"] == "temporal"
