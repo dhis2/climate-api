@@ -48,16 +48,18 @@ def main() -> None:
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
     print(f"Time steps: {ds.sizes['time']}")
 
-    # Print spatial coverage
-    print(f"Latitude:  {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
-    print(f"Longitude: {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
+    # Print spatial coverage (coordinates are named x/longitude and y/latitude)
+    y_dim = "latitude" if "latitude" in ds.coords else "y"
+    x_dim = "longitude" if "longitude" in ds.coords else "x"
+    print(f"Latitude:  {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
+    print(f"Longitude: {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
 
     # Print a sample value at the spatial centre of the domain, first time step
     variable = list(ds.data_vars)[0]
-    centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
-    centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+    centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
+    centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
     sample = ds[variable].isel(time=0).sel(
-        latitude=centre_lat, longitude=centre_lon, method="nearest"
+        {y_dim: centre_y, x_dim: centre_x}, method="nearest"
     )
     print(f"\n{variable} at domain centre, t=0: {float(sample.values):.4f}")
 

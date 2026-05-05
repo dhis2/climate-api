@@ -62,7 +62,7 @@ ds = xr.open_zarr(
 print(ds)
 ```
 
-The dataset has three dimensions — `time`, `latitude`, and `longitude` — and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
+The dataset has three dimensions — `time`, `y` (latitude), and `x` (longitude) — and one data variable matching the climate variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
 
 Select a time slice:
 
@@ -74,14 +74,14 @@ print(daily)
 Select a spatial point closest to a location (e.g. Freetown, Sierra Leone):
 
 ```python
-point = ds.sel(latitude=8.48, longitude=-13.23, method="nearest")
+point = ds.sel(y=8.48, x=-13.23, method="nearest")
 print(point["precip"].values)
 ```
 
 Compute the spatial mean over the full domain for each time step:
 
 ```python
-spatial_mean = ds["precip"].mean(dim=["latitude", "longitude"])
+spatial_mean = ds["precip"].mean(dim=["y", "x"])
 print(spatial_mean.to_dataframe())
 ```
 

@@ -5,6 +5,7 @@ Requires a running Climate API instance and a published CHIRPS3 dataset.
 Adjust BASE_URL and DATASET_ID for your instance.
 """
 
+import requests
 import xarray as xr
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -12,17 +13,25 @@ DATASET_ID = "chirps3_precipitation_daily_sle"
 
 
 def main() -> None:
-    zarr_url = f"{BASE_URL}/zarr/{DATASET_ID}"
-    print(f"Opening: {zarr_url}\n")
+    # Fetch open kwargs from the STAC collection to get the correct consolidated flag
+    collection = requests.get(f"{BASE_URL}/stac/collections/{DATASET_ID}").json()
+    asset = collection["assets"]["zarr"]
+    zarr_url = asset["href"]
+    open_kwargs = asset["xarray:open_kwargs"]
 
-    ds = xr.open_zarr(zarr_url, consolidated=False)
+    print(f"Opening: {zarr_url}\n")
+    ds = xr.open_zarr(zarr_url, **open_kwargs)
     print(ds)
+
+    # Coordinates are named x/longitude and y/latitude depending on the source dataset
+    y_dim = "latitude" if "latitude" in ds.coords else "y"
+    x_dim = "longitude" if "longitude" in ds.coords else "x"
 
     # Dimensions and coordinates
     print(f"\nDimensions:  {dict(ds.sizes)}")
     print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
-    print(f"Latitude:    {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
-    print(f"Longitude:   {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
+    print(f"Latitude:    {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
+    print(f"Longitude:   {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
 
     variable = list(ds.data_vars)[0]
 
@@ -34,12 +43,12 @@ def main() -> None:
 
     # Select a point (Freetown, Sierra Leone)
     freetown_lat, freetown_lon = 8.48, -13.23
-    point = ds[variable].sel(latitude=freetown_lat, longitude=freetown_lon, method="nearest")
+    point = ds[variable].sel({y_dim: freetown_lat, x_dim: freetown_lon}, method="nearest")
     print(f"\n{variable} at Freetown ({freetown_lat}N, {freetown_lon}E):")
     print(point.to_dataframe()[[variable]].head(10))
 
     # Spatial mean over the full domain — a simple time series
-    spatial_mean = ds[variable].mean(dim=["latitude", "longitude"])
+    spatial_mean = ds[variable].mean(dim=[y_dim, x_dim])
     print(f"\nSpatial mean {variable} time series:")
     print(spatial_mean.to_dataframe()[[variable]])
 
