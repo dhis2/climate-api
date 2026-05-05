@@ -8,6 +8,7 @@ This guide walks through configuring a new Climate API instance for a specific c
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Git
 - Make (`make` — available by default on macOS and most Linux distributions; on Windows use [WSL](https://learn.microsoft.com/en-us/windows/wsl/) or run the commands in the Makefile directly)
+- [jq](https://jqlang.org/download/) for pretty-printing API responses in the curl examples (optional — omit `| jq` if not installed)
 
 ## Step 1: Clone and install
 
