@@ -4,7 +4,7 @@ This guide walks through configuring a new Climate API instance for a specific c
 
 ## Prerequisites
 
-- Python 3.11 or higher
+- Python 3.13 or higher
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Git
 
