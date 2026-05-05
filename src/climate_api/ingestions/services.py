@@ -558,6 +558,8 @@ def _default_request_end(period_type: str) -> str:
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "daily":
         return utc_today().isoformat()
+    if period_type == "weekly":
+        return datetime_to_period_string(utc_now(), period_type)
     if period_type == "monthly":
         today = utc_today()
         return f"{today.year:04d}-{today.month:02d}"

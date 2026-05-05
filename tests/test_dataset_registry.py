@@ -63,6 +63,51 @@ def test_dataset_registry_accepts_supported_sync_kind(
     assert datasets.list_datasets()[0]["id"] == "valid_temporal"
 
 
+def test_dataset_registry_accepts_derived_sync_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "valid_derived.yaml"
+    registry_file.write_text(
+        """
+- id: derived_weekly
+  name: Derived weekly
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+  resample:
+    source_dataset_id: source_daily
+    method: sum
+    week_start: monday
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    assert datasets.list_datasets()[0]["sync_kind"] == "derived"
+
+
+def test_dataset_registry_rejects_derived_sync_kind_without_resample(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "derived_missing_resample.yaml"
+    registry_file.write_text(
+        """
+- id: derived_missing_resample
+  name: Derived missing resample
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="must define resample when sync_kind is derived"):
+        datasets.list_datasets()
+
+
 def test_dataset_registry_rejects_unsupported_sync_execution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -174,3 +219,76 @@ def test_dataset_registry_accepts_sync_availability_function(
     assert datasets.list_datasets()[0]["sync_availability"]["latest_available_function"].endswith(
         "lagged_latest_available"
     )
+
+
+def test_dataset_registry_rejects_invalid_resample_method(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_resample_method.yaml"
+    registry_file.write_text(
+        """
+- id: derived_invalid_method
+  name: Derived invalid method
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+  resample:
+    source_dataset_id: source_daily
+    method: median
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="unsupported resample.method 'median'"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_rejects_resample_for_non_derived_sync_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "temporal_with_resample.yaml"
+    registry_file.write_text(
+        """
+- id: temporal_with_resample
+  name: Temporal with resample
+  variable: value
+  period_type: weekly
+  sync_kind: temporal
+  resample:
+    source_dataset_id: source_daily
+    method: sum
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="may only define resample when sync_kind is derived"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_rejects_week_start_for_non_weekly_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_resample_week_start.yaml"
+    registry_file.write_text(
+        """
+- id: derived_monthly_with_week_start
+  name: Derived monthly with week start
+  variable: value
+  period_type: monthly
+  sync_kind: derived
+  resample:
+    source_dataset_id: source_daily
+    method: sum
+    week_start: monday
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="may only define resample.week_start when period_type is weekly"):
+        datasets.list_datasets()

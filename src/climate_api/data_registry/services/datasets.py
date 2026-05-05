@@ -10,8 +10,10 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 CONFIGS_DIR = SCRIPT_DIR.parent.parent.parent.parent / "data" / "datasets"
-SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
+SUPPORTED_SYNC_KINDS = {"temporal", "release", "static", "derived"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
+SUPPORTED_RESAMPLE_METHODS = {"mean", "sum", "min", "max", "first", "last"}
+SUPPORTED_WEEK_STARTS = {"monday", "sunday"}
 
 
 def list_datasets() -> list[dict[str, Any]]:
@@ -71,6 +73,20 @@ def _validate_dataset_template(dataset: object, *, file_path: Path) -> None:
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
+    resample = dataset.get("resample")
+    if sync_kind == "derived":
+        if resample is None:
+            raise ValueError(
+                f"Dataset template '{dataset_id}' in {file_path.name} must define resample when sync_kind is derived"
+            )
+    elif resample is not None:
+        raise ValueError(
+            f"Dataset template '{dataset_id}' in {file_path.name} may only define resample when sync_kind is derived"
+        )
+
+    if resample is not None:
+        _validate_resample(resample, dataset=dataset, dataset_id=dataset_id, file_path=file_path)
+
     sync_availability = dataset.get("sync_availability")
     if sync_availability is not None:
         _validate_sync_availability(sync_availability, dataset_id=dataset_id, file_path=file_path)
@@ -89,3 +105,46 @@ def _validate_sync_availability(sync_availability: object, *, dataset_id: str, f
             f"Dataset template '{dataset_id}' in {file_path.name} has invalid "
             "sync_availability.latest_available_function"
         )
+
+
+def _validate_resample(
+    resample: object,
+    *,
+    dataset: dict[str, Any],
+    dataset_id: str,
+    file_path: Path,
+) -> None:
+    """Validate optional derived resampling metadata."""
+    if not isinstance(resample, dict):
+        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid resample")
+
+    source_dataset_id = resample.get("source_dataset_id")
+    if not isinstance(source_dataset_id, str) or not source_dataset_id:
+        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid resample.source_dataset_id")
+
+    method = resample.get("method")
+    if not isinstance(method, str) or not method:
+        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid resample.method")
+    if method not in SUPPORTED_RESAMPLE_METHODS:
+        supported = ", ".join(sorted(SUPPORTED_RESAMPLE_METHODS))
+        raise ValueError(
+            f"Dataset template '{dataset_id}' in {file_path.name} has unsupported resample.method "
+            f"'{method}'. Supported values: {supported}"
+        )
+
+    week_start = resample.get("week_start")
+    period_type = dataset.get("period_type")
+    if week_start is not None:
+        if period_type != "weekly":
+            raise ValueError(
+                f"Dataset template '{dataset_id}' in {file_path.name} may only define "
+                "resample.week_start when period_type is weekly"
+            )
+        if not isinstance(week_start, str) or not week_start:
+            raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid resample.week_start")
+        if week_start not in SUPPORTED_WEEK_STARTS:
+            supported = ", ".join(sorted(SUPPORTED_WEEK_STARTS))
+            raise ValueError(
+                f"Dataset template '{dataset_id}' in {file_path.name} has unsupported resample.week_start "
+                f"'{week_start}'. Supported values: {supported}"
+            )
