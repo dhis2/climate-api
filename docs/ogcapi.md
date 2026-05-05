@@ -235,7 +235,7 @@ Note: `chirps3-dhis2-pipeline` has its own contract (`start_date`, `end_date`, f
 
 ### ERA5-Land (`era5-land-download`)
 
-Downloads ERA5-Land hourly climate data via the CDS API.
+Downloads ERA5-Land hourly climate data via the [DestinE Earth Data Hub](https://earthdatahub.destine.eu). Authentication uses `~/.netrc` — see [setup_guide.md](setup_guide.md#era5-land-via-destine-earth-data-hub) for registration and setup.
 
 Additional inputs:
 
