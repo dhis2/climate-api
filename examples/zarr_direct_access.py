@@ -23,21 +23,23 @@ def main() -> None:
     ds = xr.open_zarr(zarr_url, **open_kwargs)
     print(ds)
 
-    # Coordinates are named x/longitude and y/latitude depending on the source dataset
+    # Coordinate names vary by dataset: ERA5-Land uses valid_time and x/y;
+    # CHIRPS and WorldPop use time and x/y (or latitude/longitude)
+    time_dim = "valid_time" if "valid_time" in ds.coords else "time"
     y_dim = "latitude" if "latitude" in ds.coords else "y"
     x_dim = "longitude" if "longitude" in ds.coords else "x"
 
     # Dimensions and coordinates
     print(f"\nDimensions:  {dict(ds.sizes)}")
-    print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
+    print(f"Time range:  {ds[time_dim].values[0]}  →  {ds[time_dim].values[-1]}")
     print(f"Latitude:    {float(ds[y_dim].min()):.4f}  →  {float(ds[y_dim].max()):.4f}")
     print(f"Longitude:   {float(ds[x_dim].min()):.4f}  →  {float(ds[x_dim].max()):.4f}")
 
     variable = list(ds.data_vars)[0]
 
     # Select a single time step
-    t0 = ds.time.values[0]
-    snapshot = ds[variable].sel(time=t0)
+    t0 = ds[time_dim].values[0]
+    snapshot = ds[variable].sel({time_dim: t0})
     print(f"\n{variable} snapshot at {t0}:")
     print(f"  shape: {snapshot.shape},  min: {float(snapshot.min()):.4f},  max: {float(snapshot.max()):.4f}")
 

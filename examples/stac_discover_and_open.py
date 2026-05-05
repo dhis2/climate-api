@@ -46,9 +46,10 @@ def main() -> None:
     ds = open_dataset(dataset_id)
     print(ds)
 
-    # Print temporal coverage
-    print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
-    print(f"Time steps: {ds.sizes['time']}")
+    # Print temporal coverage (ERA5-Land uses valid_time; CHIRPS/WorldPop use time)
+    time_dim = "valid_time" if "valid_time" in ds.coords else "time"
+    print(f"\nTime range: {ds[time_dim].values[0]}  →  {ds[time_dim].values[-1]}")
+    print(f"Time steps: {ds.sizes[time_dim]}")
 
     # Print spatial coverage (coordinates are named x/longitude and y/latitude)
     y_dim = "latitude" if "latitude" in ds.coords else "y"
@@ -60,7 +61,7 @@ def main() -> None:
     variable = list(ds.data_vars)[0]
     centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
     centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
-    sample = ds[variable].isel(time=0).sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
+    sample = ds[variable].isel({time_dim: 0}).sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
     print(f"\n{variable} at domain centre, t=0: {float(sample.values):.4f}")
 
 
