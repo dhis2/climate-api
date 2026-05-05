@@ -34,7 +34,7 @@ If you cannot use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
@@ -43,7 +43,7 @@ uvicorn climate_api.main:app --reload
 conda create -n dhis2-climate-api python=3.13
 conda activate dhis2-climate-api
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ## Development
