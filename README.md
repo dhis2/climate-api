@@ -23,7 +23,7 @@ Copy `.env.example` to `.env` and adjust values as needed. Environment variables
 Start the app:
 
 ```
-uv run uvicorn climate_api.main:app --reload
+uv run python -m uvicorn climate_api.main:app --reload
 ```
 
 ### Using pip
