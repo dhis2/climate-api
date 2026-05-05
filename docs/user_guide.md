@@ -72,11 +72,11 @@ else:
     y_dim, x_dim = "y", "x"
 ```
 
-Select a time slice:
+Select the first time step (works for daily, hourly, and yearly datasets):
 
 ```python
-daily = ds.sel({time_dim: "2024-01-15"})
-print(daily)
+snapshot = ds.isel({time_dim: 0})
+print(snapshot)
 ```
 
 Select a spatial point closest to a location (e.g. Freetown, Sierra Leone):
