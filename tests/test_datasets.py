@@ -19,6 +19,11 @@ from climate_api.ingestions.schemas import (
 from climate_api.publications.services import managed_dataset_id_for
 
 
+@pytest.fixture(autouse=True)
+def materialized_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(services, "_artifact_storage_exists", lambda _: True)
+
+
 def _artifact(
     *,
     artifact_id: str,
@@ -112,6 +117,28 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
     assert dataset.extent.temporal.end == "2026-01-11"
     assert dataset.publication.status == PublicationStatus.PUBLISHED
     assert any(link.href == f"/zarr/{dataset.dataset_id}" for link in dataset.links)
+    assert any(link.href == f"/stac/collections/{dataset.dataset_id}" for link in dataset.links)
+
+
+def test_dataset_links_include_stac_for_published_zarr() -> None:
+    links = services._dataset_links("chirps3_precipitation_daily_sle", _artifact(artifact_id="a1"))
+
+    assert any(
+        link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily_sle" for link in links
+    )
+
+
+def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
+    unpublished = _artifact(artifact_id="a1")
+    unpublished.publication.status = PublicationStatus.UNPUBLISHED
+    netcdf = _artifact(artifact_id="a2")
+    netcdf.format = ArtifactFormat.NETCDF
+
+    unpublished_links = services._dataset_links("chirps3_precipitation_daily_sle", unpublished)
+    netcdf_links = services._dataset_links("chirps3_precipitation_daily_sle", netcdf)
+
+    assert all(link.rel != "stac" for link in unpublished_links)
+    assert all(link.rel != "stac" for link in netcdf_links)
 
 
 def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,6 +194,62 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     )
 
     assert result == valid_artifact
+
+
+def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        extent_id="sle",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+    stale_artifact = _artifact(artifact_id="stale", end="2026-02-10")
+    valid_artifact = _artifact(artifact_id="valid", end="2026-02-10")
+    monkeypatch.setattr(
+        services,
+        "_artifact_storage_exists",
+        lambda record: record.artifact_id != "stale",
+    )
+
+    result = services._find_existing_artifact_in_records(
+        records=[stale_artifact, valid_artifact],
+        dataset_id="chirps3_precipitation_daily",
+        request_scope=request_scope,
+        prefer_zarr=True,
+    )
+
+    assert result == valid_artifact
+
+
+def test_list_datasets_ignores_stale_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    records = [
+        _artifact(artifact_id="stale", created_at="2026-01-10T00:00:00+00:00", end="2026-01-10"),
+        _artifact(artifact_id="valid", created_at="2026-01-11T00:00:00+00:00", end="2026-01-11"),
+    ]
+    monkeypatch.setattr(services, "_load_records", lambda: records)
+    monkeypatch.setattr(
+        services,
+        "_artifact_storage_exists",
+        lambda record: record.artifact_id != "stale",
+    )
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "short_name": "CHIRPS3 precip",
+            "period_type": "daily",
+            "units": "mm",
+            "resolution": "5 km x 5 km",
+            "source": "CHIRPS v3",
+            "source_url": "https://example.com/chirps",
+        },
+    )
+
+    result = services.list_datasets()
+
+    assert len(result.items) == 1
+    assert result.items[0].extent.temporal.end == "2026-01-11"
 
 
 def test_temporal_coverage_matches_request_scope_allows_open_ended_reuse() -> None:

@@ -19,6 +19,7 @@ from starlette.responses import Response
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.extents.services import get_extent_or_404
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
@@ -60,19 +61,27 @@ def ensure_store() -> None:
 
 def list_artifacts() -> ArtifactListResponse:
     """Return all stored artifacts."""
-    return ArtifactListResponse(items=_load_records())
+    return ArtifactListResponse(items=_materialized_records(_load_records()))
+
+
+def group_datasets() -> dict[str, list[ArtifactRecord]]:
+    """Return artifact records grouped by stable managed dataset id."""
+    grouped: dict[str, list[ArtifactRecord]] = {}
+    for record in list_artifacts().items:
+        grouped.setdefault(managed_dataset_id_for(record), []).append(record)
+    return grouped
 
 
 def list_ingestions() -> IngestionListResponse:
     """Return ingestion run records for operational/admin use."""
-    records = sorted(_load_records(), key=lambda record: record.created_at, reverse=True)
+    records = sorted(_materialized_records(_load_records()), key=lambda record: record.created_at, reverse=True)
     items = [_build_ingestion_response(record) for record in records]
     return IngestionListResponse(items=items)
 
 
 def get_artifact_or_404(artifact_id: str) -> ArtifactRecord:
     """Return a single artifact or raise 404."""
-    for record in _load_records():
+    for record in _materialized_records(_load_records()):
         if record.artifact_id == artifact_id:
             return record
     raise HTTPException(status_code=404, detail=f"Artifact '{artifact_id}' not found")
@@ -88,7 +97,7 @@ def get_dataset_summary_for_artifact_or_404(artifact_id: str) -> DatasetRecord:
     """Return the managed dataset summary corresponding to an internal artifact id."""
     artifact = get_artifact_or_404(artifact_id)
     dataset_id = managed_dataset_id_for(artifact)
-    artifacts = _group_datasets().get(dataset_id)
+    artifacts = group_datasets().get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
     return _build_dataset_record(dataset_id, artifacts)
@@ -101,14 +110,14 @@ def get_ingestion_or_404(artifact_id: str) -> IngestionResponse:
 
 def list_datasets() -> DatasetListResponse:
     """Return managed datasets grouped by stable dataset id."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     items = [_build_dataset_record(dataset_id, artifacts) for dataset_id, artifacts in sorted(grouped.items())]
     return DatasetListResponse(items=items)
 
 
 def get_dataset_or_404(dataset_id: str) -> DatasetDetailRecord:
     """Return one managed dataset or raise 404."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     artifacts = grouped.get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
@@ -117,7 +126,7 @@ def get_dataset_or_404(dataset_id: str) -> DatasetDetailRecord:
 
 def get_latest_artifact_for_dataset_or_404(dataset_id: str) -> ArtifactRecord:
     """Return the latest artifact backing a managed dataset."""
-    grouped = _group_datasets()
+    grouped = group_datasets()
     artifacts = grouped.get(dataset_id)
     if artifacts is None:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
@@ -329,11 +338,17 @@ def sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    resolved_country_code: str | None = None
+    if latest_artifact.request_scope.extent_id is not None:
+        extent = get_extent_or_404(latest_artifact.request_scope.extent_id)
+        country_code = extent.get("country_code")
+        resolved_country_code = country_code if isinstance(country_code, str) else None
     try:
         return run_sync(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
+            country_code=resolved_country_code,
             prefer_zarr=prefer_zarr,
             publish=publish,
             create_artifact_fn=create_artifact,
@@ -583,6 +598,12 @@ def _find_existing_artifact_in_records(
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request from a provided record set."""
     for record in reversed(records):
+        if not _artifact_storage_exists(record):
+            logger.warning(
+                "Ignoring stale artifact '%s' because backing storage is missing",
+                record.artifact_id,
+            )
+            continue
         if record.dataset_id != dataset_id:
             continue
         if record.request_scope != request_scope:
@@ -606,6 +627,29 @@ def _find_existing_artifact_in_records(
 def _artifact_coverage_matches_request_scope(record: ArtifactRecord) -> bool:
     """Return whether an existing artifact is safe to reuse for its request scope."""
     return _temporal_coverage_matches_request_scope(record.coverage.temporal, record.request_scope)
+
+
+def _materialized_records(records: list[ArtifactRecord]) -> list[ArtifactRecord]:
+    """Return only artifact records whose backing storage still exists."""
+    materialized: list[ArtifactRecord] = []
+    for record in records:
+        if _artifact_storage_exists(record):
+            materialized.append(record)
+            continue
+        logger.warning("Ignoring stale artifact '%s' because backing storage is missing", record.artifact_id)
+    return materialized
+
+
+def _artifact_storage_exists(record: ArtifactRecord) -> bool:
+    """Return whether an artifact's on-disk backing files are still present."""
+    paths: list[str] = []
+    if record.path is not None:
+        paths.append(record.path)
+    if record.asset_paths:
+        paths.extend(record.asset_paths)
+    if not paths:
+        return False
+    return all(Path(path).exists() for path in paths)
 
 
 def _temporal_coverage_matches_request_scope(
@@ -672,18 +716,13 @@ def _build_dataset_detail_record(dataset_id: str, artifacts: list[ArtifactRecord
     )
 
 
-def _group_datasets() -> dict[str, list[ArtifactRecord]]:
-    grouped: dict[str, list[ArtifactRecord]] = {}
-    for record in _load_records():
-        grouped.setdefault(managed_dataset_id_for(record), []).append(record)
-    return grouped
-
-
 def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:
     links = [
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
+    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format == ArtifactFormat.ZARR:
+        links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
     if latest.format == ArtifactFormat.NETCDF:
         links.append(
             DatasetAccessLink(href=f"/datasets/{dataset_id}/download", rel="download", title="Download NetCDF")

@@ -1,6 +1,6 @@
 import pytest
 
-from climate_api.shared.time import datetime_to_period_string, normalize_period_string
+from climate_api.shared.time import datetime_to_period_string, normalize_period_string, parse_period_string_to_datetime
 
 
 def test_normalize_period_string_raises_targeted_monthly_error() -> None:
@@ -31,3 +31,9 @@ def test_datetime_to_period_string_converts_aware_monthly_datetime_to_utc_period
 def test_normalize_period_string_rejects_unsupported_period_type() -> None:
     with pytest.raises(ValueError, match="Unsupported period_type 'weekly'"):
         normalize_period_string("2026-W17", "weekly")
+
+
+def test_parse_period_string_to_datetime_accepts_dataset_native_hourly_period() -> None:
+    parsed = parse_period_string_to_datetime("2026-04-21T13")
+
+    assert parsed.isoformat() == "2026-04-21T13:00:00+00:00"

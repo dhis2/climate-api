@@ -1,4 +1,4 @@
-# Climate API Ingestion and Dataset Guide
+# Climate API Managed Data Guide
 
 This guide describes the current native FastAPI surface for Climate API and how it relates to the standards-facing `pygeoapi` publication layer.
 
@@ -7,6 +7,7 @@ The current public story is:
 - run and inspect ingestion operations with `/ingestions`
 - discover configured extents with `/extents`
 - discover managed datasets with `/datasets`
+- discover published GeoZarr datasets with `/stac/catalog.json`
 - access raw Zarr data with `/zarr/{dataset_id}`
 - access standards-facing publication with `/ogcapi/...`
 
@@ -27,6 +28,9 @@ Operational note:
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`
+- `GET /stac`
+- `GET /stac/catalog.json`
+- `GET /stac/collections/{dataset_id}`
 - `GET /zarr/{dataset_id}`
 - `GET /zarr/{dataset_id}/{relative_path}`
 - `GET /sync/{dataset_id}/plan`
@@ -155,6 +159,11 @@ Example response:
         "title": "Zarr store"
       },
       {
+        "href": "/stac/collections/chirps3_precipitation_daily_sle",
+        "rel": "stac",
+        "title": "STAC collection"
+      },
+      {
         "href": "/ogcapi/collections/chirps3_precipitation_daily_sle",
         "rel": "ogc-collection",
         "title": "OGC collection"
@@ -175,7 +184,7 @@ What this means:
 - `/ingestions` is an operational/admin surface, not the main managed-data catalog
 - `dataset` is a public managed dataset summary, not an internal artifact record
 - `extent` is realized data coverage, not just the configured bbox
-- `links` point to the native dataset metadata, native Zarr access, and standards-facing OGC collection
+- `links` point to the native dataset metadata, native Zarr access, STAC collection metadata, and standards-facing OGC collection
 
 ## 3. List ingestion runs
 
@@ -332,9 +341,16 @@ What this means:
 - entry links stay inside the canonical `/zarr/{dataset_id}/...` namespace
 - internal artifact ids and local filesystem roots are not exposed
 
-## 8. Access published OGC collections
+## 8. Access published STAC and OGC collections
 
-Published datasets are exposed only through `/ogcapi`.
+Published Zarr-backed datasets are exposed through `/stac` for discovery and `/ogcapi` for OGC collection and coverage access.
+
+STAC examples:
+
+```bash
+curl -s "http://127.0.0.1:8000/stac/catalog.json" | jq
+curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle" | jq
+```
 
 Examples:
 
@@ -346,9 +362,10 @@ curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sl
 
 What this means:
 
-- `/ogcapi` is the only public collection surface
+- `/stac` is the public STAC discovery surface for published Zarr-backed datasets
+- `/ogcapi` is the public OGC collection and coverage surface
 - native FastAPI no longer exposes `/collections`
-- dataset responses include links to `/ogcapi/collections/{dataset_id}`, but the collection resource itself lives only under `pygeoapi`
+- dataset responses can include both `/stac/collections/{dataset_id}` and `/ogcapi/collections/{dataset_id}`
 
 ## 9. `/sync`
 
@@ -435,6 +452,7 @@ Expected:
 
 ```bash
 curl -s "http://127.0.0.1:8000/datasets/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle" | jq
 curl -s "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle" | jq
 curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle?f=json" | jq
 curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle/coverage?f=json" | jq
@@ -611,6 +629,7 @@ The public contract is now:
 - ingest with `/ingestions`
 - discover extents with `/extents`
 - discover managed datasets with `/datasets`
+- discover published Zarr-backed datasets with `/stac/catalog.json`
 - access raw native data with `/zarr/{dataset_id}`
 - access standards-facing publication with `/ogcapi`
 

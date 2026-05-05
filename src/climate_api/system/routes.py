@@ -18,6 +18,7 @@ def read_index(request: Request) -> RootResponse:
         message="Welcome to DHIS2 Climate API",
         links=[
             Link(href=f"{base}/ogcapi/", rel="ogcapi", title="OGC API"),
+            Link(href=f"{base}/stac/catalog.json", rel="stac", title="STAC Catalog"),
             Link(href=f"{base}/extents", rel="extents", title="Extents"),
             Link(href=f"{base}/ingestions", rel="ingestions", title="Ingestions"),
             Link(href=f"{base}/datasets", rel="datasets", title="Datasets"),
