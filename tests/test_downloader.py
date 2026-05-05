@@ -301,6 +301,41 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
         result.close()
 
 
+def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Source coordinates using x/y spatial names are renamed to longitude/latitude."""
+    ds_xy = xr.Dataset(
+        {"precip": (["time", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
+        coords={
+            "time": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "y": [10.0, 9.0, 8.0],
+            "x": [30.0, 31.0, 32.0],
+        },
+    )
+    path = tmp_path / "chirps_xy_2024-01.nc"
+    ds_xy.to_netcdf(path)
+
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "variable": "precip",
+        "period_type": "daily",
+        "cache_info": {},
+    }
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+
+    downloader.build_dataset_zarr(dataset)
+
+    result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
+    try:
+        assert "time" in result.coords
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "x" not in result.coords
+        assert "y" not in result.coords
+    finally:
+        result.close()
+
+
 def test_build_dataset_zarr_clips_to_requested_daily_range(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
