@@ -18,9 +18,9 @@ def list_datasets() -> list[dict]:
     return [link for link in catalog["links"] if link["rel"] == "child"]
 
 
-def open_dataset(dataset_id: str) -> xr.Dataset:
-    """Open a published dataset via its STAC collection asset."""
-    response = httpx.get(f"{BASE_URL}/stac/collections/{dataset_id}")
+def open_dataset(collection_url: str) -> xr.Dataset:
+    """Open a published dataset via its STAC collection URL."""
+    response = httpx.get(collection_url)
     response.raise_for_status()
     collection = response.json()
     asset = collection["assets"]["zarr"]
@@ -42,12 +42,11 @@ def main() -> None:
     for i, link in enumerate(datasets):
         print(f"  [{i}] {link['title']}  —  {link['href']}")
 
-    # Open the first available dataset
+    # Open the first available dataset using the href from the catalog directly
     first = datasets[0]
-    dataset_id = first["href"].rstrip("/").split("/")[-1]
-    print(f"\nOpening: {first['title']} ({dataset_id})")
+    print(f"\nOpening: {first['title']}")
 
-    ds = open_dataset(dataset_id)
+    ds = open_dataset(first["href"])
     print(ds)
 
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
