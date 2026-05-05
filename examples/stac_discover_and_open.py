@@ -12,13 +12,17 @@ BASE_URL = "http://127.0.0.1:8000"
 
 def list_datasets() -> list[dict]:
     """Return all child dataset links from the STAC catalog."""
-    catalog = requests.get(f"{BASE_URL}/stac/catalog.json").json()
+    response = requests.get(f"{BASE_URL}/stac/catalog.json")
+    response.raise_for_status()
+    catalog = response.json()
     return [link for link in catalog["links"] if link["rel"] == "child"]
 
 
 def open_dataset(dataset_id: str) -> xr.Dataset:
     """Open a published dataset via its STAC collection asset."""
-    collection = requests.get(f"{BASE_URL}/stac/collections/{dataset_id}").json()
+    response = requests.get(f"{BASE_URL}/stac/collections/{dataset_id}")
+    response.raise_for_status()
+    collection = response.json()
     asset = collection["assets"]["zarr"]
     return xr.open_zarr(
         asset["href"],
