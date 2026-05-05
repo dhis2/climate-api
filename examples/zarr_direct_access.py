@@ -8,13 +8,18 @@ import requests
 import xarray as xr
 
 BASE_URL = "http://127.0.0.1:8000"
-DATASET_ID = "chirps3_precipitation_daily_sle"
 
 
 def main() -> None:
     """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
-    # Fetch open kwargs from the STAC collection to get the correct consolidated flag
-    collection = requests.get(f"{BASE_URL}/stac/collections/{DATASET_ID}").json()
+    # Discover the first published dataset from the catalog
+    catalog = requests.get(f"{BASE_URL}/stac/catalog.json").json()
+    collection_url = next((link["href"] for link in catalog["links"] if link["rel"] == "child"), None)
+    if collection_url is None:
+        print("No published datasets found. Run an ingestion first.")
+        return
+
+    collection = requests.get(collection_url).json()
     asset = collection["assets"]["zarr"]
     zarr_url = asset["href"]
     open_kwargs = asset["xarray:open_kwargs"]
@@ -48,12 +53,11 @@ def main() -> None:
     print(f"\n{variable} snapshot at {t0}:")
     print(f"  shape: {snapshot.shape},  min: {float(snapshot.min()):.4f},  max: {float(snapshot.max()):.4f}")
 
-    # Select a point (Freetown, Sierra Leone)
-    freetown_lat, freetown_lon = 8.48, -13.23
-    point = ds[variable].sel({y_dim: freetown_lat, x_dim: freetown_lon}, method="nearest")
-    lat_label = f"{abs(freetown_lat)}{'N' if freetown_lat >= 0 else 'S'}"
-    lon_label = f"{abs(freetown_lon)}{'E' if freetown_lon >= 0 else 'W'}"
-    print(f"\n{variable} at Freetown ({lat_label}, {lon_label}):")
+    # Select the point closest to the spatial centre of the domain
+    centre_y = float((ds[y_dim].min() + ds[y_dim].max()) / 2)
+    centre_x = float((ds[x_dim].min() + ds[x_dim].max()) / 2)
+    point = ds[variable].sel({y_dim: centre_y, x_dim: centre_x}, method="nearest")
+    print(f"\n{variable} at domain centre ({centre_y:.2f}, {centre_x:.2f}):")
     print(point.to_dataframe()[[variable]].head(10))
 
     # Spatial mean over the full domain — a simple time series
