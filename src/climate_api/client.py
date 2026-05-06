@@ -47,7 +47,7 @@ def list_datasets(base_url: str | None = None) -> list[dict]:
     falling back to ``http://127.0.0.1:8000``.
     """
     url = (base_url or _default_base_url()).rstrip("/")
-    response = httpx.get(f"{url}/stac/catalog.json")
+    response = httpx.get(f"{url}/stac/catalog.json", timeout=30)
     response.raise_for_status()
     catalog = response.json()
     raw_links = catalog.get("links")
@@ -71,7 +71,7 @@ def open_dataset(dataset_id: str, *, base_url: str | None = None) -> xr.Dataset:
     falling back to ``http://127.0.0.1:8000``.
     """
     url = (base_url or _default_base_url()).rstrip("/")
-    response = httpx.get(f"{url}/stac/collections/{dataset_id}")
+    response = httpx.get(f"{url}/stac/collections/{dataset_id}", timeout=30)
     response.raise_for_status()
     collection = response.json()
     asset = collection.get("assets", {}).get("zarr")

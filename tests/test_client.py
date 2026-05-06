@@ -40,7 +40,7 @@ def test_list_datasets_returns_child_links() -> None:
     with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
         result = list_datasets("http://localhost")
 
-    mock_get.assert_called_once_with("http://localhost/stac/catalog.json")
+    mock_get.assert_called_once_with("http://localhost/stac/catalog.json", timeout=30)
     assert len(result) == 1
     assert result[0]["rel"] == "child"
     assert "chirps3" in result[0]["href"]
@@ -107,7 +107,7 @@ def test_open_dataset_uses_default_base_url() -> None:
         with patch("climate_api.client.xr.open_zarr", return_value=MagicMock()):
             open_dataset("any_dataset")
 
-    mock_get.assert_called_once_with("http://127.0.0.1:8000/stac/collections/any_dataset")
+    mock_get.assert_called_once_with("http://127.0.0.1:8000/stac/collections/any_dataset", timeout=30)
 
 
 def test_open_dataset_uses_env_var_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -117,7 +117,7 @@ def test_open_dataset_uses_env_var_base_url(monkeypatch: pytest.MonkeyPatch) -> 
         with patch("climate_api.client.xr.open_zarr", return_value=MagicMock()):
             open_dataset("any_dataset")
 
-    mock_get.assert_called_once_with("http://env-host:9000/stac/collections/any_dataset")
+    mock_get.assert_called_once_with("http://env-host:9000/stac/collections/any_dataset", timeout=30)
 
 
 def test_client_catalog_delegates_to_module_function() -> None:
@@ -125,7 +125,7 @@ def test_client_catalog_delegates_to_module_function() -> None:
     with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
         result = Client("http://localhost").catalog()
 
-    mock_get.assert_called_once_with("http://localhost/stac/catalog.json")
+    mock_get.assert_called_once_with("http://localhost/stac/catalog.json", timeout=30)
     assert len(result) == 1
     assert result[0]["rel"] == "child"
 
@@ -158,4 +158,4 @@ def test_client_strips_trailing_slash() -> None:
     with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
         Client("http://localhost/").catalog()
 
-    mock_get.assert_called_once_with("http://localhost/stac/catalog.json")
+    mock_get.assert_called_once_with("http://localhost/stac/catalog.json", timeout=30)

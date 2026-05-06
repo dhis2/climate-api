@@ -38,7 +38,7 @@ def list_datasets() -> list[dict[str, Any]]:
 
     config_datasets_dir = api_config.get_config().get("datasets_dir")
     if config_datasets_dir:
-        if not isinstance(config_datasets_dir, str | Path):
+        if not isinstance(config_datasets_dir, (str, Path)):
             raise ValueError(
                 f"datasets_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_datasets_dir).__name__}"
             )
