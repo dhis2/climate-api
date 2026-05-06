@@ -4,8 +4,6 @@ Requires a running Climate API instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
-import xarray as xr
-
 from climate_api.client import Client
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -28,7 +26,7 @@ def main() -> None:
     dataset_id = first["href"].rstrip("/").split("/")[-1]
     print(f"\nOpening: {first['title']}")
 
-    ds: xr.Dataset = api.open(dataset_id)
+    ds = api.open(dataset_id)
     print(ds)
 
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
