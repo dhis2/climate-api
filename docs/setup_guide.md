@@ -129,7 +129,8 @@ import httpx
 import xarray as xr
 
 catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
-collection_url = next(link["href"] for link in catalog["links"] if link["rel"] == "child")
+children = [link for link in catalog["links"] if link["rel"] == "child"]
+collection_url = children[0]["href"]
 
 collection = httpx.get(collection_url).json()
 asset = collection["assets"]["zarr"]

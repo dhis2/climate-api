@@ -24,7 +24,7 @@ def _test_climate_api_config(tmp_path_factory: pytest.TempPathFactory) -> Genera
     os.environ["CLIMATE_API_CONFIG"] = str(config_file)
     yield
     if old is None:
-        del os.environ["CLIMATE_API_CONFIG"]
+        os.environ.pop("CLIMATE_API_CONFIG", None)
     else:
         os.environ["CLIMATE_API_CONFIG"] = old
 
