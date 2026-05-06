@@ -77,5 +77,10 @@ def open_dataset(dataset_id: str, *, base_url: str | None = None) -> xr.Dataset:
     asset = collection.get("assets", {}).get("zarr")
     if asset is None:
         raise KeyError(f"Dataset '{dataset_id}' has no Zarr asset in the STAC collection")
+    href = asset.get("href")
+    if not isinstance(href, str) or not href:
+        raise ValueError(f"Zarr asset for '{dataset_id}' has a missing or invalid href")
     open_kwargs = asset.get("xarray:open_kwargs", {})
-    return xr.open_zarr(asset["href"], **open_kwargs)  # type: ignore[no-any-return]
+    if not isinstance(open_kwargs, dict):
+        raise ValueError(f"Zarr asset for '{dataset_id}' has a malformed xarray:open_kwargs field")
+    return xr.open_zarr(href, **open_kwargs)  # type: ignore[no-any-return]
