@@ -74,7 +74,7 @@ extent:
     assert extents[0]["id"] == "rwa"
 
 
-def test_bundled_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_builtin_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
 
