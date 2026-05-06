@@ -44,7 +44,7 @@ api = Client("http://127.0.0.1:8000")
 for link in api.list_datasets():
     print(link["title"], "—", link["href"])
 
-ds = api.open_dataset("chirps3_precipitation_daily_rwa")
+ds = api.open("chirps3_precipitation_daily_rwa")
 print(ds)
 ```
 

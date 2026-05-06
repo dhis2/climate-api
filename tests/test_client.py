@@ -154,7 +154,7 @@ def test_client_open_dataset_delegates_to_module_function(tmp_path: Path) -> Non
 
     collection = _make_collection(str(zarr_path))
     with patch("climate_api.client.httpx.get", return_value=_make_response(collection)):
-        result = Client("http://localhost").open_dataset("chirps3_precipitation_daily_rwa")
+        result = Client("http://localhost").open("chirps3_precipitation_daily_rwa")
 
     try:
         assert "precip" in result.data_vars

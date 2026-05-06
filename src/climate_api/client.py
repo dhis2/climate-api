@@ -29,7 +29,7 @@ class Client:
         """
         return list_datasets(self.base_url)
 
-    def open_dataset(self, dataset_id: str) -> xr.Dataset:
+    def open(self, dataset_id: str) -> xr.Dataset:
         """Open a published dataset as an xarray Dataset.
 
         Fetches the STAC collection for ``dataset_id``, reads the Zarr asset
