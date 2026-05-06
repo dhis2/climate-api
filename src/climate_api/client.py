@@ -50,9 +50,12 @@ def list_datasets(base_url: str | None = None) -> list[dict]:
     response = httpx.get(f"{url}/stac/catalog.json")
     response.raise_for_status()
     catalog = response.json()
+    raw_links = catalog.get("links")
+    if not isinstance(raw_links, list):
+        raise ValueError(f"Invalid STAC catalog response from {url}: missing or non-list 'links' field")
     links = []
-    for link in catalog["links"]:
-        if link["rel"] == "child":
+    for link in raw_links:
+        if isinstance(link, dict) and link.get("rel") == "child":
             link["id"] = link["href"].rstrip("/").rsplit("/", 1)[-1]
             links.append(link)
     return links
