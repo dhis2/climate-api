@@ -1,5 +1,6 @@
 """Dataset registry backed by YAML config files."""
 
+import importlib.resources
 import logging
 from pathlib import Path
 from typing import Any
@@ -9,9 +10,6 @@ import yaml
 from climate_api import config as api_config
 
 logger = logging.getLogger(__name__)
-
-_SCRIPT_DIR = Path(__file__).parent.resolve()
-_BUILTIN_DATASETS_DIR = _SCRIPT_DIR.parent.parent.parent.parent / "data" / "datasets"
 
 # Overridden in tests via monkeypatch to point to a temporary directory.
 # When set, only this directory is loaded (no built-ins, no config override).
@@ -24,9 +22,9 @@ SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 def list_datasets() -> list[dict[str, Any]]:
     """Load all dataset templates and return a flat list.
 
-    Built-in templates from data/datasets/ are always loaded. When datasets_dir
-    is set in CLIMATE_API_CONFIG, templates from that directory are merged on
-    top — a custom template with the same id overrides the built-in one.
+    Built-in templates from climate_api/data/datasets/ are always loaded. When
+    datasets_dir is set in CLIMATE_API_CONFIG, templates from that directory are
+    merged on top — a custom template with the same id overrides the built-in one.
 
     CONFIGS_DIR (test override via monkeypatch) bypasses this and loads only
     from the given directory, as tests supply a fully controlled set.
@@ -34,7 +32,7 @@ def list_datasets() -> list[dict[str, Any]]:
     if CONFIGS_DIR is not None:
         return _load_from_dir(CONFIGS_DIR)
 
-    merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_from_dir(_BUILTIN_DATASETS_DIR)}
+    merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_builtin_datasets()}
 
     config_datasets_dir = api_config.get_config().get("datasets_dir")
     if config_datasets_dir:
@@ -54,6 +52,33 @@ def get_dataset(dataset_id: str) -> dict[str, Any] | None:
     """Get dataset dict for a given id."""
     datasets_lookup = {d["id"]: d for d in list_datasets()}
     return datasets_lookup.get(dataset_id)
+
+
+def _load_builtin_datasets() -> list[dict[str, Any]]:
+    """Load built-in dataset templates from package data via importlib.resources.
+
+    Using importlib.resources instead of __file__-relative path arithmetic ensures
+    this works correctly in both editable installs and wheel installs, where the
+    package lives inside site-packages with no guarantee that the project root
+    directory (and its data/ folder) is accessible.
+    """
+    pkg = importlib.resources.files("climate_api") / "data" / "datasets"
+    datasets: list[dict[str, Any]] = []
+    for resource in pkg.iterdir():
+        if not resource.name.endswith((".yaml", ".yml")):
+            continue
+        try:
+            content = resource.read_text(encoding="utf-8")
+            file_datasets = yaml.safe_load(content)
+            if not isinstance(file_datasets, list):
+                raise ValueError(f"{resource.name} must contain a list of dataset templates")
+            for dataset in file_datasets:
+                _validate_dataset_template(dataset, source=resource.name)
+            datasets.extend(file_datasets)
+        except Exception:
+            logger.exception("Error loading %s", resource.name)
+            raise
+    return datasets
 
 
 def _load_from_dir(folder: Path) -> list[dict[str, Any]]:
