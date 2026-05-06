@@ -4,6 +4,7 @@ __pycache__/
 .env
 eo_api.egg-info/
 data/downloads
+data/derived
 data/artifacts
 data/pygeoapi
 docs/internal/

@@ -18,6 +18,20 @@
   source: ERA5-Land Reanalysis
   source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
 
+- id: era5land_temperature_daily
+  name: Daily mean 2m temperature (ERA5-Land)
+  short_name: Daily mean 2m temperature
+  variable: t2m
+  period_type: daily
+  sync_kind: derived
+  resample:
+    source_dataset_id: era5land_temperature_hourly
+    method: mean
+  units: degC
+  resolution: 9 km x 9 km
+  source: ERA5-Land Reanalysis
+  source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
+
 - id: era5land_precipitation_hourly
   name: Total precipitation (ERA5-Land)
   short_name: Total precipitation
@@ -35,6 +49,20 @@
   pre_process: ['deaccumulate_era5']
   units: m
   convert_units: mm
+  resolution: 9 km x 9 km
+  source: ERA5-Land Reanalysis
+  source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
+
+- id: era5land_precipitation_daily
+  name: Daily total precipitation (ERA5-Land)
+  short_name: Daily total precipitation
+  variable: tp
+  period_type: daily
+  sync_kind: derived
+  resample:
+    source_dataset_id: era5land_precipitation_hourly
+    method: sum
+  units: mm
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
   source_url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land
