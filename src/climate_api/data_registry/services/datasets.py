@@ -1,23 +1,71 @@
 """Dataset registry backed by YAML config files."""
 
+import importlib.resources
 import logging
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from climate_api import config as api_config
+
 logger = logging.getLogger(__name__)
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-CONFIGS_DIR = SCRIPT_DIR.parent.parent.parent.parent / "data" / "datasets"
+# Overridden in tests via monkeypatch to point to a temporary directory.
+# None means use the bundled package data.
+CONFIGS_DIR: Path | None = None
+
 SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
 
 def list_datasets() -> list[dict[str, Any]]:
-    """Load all YAML files in the registry folder and return a flat list of datasets."""
+    """Load all dataset templates and return a flat list.
+
+    Resolution order:
+    1. CONFIGS_DIR if set (test override via monkeypatch)
+    2. datasets_dir from CLIMATE_API_CONFIG (user-supplied templates)
+    3. Bundled package data (src/climate_api/datasets/)
+    """
+    if CONFIGS_DIR is not None:
+        return _load_from_dir(CONFIGS_DIR)
+
+    config_datasets_dir = api_config.get_config().get("datasets_dir")
+    if config_datasets_dir:
+        return _load_from_dir(Path(config_datasets_dir))
+
+    return _load_bundled()
+
+
+def get_dataset(dataset_id: str) -> dict[str, Any] | None:
+    """Get dataset dict for a given id."""
+    datasets_lookup = {d["id"]: d for d in list_datasets()}
+    return datasets_lookup.get(dataset_id)
+
+
+def _load_bundled() -> list[dict[str, Any]]:
+    """Load dataset templates from the bundled package data."""
     datasets: list[dict[str, Any]] = []
-    folder = CONFIGS_DIR
+    resources = importlib.resources.files("climate_api.datasets")
+    for item in resources.iterdir():
+        if not (item.name.endswith(".yaml") or item.name.endswith(".yml")):
+            continue
+        try:
+            file_datasets = yaml.safe_load(item.read_text(encoding="utf-8"))
+            if not isinstance(file_datasets, list):
+                raise ValueError(f"{item.name} must contain a list of dataset templates")
+            for dataset in file_datasets:
+                _validate_dataset_template(dataset, source=item.name)
+            datasets.extend(file_datasets)
+        except Exception:
+            logger.exception("Error loading bundled dataset %s", item.name)
+            raise
+    return datasets
+
+
+def _load_from_dir(folder: Path) -> list[dict[str, Any]]:
+    """Load dataset templates from a directory on disk."""
+    datasets: list[dict[str, Any]] = []
 
     if not folder.is_dir():
         raise ValueError(f"Path is not a directory: {folder}")
@@ -29,7 +77,7 @@ def list_datasets() -> list[dict[str, Any]]:
                 if not isinstance(file_datasets, list):
                     raise ValueError(f"{file_path.name} must contain a list of dataset templates")
                 for dataset in file_datasets:
-                    _validate_dataset_template(dataset, file_path=file_path)
+                    _validate_dataset_template(dataset, source=str(file_path))
                 datasets.extend(file_datasets)
         except Exception:
             logger.exception("Error loading %s", file_path.name)
@@ -38,54 +86,47 @@ def list_datasets() -> list[dict[str, Any]]:
     return datasets
 
 
-def get_dataset(dataset_id: str) -> dict[str, Any] | None:
-    """Get dataset dict for a given id."""
-    datasets_lookup = {d["id"]: d for d in list_datasets()}
-    return datasets_lookup.get(dataset_id)
-
-
-def _validate_dataset_template(dataset: object, *, file_path: Path) -> None:
+def _validate_dataset_template(dataset: object, *, source: str) -> None:
     """Validate registry fields required by runtime sync planning."""
     if not isinstance(dataset, dict):
-        raise ValueError(f"{file_path.name} contains a non-object dataset template")
+        raise ValueError(f"{source} contains a non-object dataset template")
 
     dataset_id = str(dataset.get("id", "<missing id>"))
     sync_kind = dataset.get("sync_kind")
     if not isinstance(sync_kind, str) or not sync_kind:
-        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} must define sync_kind")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define sync_kind")
     if sync_kind not in SUPPORTED_SYNC_KINDS:
         supported = ", ".join(sorted(SUPPORTED_SYNC_KINDS))
         raise ValueError(
-            f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_kind "
+            f"Dataset template '{dataset_id}' in {source} has unsupported sync_kind "
             f"'{sync_kind}'. Supported values: {supported}"
         )
 
     sync_execution = dataset.get("sync_execution")
     if sync_execution is not None:
         if not isinstance(sync_execution, str) or not sync_execution:
-            raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid sync_execution")
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync_execution")
         if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
             supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
             raise ValueError(
-                f"Dataset template '{dataset_id}' in {file_path.name} has unsupported sync_execution "
+                f"Dataset template '{dataset_id}' in {source} has unsupported sync_execution "
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
     sync_availability = dataset.get("sync_availability")
     if sync_availability is not None:
-        _validate_sync_availability(sync_availability, dataset_id=dataset_id, file_path=file_path)
+        _validate_sync_availability(sync_availability, dataset_id=dataset_id, source=source)
 
 
-def _validate_sync_availability(sync_availability: object, *, dataset_id: str, file_path: Path) -> None:
+def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:
     """Validate optional source availability policy metadata."""
     if not isinstance(sync_availability, dict):
-        raise ValueError(f"Dataset template '{dataset_id}' in {file_path.name} has invalid sync_availability")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync_availability")
 
     latest_available_function = sync_availability.get("latest_available_function")
     if latest_available_function is not None and (
         not isinstance(latest_available_function, str) or not latest_available_function
     ):
         raise ValueError(
-            f"Dataset template '{dataset_id}' in {file_path.name} has invalid "
-            "sync_availability.latest_available_function"
+            f"Dataset template '{dataset_id}' in {source} has invalid sync_availability.latest_available_function"
         )
