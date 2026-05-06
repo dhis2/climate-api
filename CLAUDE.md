@@ -8,7 +8,7 @@ Key concepts:
 
 - **Dataset templates** — YAML files in `data/datasets/` describing a data source (variable, period type, download function). These are blueprints.
 - **Artifacts / managed datasets** — ingested instances of a template for a specific spatial extent and time range. Exposed under `/datasets` and `/zarr/{dataset_id}`.
-- **Extents** — named spatial bounding boxes configured at instance setup time (`id`, `bbox`, optional `country_code`).
+- **Extent** — a single named spatial bounding box configured at instance setup time (`id`, `bbox`, optional `country_code`). Exposed at `GET /extent`.
 
 ## Repository layout
 

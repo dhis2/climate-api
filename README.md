@@ -70,7 +70,7 @@ Once running, the API is available at:
 | `http://localhost:8000/`                  | Navigation document                        |
 | `http://localhost:8000/health`            | Health check                               |
 | `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
-| `http://localhost:8000/extents`           | Configured spatial extents                 |
+| `http://localhost:8000/extent`           | Configured spatial extents                 |
 | `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
 | `http://localhost:8000/stac/catalog.json` | STAC catalog for published GeoZarr data    |
 | `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a managed dataset        |

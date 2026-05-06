@@ -25,7 +25,7 @@ The main branch now centers on one narrow vertical slice:
 The public surface is intentionally small:
 
 - `/ingestions`
-- `/extents`
+- `/extent`
 - `/datasets`
 - `/stac/...`
 - `/zarr/{dataset_id}`
@@ -46,13 +46,13 @@ The public surface is intentionally small:
   - public ingestion, dataset, and sync contracts
 - [src/climate_api/providers/availability.py](../src/climate_api/providers/availability.py)
   - provider-specific sync availability policies
-- [src/climate_api/extents/routes.py](../src/climate_api/extents/routes.py)
+- [src/climate_api/extent/routes.py](../src/climate_api/extent/routes.py)
   - extent discovery endpoints
-- [src/climate_api/extents/services.py](../src/climate_api/extents/services.py)
+- [src/climate_api/extent/services.py](../src/climate_api/extent/services.py)
   - YAML-backed extent registry
 - [src/climate_api/publications/services.py](../src/climate_api/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
-- [data/extents.yaml](../data/extents.yaml)
+- [data/extent.yaml](../data/extent.yaml)
   - configured extents for the Climate API instance
 
 ## What Was Achieved
@@ -93,8 +93,8 @@ Internal artifact records still exist, but they no longer define the public resp
 
 The branch exposes:
 
-- `GET /extents`
-- `GET /extents/{extent_id}`
+- `GET /extent`
+- `GET /extent/{extent_id}`
 
 Extents are configured in YAML and currently include:
 
@@ -252,8 +252,8 @@ Implemented sync behavior:
 - `POST /ingestions`
 - `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
-- `GET /extents`
-- `GET /extents/{extent_id}`
+- `GET /extent`
+- `GET /extent/{extent_id}`
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`

@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
 
     _app.include_router(system_routes.router, tags=["System"])
     _app.include_router(stac_routes.router, prefix="/stac", tags=["STAC"])
-    _app.include_router(extent_routes.router, prefix="/extents", tags=["Extents"])
+    _app.include_router(extent_routes.router, prefix="/extent", tags=["Extent"])
     _app.include_router(dataset_template_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
     _app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
     _app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])

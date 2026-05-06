@@ -79,22 +79,17 @@ climate-api
 ## Step 5: Verify the configured extent
 
 ```bash
-curl -s http://127.0.0.1:8000/extents | jq
+curl -s http://127.0.0.1:8000/extent | jq
 ```
 
 Expected response:
 
 ```json
 {
-  "kind": "ExtentList",
-  "items": [
-    {
-      "extent_id": "rwa",
-      "name": "Rwanda",
-      "description": null,
-      "bbox": [28.8, -2.9, 30.9, -1.0]
-    }
-  ]
+  "extent_id": "rwa",
+  "name": "Rwanda",
+  "description": null,
+  "bbox": [28.8, -2.9, 30.9, -1.0]
 }
 ```
 
