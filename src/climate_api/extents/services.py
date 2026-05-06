@@ -1,35 +1,22 @@
-"""Extent registry backed by CLIMATE_API_CONFIG or a legacy extents.yaml."""
+"""Extent registry backed by CLIMATE_API_CONFIG."""
 
-from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import HTTPException
 
 from climate_api import config as api_config
-
-# Legacy fallback path — used when CLIMATE_API_CONFIG is not set.
-_LEGACY_EXTENTS_PATH = Path(__file__).parent.parent.parent.parent / "data" / "extents.yaml"
 
 
 def list_extents() -> list[dict[str, Any]]:
     """Return configured extents for this Climate API instance.
 
-    When CLIMATE_API_CONFIG is set, returns the single extent defined under
-    the ``extent:`` key. Otherwise falls back to the legacy ``data/extents.yaml``
-    list for backward compatibility.
+    Reads the single extent defined under the ``extent:`` key in
+    CLIMATE_API_CONFIG. Returns an empty list when no config is set.
     """
     extent = api_config.get_config().get("extent")
-    if extent is not None:
-        return [extent] if isinstance(extent, dict) else []
-
-    if not _LEGACY_EXTENTS_PATH.exists():
+    if extent is None:
         return []
-    payload = yaml.safe_load(_LEGACY_EXTENTS_PATH.read_text(encoding="utf-8")) or {}
-    extents = payload.get("extents", [])
-    if not isinstance(extents, list):
-        raise ValueError(f"Expected 'extents' list in {_LEGACY_EXTENTS_PATH}")
-    return [e for e in extents if isinstance(e, dict)]
+    return [extent] if isinstance(extent, dict) else []
 
 
 def get_extent_or_404(extent_id: str) -> dict[str, Any]:

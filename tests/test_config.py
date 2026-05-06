@@ -74,6 +74,12 @@ extent:
     assert extents[0]["id"] == "rwa"
 
 
+def test_extents_service_returns_empty_when_config_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
+
+    assert extent_services.list_extents() == []
+
+
 def test_builtin_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
