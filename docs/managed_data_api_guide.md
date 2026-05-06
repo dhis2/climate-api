@@ -24,7 +24,6 @@ Operational note:
 - `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
 - `GET /extent`
-- `GET /extent/{extent_id}`  *(lookup by id)*
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`

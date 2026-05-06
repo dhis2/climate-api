@@ -17,12 +17,6 @@ def get_extent() -> ExtentRecord:
     return _build_extent_record(extent)
 
 
-@router.get("/{extent_id}", response_model=ExtentRecord)
-def get_extent_by_id(extent_id: str) -> ExtentRecord:
-    """Return the configured extent if it matches the given id."""
-    return _build_extent_record(services.get_extent_or_404(extent_id))
-
-
 def _build_extent_record(extent: dict[str, object]) -> ExtentRecord:
     bbox = extent.get("bbox")
     if not (isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(value, int | float) for value in bbox)):

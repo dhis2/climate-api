@@ -94,7 +94,6 @@ Internal artifact records still exist, but they no longer define the public resp
 The branch exposes:
 
 - `GET /extent`
-- `GET /extent/{extent_id}`
 
 Extents are configured in YAML and currently include:
 
@@ -253,7 +252,6 @@ Implemented sync behavior:
 - `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
 - `GET /extent`
-- `GET /extent/{extent_id}`
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`
