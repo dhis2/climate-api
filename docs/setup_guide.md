@@ -10,13 +10,7 @@ This guide walks through configuring a new Climate API instance for a specific c
 - Make (`make` — available by default on macOS and most Linux distributions; on Windows use [WSL](https://learn.microsoft.com/en-us/windows/wsl/) or run the commands in the Makefile directly)
 - [jq](https://jqlang.org/download/) for pretty-printing API responses in the curl examples (optional — omit `| jq` if not installed)
 
-## Step 1: Install
-
-```bash
-pip install climate-api
-```
-
-For local development from source instead:
+## Step 1: Clone and install
 
 ```bash
 git clone https://github.com/dhis2/climate-api.git
