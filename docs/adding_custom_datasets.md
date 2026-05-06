@@ -8,31 +8,51 @@ The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package da
 
 Adding a custom dataset involves two things:
 
-1. **A download function** — a Python function that accepts a bounding box and time range and returns an `xarray.Dataset` with `time`, `latitude`, and `longitude` coordinates.
+1. **A download function** — a Python function that downloads data and writes it as one or more NetCDF files to a given directory.
 2. **A dataset template YAML** — a file that describes the dataset and tells the API which download function to call.
 
 ## Step 1: Write the download function
 
-The download function must be importable as a dotted Python path and accept a standard set of keyword arguments:
+The download function must be importable as a dotted Python path. The API calls it with keyword arguments and ignores the return value — the function is expected to write NetCDF files to `dirname` using `prefix` as the filename prefix.
 
 ```python
 # mypackage/sources/enacts.py
-import xarray as xr
+from pathlib import Path
 
 def download(
     *,
-    bbox: tuple[float, float, float, float],  # xmin, ymin, xmax, ymax
-    start: str,                               # ISO 8601 date or datetime
+    start: str,         # ISO 8601 date or datetime
     end: str,
-    **kwargs: object,
-) -> xr.Dataset:
-    """Download ENACTS rainfall for the given bbox and time range."""
-    # ... fetch and return an xr.Dataset with coordinates:
-    #     time (datetime64), latitude (float), longitude (float)
+    dirname: Path,      # directory to write output files into
+    prefix: str,        # filename prefix (use e.g. f"{prefix}_{year}.nc")
+    overwrite: bool,
+    bbox: list[float],  # [xmin, ymin, xmax, ymax] — include only if your source needs it
+    **kwargs: object,   # absorbs default_params from the YAML template
+) -> None:
+    """Download ENACTS rainfall and write NetCDF files to dirname."""
     ...
 ```
 
-The returned dataset must use the canonical coordinate names: `time`, `latitude`, `longitude`. Any additional keyword arguments from `default_params` in the YAML template are forwarded as `**kwargs`.
+**Required parameters** — always passed by the API:
+
+| Parameter   | Type       | Description |
+| ----------- | ---------- | ----------- |
+| `start`     | `str`      | Start of the requested time range (ISO 8601) |
+| `end`       | `str`      | End of the requested time range (ISO 8601) |
+| `dirname`   | `Path`     | Directory to write output NetCDF files into |
+| `prefix`    | `str`      | Filename prefix for output files |
+| `overwrite` | `bool`     | Whether to overwrite existing cached files |
+
+**Optional parameters** — passed only when present in the function signature:
+
+| Parameter      | Type            | Description |
+| -------------- | --------------- | ----------- |
+| `bbox`         | `list[float]`   | Bounding box as `[xmin, ymin, xmax, ymax]` — include this if your source requires a spatial filter |
+| `country_code` | `str`           | ISO 3166-1 alpha-3 code — include this if your source (e.g. WorldPop) requires a country code |
+
+Any extra keyword arguments from `default_params` in the YAML template are forwarded as additional kwargs.
+
+The output NetCDF files must use the coordinate names `time`, `latitude`, and `longitude`. The API normalises other common names (e.g. `lon`, `lat`, `valid_time`) automatically.
 
 Install your package in the same environment as the Climate API:
 
