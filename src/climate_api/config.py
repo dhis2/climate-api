@@ -18,17 +18,36 @@ def _substitute_env_vars(text: str) -> str:
     return re.sub(r"\$\{([^}]+)\}", _replace, text)
 
 
+def get_config_path() -> Path | None:
+    """Return the resolved Path of CLIMATE_API_CONFIG, or None if unset."""
+    raw = os.environ.get("CLIMATE_API_CONFIG")
+    return Path(raw).resolve() if raw else None
+
+
 def get_config() -> dict[str, Any]:
     """Load and return the instance config from CLIMATE_API_CONFIG.
 
-    Returns an empty dict if CLIMATE_API_CONFIG is not set.
-    Raises FileNotFoundError if the path is set but does not exist.
+    Results are cached for the lifetime of the process; the config file is
+    read once and reused on subsequent calls. Returns an empty dict if
+    CLIMATE_API_CONFIG is not set. Raises FileNotFoundError if the path is
+    set but does not exist.
     """
-    config_path = os.environ.get("CLIMATE_API_CONFIG")
-    if not config_path:
+    return _load_config()
+
+
+# Module-level cache — reset between tests via monkeypatch on _cache.
+_cache: dict[str, Any] | None = None
+
+
+def _load_config() -> dict[str, Any]:
+    global _cache
+    if _cache is not None:
+        return _cache
+    path = get_config_path()
+    if path is None:
         return {}
-    path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"CLIMATE_API_CONFIG not found: {path}")
     text = _substitute_env_vars(path.read_text(encoding="utf-8"))
-    return yaml.safe_load(text) or {}
+    _cache = dict(yaml.safe_load(text) or {})
+    return _cache

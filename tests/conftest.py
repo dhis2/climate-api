@@ -4,6 +4,7 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 
+from climate_api import config as api_config
 from climate_api.main import app
 
 _TEST_CONFIG = """\
@@ -26,6 +27,13 @@ def _test_climate_api_config(tmp_path_factory: pytest.TempPathFactory) -> Genera
         del os.environ["CLIMATE_API_CONFIG"]
     else:
         os.environ["CLIMATE_API_CONFIG"] = old
+
+
+@pytest.fixture(autouse=True)
+def _reset_config_cache() -> Generator[None, None, None]:
+    api_config._cache = None
+    yield
+    api_config._cache = None
 
 
 @pytest.fixture

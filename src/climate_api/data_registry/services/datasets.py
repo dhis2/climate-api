@@ -38,7 +38,9 @@ def list_datasets() -> list[dict[str, Any]]:
 
     config_datasets_dir = api_config.get_config().get("datasets_dir")
     if config_datasets_dir:
-        for dataset in _load_from_dir(Path(config_datasets_dir)):
+        config_path = api_config.get_config_path()
+        resolved = (config_path.parent / config_datasets_dir).resolve() if config_path else Path(config_datasets_dir)
+        for dataset in _load_from_dir(resolved):
             merged[dataset["id"]] = dataset
 
     return list(merged.values())

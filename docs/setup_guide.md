@@ -70,6 +70,12 @@ make run
 
 The API starts on `http://127.0.0.1:8000`. Open `http://127.0.0.1:8000/docs` for the interactive API documentation.
 
+Alternatively, if the package is installed (e.g. via `pip install .`), you can start it with:
+
+```bash
+climate-api
+```
+
 ## Step 5: Verify the configured extent
 
 ```bash
@@ -85,7 +91,7 @@ Expected response:
     {
       "extent_id": "rwa",
       "name": "Rwanda",
-      "description": "National extent for Rwanda.",
+      "description": null,
       "bbox": [28.8, -2.9, 30.9, -1.0]
     }
   ]
@@ -128,7 +134,7 @@ import httpx
 import xarray as xr
 
 catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
-collection_url = next(l["href"] for l in catalog["links"] if l["rel"] == "child")
+collection_url = next(link["href"] for link in catalog["links"] if link["rel"] == "child")
 
 collection = httpx.get(collection_url).json()
 asset = collection["assets"]["zarr"]

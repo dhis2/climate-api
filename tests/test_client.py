@@ -102,30 +102,20 @@ def test_open_dataset_raises_on_http_error() -> None:
 
 
 def test_open_dataset_uses_default_base_url() -> None:
-    with patch("climate_api.client.httpx.get", return_value=_make_response({})) as mock_get:
-        mock_get.return_value.raise_for_status.return_value = None
-        mock_get.return_value.json.return_value = {
-            "assets": {"zarr": {"href": "/dev/null", "xarray:open_kwargs": {"consolidated": False}}}
-        }
-        try:
+    collection = _make_collection("/dev/null")
+    with patch("climate_api.client.httpx.get", return_value=_make_response(collection)) as mock_get:
+        with patch("climate_api.client.xr.open_zarr", return_value=MagicMock()):
             open_dataset("any_dataset")
-        except Exception:
-            pass
 
     mock_get.assert_called_once_with("http://127.0.0.1:8000/stac/collections/any_dataset")
 
 
 def test_open_dataset_uses_env_var_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLIMATE_API_BASE_URL", "http://env-host:9000")
-    with patch("climate_api.client.httpx.get", return_value=_make_response({})) as mock_get:
-        mock_get.return_value.raise_for_status.return_value = None
-        mock_get.return_value.json.return_value = {
-            "assets": {"zarr": {"href": "/dev/null", "xarray:open_kwargs": {"consolidated": False}}}
-        }
-        try:
+    collection = _make_collection("/dev/null")
+    with patch("climate_api.client.httpx.get", return_value=_make_response(collection)) as mock_get:
+        with patch("climate_api.client.xr.open_zarr", return_value=MagicMock()):
             open_dataset("any_dataset")
-        except Exception:
-            pass
 
     mock_get.assert_called_once_with("http://env-host:9000/stac/collections/any_dataset")
 

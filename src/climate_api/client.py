@@ -25,7 +25,7 @@ class Client:
     def catalog(self) -> list[dict]:
         """Return all published datasets from the STAC catalog.
 
-        Each entry is a STAC child link dict with at least ``title`` and ``href``.
+        Each entry is a STAC child link dict with at least ``id``, ``title``, and ``href``.
         """
         return list_datasets(self.base_url)
 
@@ -42,7 +42,7 @@ class Client:
 def list_datasets(base_url: str | None = None) -> list[dict]:
     """Return all published datasets from the STAC catalog.
 
-    Each entry is a STAC child link dict with at least ``title`` and ``href``.
+    Each entry is a STAC child link dict with at least ``id``, ``title``, and ``href``.
     ``base_url`` defaults to the ``CLIMATE_API_BASE_URL`` environment variable,
     falling back to ``http://127.0.0.1:8000``.
     """
@@ -66,7 +66,9 @@ def open_dataset(dataset_id: str, *, base_url: str | None = None) -> xr.Dataset:
     response = httpx.get(f"{url}/stac/collections/{dataset_id}")
     response.raise_for_status()
     collection = response.json()
-    asset = collection["assets"]["zarr"]
+    asset = collection.get("assets", {}).get("zarr")
+    if asset is None:
+        raise KeyError(f"Dataset '{dataset_id}' has no Zarr asset in the STAC collection")
     return xr.open_zarr(  # type: ignore[no-any-return]
         asset["href"],
         consolidated=asset["xarray:open_kwargs"]["consolidated"],

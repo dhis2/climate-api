@@ -10,7 +10,7 @@ class StacLink(BaseModel):
 
     rel: str
     href: str
-    id: str | None = None
+    id: str | None = None  # non-standard convenience field, not part of the STAC spec
     type: str | None = None
     title: str | None = None
 
