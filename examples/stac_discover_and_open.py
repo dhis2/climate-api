@@ -23,10 +23,9 @@ def main() -> None:
         print(f"  [{i}] {link['title']}  —  {link['href']}")
 
     first = datasets[0]
-    dataset_id = first["href"].rstrip("/").split("/")[-1]
     print(f"\nOpening: {first['title']}")
 
-    ds = api.open(dataset_id)
+    ds = api.open(first["id"])
     print(ds)
 
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")

@@ -10,6 +10,7 @@ class StacLink(BaseModel):
 
     rel: str
     href: str
+    id: str | None = None
     type: str | None = None
     title: str | None = None
 

@@ -378,6 +378,7 @@ def test_catalog_prefers_latest_artifact_per_managed_dataset(
     payload = response.json()
     child_links = [link for link in payload["links"] if link["rel"] == "child"]
     assert len(child_links) == 1
+    assert child_links[0]["id"] == "chirps3_precipitation_daily_sle"
 
 
 def test_catalog_sorts_child_links_by_managed_dataset_id(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -45,6 +45,7 @@ def build_catalog(request: Request) -> dict[str, object]:
         links.append(
             {
                 "rel": "child",
+                "id": dataset_id,
                 "href": _abs_url(request, f"/stac/collections/{dataset_id}"),
                 "title": artifact.dataset_name,
                 "type": "application/json",

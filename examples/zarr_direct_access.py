@@ -18,10 +18,9 @@ def main() -> None:
         return
 
     first = datasets[0]
-    dataset_id = first["href"].rstrip("/").split("/")[-1]
     print(f"Opening: {first['title']}\n")
 
-    ds = api.open(dataset_id)
+    ds = api.open(first["id"])
     print(ds)
 
     print(f"\nDimensions:  {dict(ds.sizes)}")
