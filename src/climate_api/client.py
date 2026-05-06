@@ -50,7 +50,12 @@ def list_datasets(base_url: str | None = None) -> list[dict]:
     response = httpx.get(f"{url}/stac/catalog.json")
     response.raise_for_status()
     catalog = response.json()
-    return [link for link in catalog["links"] if link["rel"] == "child"]
+    links = []
+    for link in catalog["links"]:
+        if link["rel"] == "child":
+            link["id"] = link["href"].rstrip("/").rsplit("/", 1)[-1]
+            links.append(link)
+    return links
 
 
 def open_dataset(dataset_id: str, *, base_url: str | None = None) -> xr.Dataset:
