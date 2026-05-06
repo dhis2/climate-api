@@ -4,35 +4,16 @@ Requires a running Climate API instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
-import httpx
 import xarray as xr
+
+from climate_api.client import list_datasets, open_dataset
 
 BASE_URL = "http://127.0.0.1:8000"
 
 
-def list_datasets() -> list[dict]:
-    """Return all child dataset links from the STAC catalog."""
-    response = httpx.get(f"{BASE_URL}/stac/catalog.json")
-    response.raise_for_status()
-    catalog = response.json()
-    return [link for link in catalog["links"] if link["rel"] == "child"]
-
-
-def open_dataset(collection_url: str) -> xr.Dataset:
-    """Open a published dataset via its STAC collection URL."""
-    response = httpx.get(collection_url)
-    response.raise_for_status()
-    collection = response.json()
-    asset = collection["assets"]["zarr"]
-    return xr.open_zarr(
-        asset["href"],
-        consolidated=asset["xarray:open_kwargs"]["consolidated"],
-    )
-
-
 def main() -> None:
     """Discover and open the first published dataset."""
-    datasets = list_datasets()
+    datasets = list_datasets(BASE_URL)
 
     if not datasets:
         print("No published datasets found. Run an ingestion first.")
@@ -42,11 +23,11 @@ def main() -> None:
     for i, link in enumerate(datasets):
         print(f"  [{i}] {link['title']}  —  {link['href']}")
 
-    # Open the first available dataset using the href from the catalog directly
     first = datasets[0]
+    dataset_id = first["href"].rstrip("/").split("/")[-1]
     print(f"\nOpening: {first['title']}")
 
-    ds = open_dataset(first["href"])
+    ds: xr.Dataset = open_dataset(dataset_id, base_url=BASE_URL)
     print(ds)
 
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
@@ -54,7 +35,6 @@ def main() -> None:
     print(f"Latitude:  {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
     print(f"Longitude: {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
 
-    # Print a sample value at the spatial centre of the domain, first time step
     variable = list(ds.data_vars)[0]
     centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
     centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)

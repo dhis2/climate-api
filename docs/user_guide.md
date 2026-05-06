@@ -34,23 +34,18 @@ The `assets.zarr` field contains everything needed to open the dataset:
 
 ## Opening a dataset with xarray
 
-Use the `href` of any child link from the catalog to open a dataset with xarray:
+The `climate_api.client` module provides convenience functions for discovering and opening datasets:
 
 ```python
-import httpx
-import xarray as xr
+from climate_api.client import list_datasets, open_dataset
 
-# Get the first published dataset from the catalog
-catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
-collection_url = next(l["href"] for l in catalog["links"] if l["rel"] == "child")
+# List all published datasets
+for link in list_datasets("http://127.0.0.1:8000"):
+    print(link["title"], "—", link["href"])
 
-collection = httpx.get(collection_url).json()
-
-asset = collection["assets"]["zarr"]
-ds = xr.open_zarr(
-    asset["href"],
-    consolidated=asset["xarray:open_kwargs"]["consolidated"],
-)
+# Open a dataset by ID
+ds = open_dataset("chirps3_precipitation_daily_rwa",
+                  base_url="http://127.0.0.1:8000")
 print(ds)
 ```
 

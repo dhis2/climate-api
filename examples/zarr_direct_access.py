@@ -4,32 +4,23 @@ Requires a running Climate API instance with at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
-import httpx
-import xarray as xr
+from climate_api.client import list_datasets, open_dataset
 
 BASE_URL = "http://127.0.0.1:8000"
 
 
 def main() -> None:
     """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
-    # Discover the first published dataset from the catalog
-    catalog_response = httpx.get(f"{BASE_URL}/stac/catalog.json")
-    catalog_response.raise_for_status()
-    catalog = catalog_response.json()
-    collection_url = next((link["href"] for link in catalog["links"] if link["rel"] == "child"), None)
-    if collection_url is None:
+    datasets = list_datasets(BASE_URL)
+    if not datasets:
         print("No published datasets found. Run an ingestion first.")
         return
 
-    collection_response = httpx.get(collection_url)
-    collection_response.raise_for_status()
-    collection = collection_response.json()
-    asset = collection["assets"]["zarr"]
-    zarr_url = asset["href"]
-    open_kwargs = asset["xarray:open_kwargs"]
+    first = datasets[0]
+    dataset_id = first["href"].rstrip("/").split("/")[-1]
+    print(f"Opening: {first['title']}\n")
 
-    print(f"Opening: {zarr_url}\n")
-    ds = xr.open_zarr(zarr_url, **open_kwargs)
+    ds = open_dataset(dataset_id, base_url=BASE_URL)
     print(ds)
 
     print(f"\nDimensions:  {dict(ds.sizes)}")
