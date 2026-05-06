@@ -18,9 +18,9 @@ cd climate-api
 make sync
 ```
 
-## Step 2: Create the instance config file
+## Step 2: Configure the spatial extent
 
-Each Climate API instance is scoped to one spatial extent. Create a `climate-api.yaml` file in your working directory:
+The repo includes a default `climate-api.yaml` with Sierra Leone as the extent. Open it and replace the entry with your country:
 
 ```yaml
 extent:
@@ -58,13 +58,7 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-Set `CLIMATE_API_CONFIG` to the path of the config file you created in Step 2:
-
-```bash
-CLIMATE_API_CONFIG=./climate-api.yaml
-```
-
-The remaining defaults in `.env.example` are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
+`CLIMATE_API_CONFIG=./climate-api.yaml` is already set in `.env.example`. The remaining defaults are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
 
 For ERA5-Land downloads see [ERA5-Land setup](#era5-land-via-destine-earth-data-hub) below.
 
