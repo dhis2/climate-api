@@ -215,3 +215,5 @@ curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_rwa" \
 ```
 
 See [managed_data_api_guide.md](managed_data_api_guide.md) for the full sync API reference.
+
+See [custom_datasets_guide.md](custom_datasets_guide.md) for adding new dataset sources beyond the built-in templates.
