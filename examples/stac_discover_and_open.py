@@ -4,6 +4,8 @@ Requires a running Climate API instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 
+import json
+
 from climate_api.client import Client
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -18,7 +20,7 @@ def main() -> None:
         print("No published datasets found. Run an ingestion first.")
         return
 
-    print(datasets)
+    print(json.dumps(datasets, indent=2))
 
     first = datasets[0]
     print(f"\nOpening: {first['title']}")
