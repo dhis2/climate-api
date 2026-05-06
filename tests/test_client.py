@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from climate_api.client import list_datasets, open_dataset
+from climate_api.client import Client, list_datasets, open_dataset
 
 
 def _make_catalog(hrefs: list[str]) -> dict:
@@ -113,3 +113,59 @@ def test_open_dataset_uses_default_base_url() -> None:
             pass
 
     mock_get.assert_called_once_with("http://127.0.0.1:8000/stac/collections/any_dataset")
+
+
+def test_open_dataset_uses_env_var_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLIMATE_API_BASE_URL", "http://env-host:9000")
+    with patch("climate_api.client.httpx.get", return_value=_make_response({})) as mock_get:
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {
+            "assets": {"zarr": {"href": "/dev/null", "xarray:open_kwargs": {"consolidated": False}}}
+        }
+        try:
+            open_dataset("any_dataset")
+        except Exception:
+            pass
+
+    mock_get.assert_called_once_with("http://env-host:9000/stac/collections/any_dataset")
+
+
+def test_client_list_datasets_delegates_to_module_function() -> None:
+    catalog = _make_catalog(["http://localhost/stac/collections/chirps3_precipitation_daily_rwa"])
+    with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
+        result = Client("http://localhost").list_datasets()
+
+    mock_get.assert_called_once_with("http://localhost/stac/catalog.json")
+    assert len(result) == 1
+    assert result[0]["rel"] == "child"
+
+
+def test_client_open_dataset_delegates_to_module_function(tmp_path: Path) -> None:
+    zarr_path = tmp_path / "test.zarr"
+    ds = xr.Dataset(
+        {"precip": (["time", "latitude", "longitude"], np.ones((2, 3, 3), dtype="float32"))},
+        coords={
+            "time": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "latitude": [3.0, 2.0, 1.0],
+            "longitude": [10.0, 11.0, 12.0],
+        },
+    )
+    ds.to_zarr(str(zarr_path), mode="w", consolidated=True)
+
+    collection = _make_collection(str(zarr_path))
+    with patch("climate_api.client.httpx.get", return_value=_make_response(collection)):
+        result = Client("http://localhost").open_dataset("chirps3_precipitation_daily_rwa")
+
+    try:
+        assert "precip" in result.data_vars
+        assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
+def test_client_strips_trailing_slash() -> None:
+    catalog = _make_catalog(["http://localhost/stac/collections/chirps3_precipitation_daily_rwa"])
+    with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
+        Client("http://localhost/").list_datasets()
+
+    mock_get.assert_called_once_with("http://localhost/stac/catalog.json")

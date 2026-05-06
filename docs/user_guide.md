@@ -34,19 +34,26 @@ The `assets.zarr` field contains everything needed to open the dataset:
 
 ## Opening a dataset with xarray
 
-The `climate_api.client` module provides convenience functions for discovering and opening datasets:
+The `climate_api.client` module provides a `Client` class for discovering and opening datasets:
 
 ```python
-from climate_api.client import list_datasets, open_dataset
+from climate_api.client import Client
 
-# List all published datasets
-for link in list_datasets("http://127.0.0.1:8000"):
+api = Client("http://127.0.0.1:8000")
+
+for link in api.list_datasets():
     print(link["title"], "—", link["href"])
 
-# Open a dataset by ID
-ds = open_dataset("chirps3_precipitation_daily_rwa",
-                  base_url="http://127.0.0.1:8000")
+ds = api.open_dataset("chirps3_precipitation_daily_rwa")
 print(ds)
+```
+
+The `base_url` defaults to the `CLIMATE_API_BASE_URL` environment variable (falling back to `http://127.0.0.1:8000`), so module-level functions work without any argument when the env var is set:
+
+```python
+from climate_api.client import open_dataset  # reads CLIMATE_API_BASE_URL
+
+ds = open_dataset("chirps3_precipitation_daily_rwa")
 ```
 
 Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
