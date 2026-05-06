@@ -46,14 +46,14 @@ The public surface is intentionally small:
   - public ingestion, dataset, and sync contracts
 - [src/climate_api/providers/availability.py](../src/climate_api/providers/availability.py)
   - provider-specific sync availability policies
-- [src/climate_api/extent/routes.py](../src/climate_api/extent/routes.py)
-  - extent discovery endpoints
-- [src/climate_api/extent/services.py](../src/climate_api/extent/services.py)
-  - YAML-backed extent registry
+- [src/climate_api/extents/routes.py](../src/climate_api/extents/routes.py)
+  - extent discovery endpoint
+- [src/climate_api/extents/services.py](../src/climate_api/extents/services.py)
+  - extent registry backed by CLIMATE_API_CONFIG
 - [src/climate_api/publications/services.py](../src/climate_api/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
-- [data/extent.yaml](../data/extent.yaml)
-  - configured extents for the Climate API instance
+- `extent:` block in `climate-api.yaml` (CLIMATE_API_CONFIG)
+  - configured spatial extent for this Climate API instance
 
 ## What Was Achieved
 

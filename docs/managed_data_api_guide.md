@@ -233,7 +233,7 @@ Example response:
 ```json
 {
   "kind": "DatasetList",
-  
+  "items": [
     {
       "dataset_id": "chirps3_precipitation_daily_sle",
       "source_dataset_id": "chirps3_precipitation_daily",

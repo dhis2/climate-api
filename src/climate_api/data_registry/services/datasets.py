@@ -102,6 +102,19 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
+    ingestion = dataset.get("ingestion")
+    if ingestion is not None:
+        if not isinstance(ingestion, dict):
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid ingestion block")
+        eo_function = ingestion.get("eo_function")
+        if not isinstance(eo_function, str) or not eo_function:
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.eo_function")
+    elif sync_kind != "static":
+        raise ValueError(
+            f"Dataset template '{dataset_id}' in {source} must define an ingestion block "
+            f"with eo_function (required for sync_kind '{sync_kind}')"
+        )
+
     sync_availability = dataset.get("sync_availability")
     if sync_availability is not None:
         _validate_sync_availability(sync_availability, dataset_id=dataset_id, source=source)

@@ -52,7 +52,7 @@ def download(
 
 Any extra keyword arguments from `default_params` in the YAML template are forwarded as additional kwargs.
 
-The output NetCDF files must use the coordinate names `time`, `latitude`, and `longitude`. The API normalises other common names (e.g. `lon`, `lat`, `valid_time`) automatically.
+The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`y` → `latitude`, `lon`/`x` → `longitude`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
 
 Install your package in the same environment as the Climate API:
 
