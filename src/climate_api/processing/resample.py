@@ -17,7 +17,7 @@ from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions import sync_engine
-from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope
+from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
 from climate_api.shared.time import datetime_to_period_string, parse_period_string_to_datetime
 
@@ -62,6 +62,8 @@ def materialize_resampled_artifact(
         prefer_zarr=True,
     )
     if existing is not None and not overwrite:
+        if publish and existing.publication.status != PublicationStatus.PUBLISHED:
+            return ingestion_services.publish_artifact_record(existing.artifact_id)
         return existing
 
     source_dataset_id = str(resample["source_dataset_id"])
@@ -100,6 +102,17 @@ def materialize_resampled_artifact(
         )
         if resampled.sizes.get(get_time_dim(resampled), 0) == 0:
             raise HTTPException(status_code=409, detail="Source artifact does not contain any complete target periods")
+        existing_realized = _find_existing_resampled_artifact(
+            target_dataset=target_dataset,
+            extent_id=extent_id,
+            bbox=source_bbox if extent_id is None else None,
+            start=normalized_start,
+            resampled=resampled,
+        )
+        if existing_realized is not None and not overwrite:
+            if publish and existing_realized.publication.status != PublicationStatus.PUBLISHED:
+                return ingestion_services.publish_artifact_record(existing_realized.artifact_id)
+            return existing_realized
         _write_resampled_zarr(resampled, zarr_path)
     finally:
         source_ds.close()
@@ -170,6 +183,7 @@ def _resample_dataset(
     subset = subset.where(subset[time_dim] < np.datetime64(target_end_exclusive), drop=True)
     if subset.sizes.get(time_dim, 0) == 0:
         raise HTTPException(status_code=409, detail="Source artifact contains no data for the requested resample range")
+    source_start = _coord_to_datetime(subset[time_dim].values[0])
     source_end = _coord_to_datetime(subset[time_dim].values[-1])
 
     with xr.set_options(keep_attrs=True):
@@ -184,8 +198,9 @@ def _resample_dataset(
             closed="left",
         )
         result = cast(xr.Dataset, getattr(resampler, str(resample_config["method"]))())
-    result = _drop_incomplete_trailing_period(
+    result = _drop_incomplete_edge_periods(
         result=result,
+        source_start=source_start,
         source_end=source_end,
         source_period_type=source_period_type,
         target_period_type=target_period_type,
@@ -205,9 +220,10 @@ def _resample_frequency(*, target_period_type: str, week_start: str) -> str:
     raise HTTPException(status_code=400, detail=f"Unsupported target period_type '{target_period_type}' for resampling")
 
 
-def _drop_incomplete_trailing_period(
+def _drop_incomplete_edge_periods(
     *,
     result: xr.Dataset,
+    source_start: datetime,
     source_end: datetime,
     source_period_type: str,
     target_period_type: str,
@@ -215,6 +231,12 @@ def _drop_incomplete_trailing_period(
     time_dim = get_time_dim(result)
     if result.sizes.get(time_dim, 0) == 0:
         return result
+
+    first_output_start = _coord_to_datetime(result[time_dim].values[0])
+    if source_start > first_output_start:
+        result = result.isel({time_dim: slice(1, None)})
+        if result.sizes.get(time_dim, 0) == 0:
+            return result
 
     last_output_start = _coord_to_datetime(result[time_dim].values[-1])
     next_target_start = parse_period_string_to_datetime(
@@ -227,6 +249,31 @@ def _drop_incomplete_trailing_period(
     if source_end < required_source_end:
         return result.isel({time_dim: slice(0, -1)})
     return result
+
+
+def _find_existing_resampled_artifact(
+    *,
+    target_dataset: dict[str, Any],
+    extent_id: str | None,
+    bbox: list[float] | None,
+    start: str,
+    resampled: xr.Dataset,
+) -> ArtifactRecord | None:
+    time_dim = get_time_dim(resampled)
+    realized_end = datetime_to_period_string(
+        _coord_to_datetime(resampled[time_dim].values[-1]).replace(tzinfo=UTC),
+        str(target_dataset["period_type"]),
+    )
+    return ingestion_services._find_existing_artifact(
+        dataset_id=str(target_dataset["id"]),
+        request_scope=ArtifactRequestScope(
+            start=start,
+            end=realized_end,
+            extent_id=extent_id,
+            bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
+        ),
+        prefer_zarr=True,
+    )
 
 
 def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:

@@ -264,6 +264,70 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         result.close()
 
 
+def test_materialize_resampled_artifact_drops_incomplete_leading_week(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_leading_partial.zarr"
+    time = np.array("2026-01-07", dtype="datetime64[D]") + np.arange(12)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((12, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-leading-partial",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-07",
+        end="2026-01-18",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_weekly",
+        "name": "CHIRPS weekly precipitation",
+        "variable": "value",
+        "period_type": "weekly",
+        "resample": {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "method": "sum",
+            "week_start": "monday",
+        },
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-W02",
+        end="2026-W03",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.coverage.temporal.start == "2026-W03"
+    assert artifact.coverage.temporal.end == "2026-W03"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [7.0]
+    finally:
+        result.close()
+
+
 def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_requested_range(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -454,6 +518,151 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
     )
 
     assert second.artifact_id == first.artifact_id
+
+
+def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_realized_reuse.zarr"
+    time = np.array("2026-01-05", dtype="datetime64[D]") + np.arange(10)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((10, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-realized-reuse",
+        dataset_id="chirps3_precipitation_daily",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        path=source_path,
+        start="2026-01-05",
+        end="2026-01-14",
+    )
+    target_dataset = {
+        "id": "chirps3_precipitation_weekly",
+        "name": "CHIRPS weekly precipitation",
+        "variable": "value",
+        "period_type": "weekly",
+        "resample": {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "method": "sum",
+            "week_start": "monday",
+        },
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "chirps3_precipitation_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    first = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-W02",
+        end="2026-W03",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+    second = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-W02",
+        end="2026-W03",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert second.artifact_id == first.artifact_id
+
+
+def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_hourly_publish_existing.zarr"
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(24)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(24, dtype=float).reshape(24, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-hourly-publish-existing",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-01T23",
+    )
+    target_dataset = {
+        "id": "era5land_temperature_daily",
+        "name": "ERA5-Land daily temperature",
+        "variable": "value",
+        "period_type": "daily",
+        "resample": {"source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
+    }
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "hourly"} if dataset_id == "era5land_temperature_hourly" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    existing = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    published = existing.model_copy(
+        update={
+            "publication": existing.publication.model_copy(update={"status": PublicationStatus.PUBLISHED}),
+        }
+    )
+    publish_calls: list[str] = []
+
+    def _publish_artifact_record(artifact_id: str) -> ArtifactRecord:
+        publish_calls.append(artifact_id)
+        return published
+
+    monkeypatch.setattr(resample.ingestion_services, "publish_artifact_record", _publish_artifact_record)
+
+    reused = resample.materialize_resampled_artifact(
+        target_dataset=target_dataset,
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=True,
+    )
+
+    assert publish_calls == [existing.artifact_id]
+    assert reused.publication.status == PublicationStatus.PUBLISHED
 
 
 def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(

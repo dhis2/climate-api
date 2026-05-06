@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 ARTIFACTS_INDEX_PATH = ARTIFACTS_DIR / "records.json"
-DERIVED_DIR = DATA_DIR / "derived"
 
 
 def ensure_store() -> None:
