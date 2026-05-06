@@ -130,10 +130,10 @@ def test_open_dataset_uses_env_var_base_url(monkeypatch: pytest.MonkeyPatch) -> 
     mock_get.assert_called_once_with("http://env-host:9000/stac/collections/any_dataset")
 
 
-def test_client_list_datasets_delegates_to_module_function() -> None:
+def test_client_catalog_delegates_to_module_function() -> None:
     catalog = _make_catalog(["http://localhost/stac/collections/chirps3_precipitation_daily_rwa"])
     with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
-        result = Client("http://localhost").list_datasets()
+        result = Client("http://localhost").catalog()
 
     mock_get.assert_called_once_with("http://localhost/stac/catalog.json")
     assert len(result) == 1
@@ -166,6 +166,6 @@ def test_client_open_dataset_delegates_to_module_function(tmp_path: Path) -> Non
 def test_client_strips_trailing_slash() -> None:
     catalog = _make_catalog(["http://localhost/stac/collections/chirps3_precipitation_daily_rwa"])
     with patch("climate_api.client.httpx.get", return_value=_make_response(catalog)) as mock_get:
-        Client("http://localhost/").list_datasets()
+        Client("http://localhost/").catalog()
 
     mock_get.assert_called_once_with("http://localhost/stac/catalog.json")

@@ -14,7 +14,7 @@ BASE_URL = "http://127.0.0.1:8000"
 def main() -> None:
     """Discover and open the first published dataset."""
     api = Client(BASE_URL)
-    datasets = api.list_datasets()
+    datasets = api.catalog()
 
     if not datasets:
         print("No published datasets found. Run an ingestion first.")

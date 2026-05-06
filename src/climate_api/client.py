@@ -22,7 +22,7 @@ class Client:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
 
-    def list_datasets(self) -> list[dict]:
+    def catalog(self) -> list[dict]:
         """Return all published datasets from the STAC catalog.
 
         Each entry is a STAC child link dict with at least ``title`` and ``href``.

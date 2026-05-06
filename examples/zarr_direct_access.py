@@ -12,7 +12,7 @@ BASE_URL = "http://127.0.0.1:8000"
 def main() -> None:
     """Open a Zarr store directly and demonstrate spatial and temporal subsetting."""
     api = Client(BASE_URL)
-    datasets = api.list_datasets()
+    datasets = api.catalog()
     if not datasets:
         print("No published datasets found. Run an ingestion first.")
         return

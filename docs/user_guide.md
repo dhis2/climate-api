@@ -41,7 +41,7 @@ from climate_api.client import Client
 
 api = Client("http://127.0.0.1:8000")
 
-for link in api.list_datasets():
+for link in api.catalog():
     print(link["title"], "—", link["href"])
 
 ds = api.open("chirps3_precipitation_daily_rwa")
