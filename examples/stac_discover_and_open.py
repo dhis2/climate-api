@@ -30,14 +30,14 @@ def main() -> None:
 
     print(f"\nTime range: {ds.time.values[0]}  →  {ds.time.values[-1]}")
     print(f"Time steps: {ds.sizes['time']}")
-    print(f"Latitude:  {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
-    print(f"Longitude: {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
+    print(f"Latitude:  {ds.latitude.min().item()}  →  {ds.latitude.max().item()}")
+    print(f"Longitude: {ds.longitude.min().item()}  →  {ds.longitude.max().item()}")
 
     variable = list(ds.data_vars)[0]
-    centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
-    centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+    centre_lat = ((ds.latitude.min() + ds.latitude.max()) / 2).item()
+    centre_lon = ((ds.longitude.min() + ds.longitude.max()) / 2).item()
     sample = ds[variable].isel(time=0).sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
-    print(f"\n{variable} at domain centre, t=0: {float(sample.values):.4f}")
+    print(f"\n{variable} at domain centre, t=0: {sample.item()}")
 
 
 if __name__ == "__main__":

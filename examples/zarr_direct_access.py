@@ -25,8 +25,8 @@ def main() -> None:
 
     print(f"\nDimensions:  {dict(ds.sizes)}")
     print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
-    print(f"Latitude:    {float(ds.latitude.min()):.4f}  →  {float(ds.latitude.max()):.4f}")
-    print(f"Longitude:   {float(ds.longitude.min()):.4f}  →  {float(ds.longitude.max()):.4f}")
+    print(f"Latitude:    {ds.latitude.min().item()}  →  {ds.latitude.max().item()}")
+    print(f"Longitude:   {ds.longitude.min().item()}  →  {ds.longitude.max().item()}")
 
     variable = list(ds.data_vars)[0]
 
@@ -34,11 +34,11 @@ def main() -> None:
     t0 = ds.time.values[0]
     snapshot = ds[variable].sel(time=t0)
     print(f"\n{variable} snapshot at {t0}:")
-    print(f"  shape: {snapshot.shape},  min: {float(snapshot.min()):.4f},  max: {float(snapshot.max()):.4f}")
+    print(f"  shape: {snapshot.shape},  min: {snapshot.min().item()},  max: {snapshot.max().item()}")
 
     # Select the point closest to the spatial centre of the domain
-    centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
-    centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+    centre_lat = ((ds.latitude.min() + ds.latitude.max()) / 2).item()
+    centre_lon = ((ds.longitude.min() + ds.longitude.max()) / 2).item()
     point = ds[variable].sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
     print(f"\n{variable} at domain centre ({centre_lat:.2f}, {centre_lon:.2f}):")
     print(point.to_dataframe()[[variable]].head(10))
