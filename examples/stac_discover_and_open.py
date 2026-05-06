@@ -18,9 +18,7 @@ def main() -> None:
         print("No published datasets found. Run an ingestion first.")
         return
 
-    print("Published datasets:")
-    for i, link in enumerate(datasets):
-        print(f"  [{i}] {link['title']}  —  {link['href']}")
+    print(datasets)
 
     first = datasets[0]
     print(f"\nOpening: {first['title']}")
