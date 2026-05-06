@@ -69,8 +69,8 @@ Select a spatial point by sampling the centre of the domain:
 
 ```python
 variable = list(ds.data_vars)[0]  # precip, t2m, tp, or pop_total depending on the dataset
-centre_lat = float((ds.latitude.min() + ds.latitude.max()) / 2)
-centre_lon = float((ds.longitude.min() + ds.longitude.max()) / 2)
+centre_lat = ds.latitude.mean().item()
+centre_lon = ds.longitude.mean().item()
 point = ds.sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
 print(point[variable].values)
 ```

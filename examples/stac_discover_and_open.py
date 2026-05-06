@@ -34,8 +34,8 @@ def main() -> None:
     print(f"Longitude: {ds.longitude.min().item()}  →  {ds.longitude.max().item()}")
 
     variable = list(ds.data_vars)[0]
-    centre_lat = ((ds.latitude.min() + ds.latitude.max()) / 2).item()
-    centre_lon = ((ds.longitude.min() + ds.longitude.max()) / 2).item()
+    centre_lat = ds.latitude.mean().item()
+    centre_lon = ds.longitude.mean().item()
     sample = ds[variable].isel(time=0).sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
     print(f"\n{variable} at domain centre, t=0: {sample.item()}")
 
