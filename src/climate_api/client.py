@@ -56,7 +56,10 @@ def list_datasets(base_url: str | None = None) -> list[dict]:
     links = []
     for link in raw_links:
         if isinstance(link, dict) and link.get("rel") == "child":
-            link["id"] = link["href"].rstrip("/").rsplit("/", 1)[-1]
+            href = link.get("href")
+            if not isinstance(href, str) or not href:
+                raise ValueError(f"STAC child link from {url} has a missing or invalid href")
+            link["id"] = href.rstrip("/").rsplit("/", 1)[-1]
             links.append(link)
     return links
 
@@ -74,8 +77,11 @@ def open_dataset(dataset_id: str, *, base_url: str | None = None) -> xr.Dataset:
     response = httpx.get(f"{url}/stac/collections/{dataset_id}", timeout=30)
     response.raise_for_status()
     collection = response.json()
-    asset = collection.get("assets", {}).get("zarr")
-    if asset is None:
+    assets = collection.get("assets")
+    if not isinstance(assets, dict):
+        raise ValueError(f"STAC collection for '{dataset_id}' from {url} has a missing or invalid 'assets' field")
+    asset = assets.get("zarr")
+    if not isinstance(asset, dict):
         raise KeyError(f"Dataset '{dataset_id}' has no Zarr asset in the STAC collection")
     href = asset.get("href")
     if not isinstance(href, str) or not href:
