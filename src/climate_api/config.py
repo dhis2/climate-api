@@ -49,5 +49,8 @@ def _load_config() -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"CLIMATE_API_CONFIG not found: {path}")
     text = _substitute_env_vars(path.read_text(encoding="utf-8"))
-    _cache = dict(yaml.safe_load(text) or {})
+    loaded = yaml.safe_load(text)
+    if loaded is not None and not isinstance(loaded, dict):
+        raise ValueError(f"CLIMATE_API_CONFIG must be a YAML mapping at the top level: {path}")
+    _cache = dict(loaded or {})
     return _cache

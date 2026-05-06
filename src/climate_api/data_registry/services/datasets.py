@@ -80,7 +80,9 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
     if not isinstance(dataset, dict):
         raise ValueError(f"{source} contains a non-object dataset template")
 
-    dataset_id = str(dataset.get("id", "<missing id>"))
+    dataset_id = dataset.get("id")
+    if not isinstance(dataset_id, str) or not dataset_id:
+        raise ValueError(f"{source} contains a dataset template with a missing or invalid id")
     sync_kind = dataset.get("sync_kind")
     if not isinstance(sync_kind, str) or not sync_kind:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define sync_kind")
@@ -103,17 +105,11 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
             )
 
     ingestion = dataset.get("ingestion")
-    if ingestion is not None:
-        if not isinstance(ingestion, dict):
-            raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid ingestion block")
-        eo_function = ingestion.get("eo_function")
-        if not isinstance(eo_function, str) or not eo_function:
-            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.eo_function")
-    elif sync_kind != "static":
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} must define an ingestion block "
-            f"with eo_function (required for sync_kind '{sync_kind}')"
-        )
+    if not isinstance(ingestion, dict):
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an ingestion block with eo_function")
+    eo_function = ingestion.get("eo_function")
+    if not isinstance(eo_function, str) or not eo_function:
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.eo_function")
 
     sync_availability = dataset.get("sync_availability")
     if sync_availability is not None:

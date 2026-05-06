@@ -101,6 +101,8 @@ def test_datasets_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch,
   variable: val
   period_type: daily
   sync_kind: static
+  ingestion:
+    eo_function: mypackage.sources.download
 """,
         encoding="utf-8",
     )
@@ -125,6 +127,8 @@ def test_datasets_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.Monk
   variable: precip
   period_type: daily
   sync_kind: static
+  ingestion:
+    eo_function: mypackage.sources.download
 """,
         encoding="utf-8",
     )
