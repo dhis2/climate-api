@@ -8,7 +8,7 @@
   sync_availability:
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
-  cache_info: 
+  ingestion: 
     eo_function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['t2m']
@@ -28,7 +28,7 @@
   sync_availability:
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
-  cache_info: 
+  ingestion: 
     eo_function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['tp']

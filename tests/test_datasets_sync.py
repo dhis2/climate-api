@@ -98,7 +98,7 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
             "id": "chirps3_precipitation_daily",
             "period_type": "daily",
             "sync_kind": "temporal",
-            "cache_info": {},
+            "ingestion": {},
         },
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
@@ -175,7 +175,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
             "period_type": "daily",
             "sync_kind": "temporal",
             "sync_execution": "append",
-            "cache_info": {},
+            "ingestion": {},
         },
     )
 
@@ -227,7 +227,7 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
             "period_type": "yearly",
             "sync_kind": "temporal",
             "sync_execution": "append",
-            "cache_info": {"multiscales": {"levels": 4}},
+            "ingestion": {"multiscales": {"levels": 4}},
         },
     )
 
@@ -509,7 +509,7 @@ def test_plan_sync_treats_blank_end_as_default_target(monkeypatch: pytest.Monkey
             "period_type": "daily",
             "sync_kind": "temporal",
             "sync_execution": "append",
-            "cache_info": {},
+            "ingestion": {},
         },
         latest_artifact=_artifact(artifact_id="a1", end="2024-02-29"),
         requested_end="",
@@ -587,7 +587,7 @@ def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPat
             "period_type": "daily",
             "sync_kind": "temporal",
             "sync_execution": "append",
-            "cache_info": {},
+            "ingestion": {},
         },
         latest_artifact=_artifact(artifact_id="a1", end="2024-02-29"),
         requested_end=None,
@@ -608,7 +608,7 @@ def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pyt
             "period_type": "daily",
             "sync_kind": "temporal",
             "sync_execution": "append",
-            "cache_info": {},
+            "ingestion": {},
             "sync_availability": {
                 "latest_available_function": "climate_api.providers.availability.chirps3_daily_latest_available"
             },

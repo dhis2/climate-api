@@ -289,7 +289,7 @@ def test_collection_uses_level0_href_for_multiscale_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "cache_info": {"multiscales": {"levels": 2}}},
+        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {"multiscales": {"levels": 2}}},
     )
     monkeypatch.setattr(
         stac_services,
@@ -325,7 +325,7 @@ def test_collection_uses_level0_href_for_remote_multiscale_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "cache_info": {"multiscales": {"levels": 2}}},
+        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {"multiscales": {"levels": 2}}},
     )
     monkeypatch.setattr(
         stac_services,

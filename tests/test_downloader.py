@@ -28,7 +28,7 @@ def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"eo_function": "ignored.path"},
     }
     monkeypatch.delenv("COUNTRY_CODE", raising=False)
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
@@ -62,7 +62,7 @@ def test_download_dataset_returns_400_for_missing_bbox(monkeypatch: pytest.Monke
 
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"eo_function": "ignored.path"},
     }
     monkeypatch.delenv("DOWNLOAD_BBOX", raising=False)
     monkeypatch.delenv("DEFAULT_DOWNLOAD_BBOX", raising=False)
@@ -99,7 +99,7 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"eo_function": "ignored.path"},
     }
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
 
@@ -173,14 +173,14 @@ _FLAT_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
     "period_type": "yearly",
-    "cache_info": {},
+    "ingestion": {},
 }
 
 _PYRAMID_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
     "period_type": "yearly",
-    "cache_info": {"multiscales": {"levels": 2, "method": "mean"}},
+    "ingestion": {"multiscales": {"levels": 2, "method": "mean"}},
 }
 
 
@@ -282,7 +282,7 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
         "id": "era5land_temperature_hourly",
         "variable": "t2m",
         "period_type": "hourly",
-        "cache_info": {},
+        "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
@@ -318,7 +318,7 @@ def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monke
         "id": "chirps3_precipitation_daily",
         "variable": "precip",
         "period_type": "daily",
-        "cache_info": {},
+        "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
@@ -346,7 +346,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
         "id": "chirps3_precipitation_daily",
         "variable": "precip",
         "period_type": "daily",
-        "cache_info": {},
+        "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)

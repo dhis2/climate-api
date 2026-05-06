@@ -73,7 +73,7 @@ Create a directory for your custom templates and add a YAML file. Each file cont
   period_type: daily
   sync_kind: temporal
   sync_execution: append
-  cache_info:
+  ingestion:
     eo_function: mypackage.sources.enacts.download
   units: mm
   resolution: 4 km x 4 km
@@ -109,9 +109,9 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 | Field                          | Required | Description |
 | ------------------------------ | -------- | ----------- |
-| `cache_info.eo_function`       | Yes | Dotted import path to the download function |
-| `cache_info.default_params`    | No  | Extra keyword arguments forwarded to the download function |
-| `cache_info.multiscales`       | No  | Build a multi-resolution Zarr pyramid (see below) |
+| `ingestion.eo_function`       | Yes | Dotted import path to the download function |
+| `ingestion.default_params`    | No  | Extra keyword arguments forwarded to the download function |
+| `ingestion.multiscales`       | No  | Build a multi-resolution Zarr pyramid (see below) |
 
 **Sync availability** — how the API determines the latest available data:
 
@@ -134,7 +134,7 @@ sync_availability:
 **Multiscale pyramid** — for high-resolution raster datasets rendered in map viewers:
 
 ```yaml
-cache_info:
+ingestion:
   eo_function: mypackage.sources.enacts.download
   multiscales:
     levels: 4    # number of pyramid levels (default: 4)
@@ -189,6 +189,6 @@ The smallest valid template for a static dataset with no sync:
   variable: value
   period_type: daily
   sync_kind: static
-  cache_info:
+  ingestion:
     eo_function: mypackage.sources.my_source.download
 ```

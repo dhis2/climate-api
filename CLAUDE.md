@@ -41,10 +41,10 @@ The `.env` file is required for `make run` and `make openapi`. Copy `.env.exampl
 
 ## Dataset templates
 
-Each YAML in `data/datasets/` defines a dataset template. The `cache_info` block controls download and zarr build behaviour:
+Each YAML in `data/datasets/` defines a dataset template. The `ingestion` block controls download and zarr build behaviour:
 
 ```yaml
-cache_info:
+ingestion:
   eo_function: dhis2eo.data.worldpop.pop_total.yearly.download
   default_params: {} # passed to the download function
   multiscales: # optional — triggers pyramid build

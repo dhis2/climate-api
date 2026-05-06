@@ -47,12 +47,12 @@ def download_dataset(
     When running in the background-task path, the download is deferred and this function
     returns an empty list because no files have been created yet.
     """
-    cache_info = dataset["cache_info"]
-    eo_download_func_path = cache_info["eo_function"]
+    ingestion = dataset["ingestion"]
+    eo_download_func_path = ingestion["eo_function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
     before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
-    params = dict(cache_info.get("default_params", {}))
+    params = dict(ingestion.get("default_params", {}))
     params.update(
         {
             "start": start,
@@ -109,7 +109,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
-    cache_info = dataset["cache_info"]
+    ingestion = dataset["ingestion"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
@@ -155,7 +155,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
 
-    multiscales = dict(cache_info.get("multiscales", {}))
+    multiscales = dict(ingestion.get("multiscales", {}))
 
     if multiscales:
         levels = multiscales.get("levels", 4)
