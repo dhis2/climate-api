@@ -10,7 +10,13 @@ This guide walks through configuring a new Climate API instance for a specific c
 - Make (`make` — available by default on macOS and most Linux distributions; on Windows use [WSL](https://learn.microsoft.com/en-us/windows/wsl/) or run the commands in the Makefile directly)
 - [jq](https://jqlang.org/download/) for pretty-printing API responses in the curl examples (optional — omit `| jq` if not installed)
 
-## Step 1: Clone and install
+## Step 1: Install
+
+```bash
+pip install climate-api
+```
+
+For local development from source instead:
 
 ```bash
 git clone https://github.com/dhis2/climate-api.git
@@ -18,17 +24,16 @@ cd climate-api
 make sync
 ```
 
-## Step 2: Configure the spatial extent
+## Step 2: Create the instance config file
 
-Each Climate API instance is scoped to one spatial extent. Open `data/extents.yaml` and replace the default entry with your country:
+Each Climate API instance is scoped to one spatial extent. Create a `climate-api.yaml` file in your working directory:
 
 ```yaml
-extents:
-  - id: rwa
-    name: Rwanda
-    description: National extent for Rwanda.
-    bbox: [28.8, -2.9, 30.9, -1.0]
-    country_code: RWA
+extent:
+  id: rwa
+  name: Rwanda
+  bbox: [28.8, -2.9, 30.9, -1.0]
+  country_code: RWA
 ```
 
 Field reference:
@@ -37,11 +42,19 @@ Field reference:
 | -------------- | -------- | ----------- |
 | `id`           | Yes | Short identifier used in dataset IDs and API paths (e.g. `chirps3_precipitation_daily_rwa`) |
 | `name`         | No  | Human-readable name shown in API responses |
-| `description`  | No  | Optional descriptive text |
 | `bbox`         | Yes | Bounding box as `[xmin, ymin, xmax, ymax]` in WGS84 decimal degrees |
 | `country_code` | No  | ISO 3166-1 alpha-3 code — required for WorldPop downloads |
 
 To find the bounding box for a country, [bboxfinder.com](http://bboxfinder.com) is a useful tool.
+
+Values can reference environment variables using `${VAR:-default}` syntax:
+
+```yaml
+extent:
+  id: ${EXTENT_ID:-rwa}
+  name: ${EXTENT_NAME:-Rwanda}
+  bbox: [28.8, -2.9, 30.9, -1.0]
+```
 
 ## Step 3: Configure environment variables
 
@@ -51,7 +64,13 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-The defaults in `.env.example` are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
+Set `CLIMATE_API_CONFIG` to the path of the config file you created in Step 2:
+
+```bash
+CLIMATE_API_CONFIG=./climate-api.yaml
+```
+
+The remaining defaults in `.env.example` are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
 
 For ERA5-Land downloads see [ERA5-Land setup](#era5-land-via-destine-earth-data-hub) below.
 
@@ -177,7 +196,7 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
   }' | jq
 ```
 
-ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner will not request data from the last 120 hours. This can be adjusted via `lag_hours` in `data/datasets/era5_land.yaml`.
+ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner will not request data from the last 120 hours. This can be adjusted by supplying a custom `era5_land.yaml` via `datasets_dir` in your `climate-api.yaml`.
 
 ---
 
