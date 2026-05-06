@@ -15,8 +15,8 @@ curl -s http://127.0.0.1:8000/stac/catalog.json | jq
 Each entry in `links` with `"rel": "child"` points to one dataset collection. Use the `href` from the catalog to fetch it:
 
 ```bash
-# Replace the URL with the href of any child link from the catalog above
-curl -s http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_rwa | jq
+# Replace {dataset_id} with any id from the catalog above, e.g. chirps3_precipitation_daily_sle
+curl -s http://127.0.0.1:8000/stac/collections/{dataset_id} | jq
 ```
 
 The `assets.zarr` field contains everything needed to open the dataset:
@@ -41,19 +41,21 @@ from climate_api.client import Client
 
 api = Client("http://127.0.0.1:8000")
 
-for link in api.catalog():
-    print(link["title"], "—", link["href"])
+datasets = api.catalog()
+for link in datasets:
+    print(link["id"], "—", link["title"])
 
-ds = api.open("chirps3_precipitation_daily_rwa")
+ds = api.open(datasets[0]["id"])  # open whichever dataset is published first
 print(ds)
 ```
 
 The `base_url` defaults to the `CLIMATE_API_BASE_URL` environment variable (falling back to `http://127.0.0.1:8000`), so module-level functions work without any argument when the env var is set:
 
 ```python
-from climate_api.client import open_dataset  # reads CLIMATE_API_BASE_URL
+from climate_api.client import list_datasets, open_dataset  # reads CLIMATE_API_BASE_URL
 
-ds = open_dataset("chirps3_precipitation_daily_rwa")
+dataset_id = list_datasets()[0]["id"]
+ds = open_dataset(dataset_id)
 ```
 
 Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).

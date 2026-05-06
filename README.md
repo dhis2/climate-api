@@ -34,7 +34,7 @@ If you cannot use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
@@ -43,7 +43,7 @@ uvicorn climate_api.main:app --reload
 conda create -n dhis2-climate-api python=3.13
 conda activate dhis2-climate-api
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ## Development
@@ -70,7 +70,7 @@ Once running, the API is available at:
 | `http://localhost:8000/`                  | Navigation document                        |
 | `http://localhost:8000/health`            | Health check                               |
 | `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
-| `http://localhost:8000/extent`           | Configured spatial extents                 |
+| `http://localhost:8000/extent`           | Configured spatial extent                  |
 | `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
 | `http://localhost:8000/stac/catalog.json` | STAC catalog for published GeoZarr data    |
 | `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a managed dataset        |
@@ -89,7 +89,7 @@ import httpx
 import xarray as xr
 
 catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
-children = [l for l in catalog["links"] if l["rel"] == "child"]
+children = [link for link in catalog["links"] if link["rel"] == "child"]
 
 if not children:
     print("No published datasets found. Run an ingestion first.")
