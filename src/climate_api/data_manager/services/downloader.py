@@ -21,12 +21,20 @@ from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-_download_dir = SCRIPT_DIR.parent.parent.parent.parent / "data" / "downloads"
-CACHE_OVERRIDE = os.getenv("CACHE_OVERRIDE")
-if CACHE_OVERRIDE:
-    _download_dir = Path(CACHE_OVERRIDE)
-DOWNLOAD_DIR = _download_dir
+
+def _resolve_download_dir() -> Path:
+    # CACHE_OVERRIDE keeps existing Docker/dev deployments working unchanged.
+    override = os.getenv("CACHE_OVERRIDE")
+    if override:
+        return Path(override)
+    # Default to an XDG-compliant user-writable location so the package works
+    # when installed with pip (where a package-relative path would land inside
+    # site-packages and typically be non-writable).
+    xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return xdg_data / "climate-api" / "downloads"
+
+
+DOWNLOAD_DIR = _resolve_download_dir()
 
 CRS = "EPSG:4326"
 
