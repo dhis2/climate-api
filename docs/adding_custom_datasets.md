@@ -134,7 +134,7 @@ extent:
 datasets_dir: ./datasets/
 ```
 
-All `*.yaml` and `*.yml` files in `datasets_dir` are loaded as dataset templates. The built-in templates (CHIRPS3, ERA5-Land, WorldPop) are **replaced** by your directory — include copies of the built-in YAMLs alongside your own if you want to keep them.
+All `*.yaml` and `*.yml` files in `datasets_dir` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
 
 ## Step 4: Ingest and publish
 

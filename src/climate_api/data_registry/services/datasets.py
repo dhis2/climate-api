@@ -22,19 +22,24 @@ SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 def list_datasets() -> list[dict[str, Any]]:
     """Load all dataset templates and return a flat list.
 
-    Resolution order:
-    1. CONFIGS_DIR if set (test override via monkeypatch)
-    2. datasets_dir from CLIMATE_API_CONFIG (user-supplied templates)
-    3. Bundled package data (src/climate_api/datasets/)
+    Bundled templates are always loaded. When datasets_dir is set in
+    CLIMATE_API_CONFIG, templates from that directory are merged on top —
+    a custom template with the same id overrides the bundled one.
+
+    CONFIGS_DIR (test override via monkeypatch) bypasses this and loads
+    only from the given directory, as tests supply a fully controlled set.
     """
     if CONFIGS_DIR is not None:
         return _load_from_dir(CONFIGS_DIR)
 
+    merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_bundled()}
+
     config_datasets_dir = api_config.get_config().get("datasets_dir")
     if config_datasets_dir:
-        return _load_from_dir(Path(config_datasets_dir))
+        for dataset in _load_from_dir(Path(config_datasets_dir)):
+            merged[dataset["id"]] = dataset
 
-    return _load_bundled()
+    return list(merged.values())
 
 
 def get_dataset(dataset_id: str) -> dict[str, Any] | None:

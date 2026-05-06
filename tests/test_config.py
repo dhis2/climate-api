@@ -85,7 +85,7 @@ def test_bundled_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.Monke
     assert "worldpop_population_yearly" in ids
 
 
-def test_datasets_dir_in_config_overrides_bundled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_datasets_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     datasets_dir = tmp_path / "datasets"
     datasets_dir.mkdir()
     (datasets_dir / "custom.yaml").write_text(
@@ -105,4 +105,28 @@ def test_datasets_dir_in_config_overrides_bundled(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
 
     ids = {d["id"] for d in dataset_registry.list_datasets()}
-    assert ids == {"custom_dataset"}
+    assert "custom_dataset" in ids
+    assert "chirps3_precipitation_daily" in ids
+
+
+def test_datasets_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    datasets_dir = tmp_path / "datasets"
+    datasets_dir.mkdir()
+    (datasets_dir / "chirps3.yaml").write_text(
+        """
+- id: chirps3_precipitation_daily
+  name: Custom CHIRPS override
+  variable: precip
+  period_type: daily
+  sync_kind: static
+""",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text(f"datasets_dir: {datasets_dir}\n", encoding="utf-8")
+
+    monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+
+    datasets = {d["id"]: d for d in dataset_registry.list_datasets()}
+    assert datasets["chirps3_precipitation_daily"]["name"] == "Custom CHIRPS override"
