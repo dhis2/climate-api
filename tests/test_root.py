@@ -5,19 +5,44 @@ from climate_api.ingestions import services as ingestion_services
 from climate_api.system.schemas import HealthStatus, RootResponse
 
 
-def test_root_returns_200(client: TestClient) -> None:
+def test_root_returns_html_by_default(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "DHIS2 Climate API" in response.text
 
 
-def test_root_returns_welcome_message(client: TestClient) -> None:
+def test_root_html_shows_extent(client: TestClient) -> None:
     response = client.get("/")
+    assert "Sierra Leone" in response.text
+    assert "sle" in response.text
+
+
+def test_root_html_links_to_key_endpoints(client: TestClient) -> None:
+    response = client.get("/")
+    assert "/docs" in response.text
+    assert "/ogcapi/" in response.text
+    assert "/stac/catalog.json" in response.text
+    assert "/maps" in response.text
+
+
+def test_root_f_json_returns_json(client: TestClient) -> None:
+    response = client.get("/?f=json")
+    assert response.status_code == 200
+    assert "application/json" in response.headers["content-type"]
     result = RootResponse.model_validate(response.json())
     assert result.message == "Welcome to DHIS2 Climate API"
 
 
-def test_root_returns_links(client: TestClient) -> None:
-    response = client.get("/")
+def test_root_accept_json_returns_json(client: TestClient) -> None:
+    response = client.get("/", headers={"accept": "application/json"})
+    assert response.status_code == 200
+    result = RootResponse.model_validate(response.json())
+    assert result.message == "Welcome to DHIS2 Climate API"
+
+
+def test_root_json_contains_links(client: TestClient) -> None:
+    response = client.get("/?f=json")
     result = RootResponse.model_validate(response.json())
     rels = [link.rel for link in result.links]
     assert "extent" in rels
