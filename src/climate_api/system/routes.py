@@ -1,42 +1,15 @@
 """Root API endpoints."""
 
-import importlib.resources
 import sys
 from importlib.metadata import version
-from typing import Any
 
-import jinja2
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from climate_api.extents.services import get_extent
-from climate_api.ingestions.services import list_datasets
-
 from .schemas import AppInfo, HealthStatus, Link, RootResponse, Status
+from .templates import render_landing, wants_json
 
 router = APIRouter()
-
-_env = jinja2.Environment(
-    loader=jinja2.BaseLoader(),
-    autoescape=True,
-)
-
-_template_text: str | None = None
-
-
-def _get_template() -> jinja2.Template:
-    global _template_text
-    if _template_text is None:
-        resource = importlib.resources.files("climate_api") / "data" / "templates" / "index.html"
-        _template_text = resource.read_text(encoding="utf-8")
-    return _env.from_string(_template_text)
-
-
-def _wants_json(request: Request) -> bool:
-    if request.query_params.get("f") == "json":
-        return True
-    accept = request.headers.get("accept", "")
-    return "application/json" in accept and "text/html" not in accept
 
 
 def _root_json(base: str) -> RootResponse:
@@ -53,29 +26,13 @@ def _root_json(base: str) -> RootResponse:
     )
 
 
-def _root_html() -> str:
-    try:
-        extent: dict[str, Any] | None = get_extent()
-    except Exception:
-        extent = None
-    try:
-        datasets = list_datasets().items
-    except Exception:
-        datasets = []
-    return _get_template().render(
-        version=version("climate-api"),
-        extent=extent,
-        datasets=datasets,
-    )
-
-
 @router.get("/", response_class=Response)
 def read_index(request: Request) -> Response:
     """Return the landing page (HTML) or a navigation object (JSON with ?f=json)."""
     base = str(request.base_url).rstrip("/")
-    if _wants_json(request):
+    if wants_json(request):
         return JSONResponse(_root_json(base).model_dump())
-    return HTMLResponse(_root_html())
+    return HTMLResponse(render_landing(version("climate-api")))
 
 
 @router.get("/health")
