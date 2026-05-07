@@ -22,6 +22,7 @@ Copy `.env.example` to `.env` and adjust values as needed. Environment variables
 
 Key environment variables:
 
+- `DHIS2_BASE_URL` / `DHIS2_USERNAME` / `DHIS2_PASSWORD` — optional for now; reserved for future DHIS2 write/integration workflows
 - `CDSAPI_URL` / `CDSAPI_KEY` — required for ERA5-Land downloads
 - `DOWNLOAD_BBOX` — default `xmin,ymin,xmax,ymax` used when a dataset requires bbox and the request/extent does not provide one
 - `COUNTRY_CODE` — default country code for datasets that require one, such as WorldPop
