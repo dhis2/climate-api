@@ -236,29 +236,10 @@
 
       function buildColormap(name) {
         const key = COLORMAP_ALIASES[name?.toLowerCase()] ?? "viridis";
-        const safe = Object.keys(COLORMAP_ALIASES).includes(name?.toLowerCase())
-          ? key
-          : "viridis";
         try {
-          const colors = colormap({
-            colormap: safe,
-            nshades: 256,
-            format: "rba",
-            alpha: 1.0,
-          });
-          return new Uint8Array(
-            colors.flatMap(([r, g, b, a]) => [r, g, b, Math.round(a * 255)])
-          );
+          return colormap({ colormap: key, nshades: 256, format: "hex", alpha: 1.0 });
         } catch {
-          const fallback = colormap({
-            colormap: "viridis",
-            nshades: 256,
-            format: "rba",
-            alpha: 1.0,
-          });
-          return new Uint8Array(
-            fallback.flatMap(([r, g, b, a]) => [r, g, b, Math.round(a * 255)])
-          );
+          return colormap({ colormap: "viridis", nshades: 256, format: "hex", alpha: 1.0 });
         }
       }
 
