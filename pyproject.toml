@@ -14,7 +14,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pygeoapi>=0.22.0",
     "pystac>=1.10,<2",
-    "dhis2eo @ git+https://github.com/dhis2/dhis2eo.git@v1.2.0",
+    "dhis2eo==1.2.1",
     "geojson-pydantic>=2.1.0",
     "httpx>=0.28.1",
     "earthkit-transforms==0.5.*",

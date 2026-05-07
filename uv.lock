@@ -432,7 +432,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dhis2eo", git = "https://github.com/dhis2/dhis2eo.git?rev=v1.2.0" },
+    { name = "dhis2eo", specifier = "==1.2.1" },
     { name = "earthkit-transforms", specifier = "==0.5.*" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "geojson-pydantic", specifier = ">=2.1.0" },
@@ -594,8 +594,8 @@ wheels = [
 
 [[package]]
 name = "dhis2eo"
-version = "1.2.0"
-source = { git = "https://github.com/dhis2/dhis2eo.git?rev=v1.2.0#e6e62f2b9f916b840534a2cf8c4cc2b0368ad370" }
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "earthkit-data", extra = ["cds", "geopandas", "geotiff", "projection"] },
@@ -607,6 +607,10 @@ dependencies = [
     { name = "rioxarray" },
     { name = "xarray" },
     { name = "zarr" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e5/3d/0a2945f5459bbda30e2d014a2c02417415374953e119f7a19d58c2bdf004/dhis2eo-1.2.1.tar.gz", hash = "sha256:dfc8687f033ae36758bdbc9f78ac648c50e1badf483356d35ebbee6d00f800e3", size = 22424, upload-time = "2026-05-07T11:52:09.867Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/f3/c07d21f796b809ae72858d537c68fe6be7f9f97d363ba0f76adb604b8795/dhis2eo-1.2.1-py3-none-any.whl", hash = "sha256:25fc25a8225ef7b9384a5eba6df491857562b317312cb931b8af924878fa0c52", size = 29273, upload-time = "2026-05-07T11:52:08.23Z" },
 ]
 
 [[package]]
