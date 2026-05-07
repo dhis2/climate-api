@@ -443,7 +443,7 @@
 
         try {
           const cm = buildColormap(colormapName);
-          console.log("[maps] colormap:", colormapName, "→", Array.isArray(cm) ? `array[${cm.length}]` : typeof cm, cm?.[0]);
+          const zarrVersion = zarr["zarr:zarr_format"] ?? null;
           const selector =
             timeSteps.length > 0 ? { [timeDimKey]: 0 } : {};
           activeLayer = new ZarrLayer({
@@ -453,6 +453,7 @@
             clim,
             colormap: cm,
             selector,
+            ...(zarrVersion !== null && { zarrVersion }),
           });
           map.addLayer(activeLayer);
         } catch (err) {
