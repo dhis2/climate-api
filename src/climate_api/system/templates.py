@@ -1,7 +1,9 @@
-"""Server-side HTML rendering for the Climate API management interface."""
+"""Server-side HTML rendering and root resource representations for the Climate API."""
 
 import importlib.resources
 import logging
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 import jinja2
@@ -10,11 +12,43 @@ from fastapi import Request
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.services import list_datasets
 
+from .schemas import Link, RootResponse
+
 _env = jinja2.Environment(loader=jinja2.BaseLoader(), autoescape=True)
 
 _cache: dict[str, jinja2.Template] = {}
 
 _log = logging.getLogger(__name__)
+
+try:
+    app_version = _pkg_version("climate-api")
+except PackageNotFoundError:
+    app_version = "unknown"
+
+ROOT_RESPONSES: dict[int, dict[str, Any]] = {
+    200: {
+        "description": "Landing page (HTML) or navigation document (JSON)",
+        "content": {
+            "text/html": {"schema": {"type": "string"}},
+            "application/json": {"schema": RootResponse.model_json_schema()},
+        },
+    }
+}
+
+
+def root_json(base: str) -> RootResponse:
+    """Build the root navigation document for the JSON representation."""
+    return RootResponse(
+        message="Welcome to DHIS2 Climate API",
+        links=[
+            Link(href=f"{base}/ogcapi/", rel="ogcapi", title="OGC API"),
+            Link(href=f"{base}/stac/catalog.json", rel="stac", title="STAC Catalog"),
+            Link(href=f"{base}/extent", rel="extent", title="Extent"),
+            Link(href=f"{base}/ingestions", rel="ingestions", title="Ingestions"),
+            Link(href=f"{base}/datasets", rel="datasets", title="Datasets"),
+            Link(href=f"{base}/docs", rel="docs", title="API Docs"),
+        ],
+    )
 
 
 def get_template(name: str) -> jinja2.Template:
