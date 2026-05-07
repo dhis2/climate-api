@@ -18,6 +18,16 @@ Install dependencies (requires [uv](https://docs.astral.sh/uv/)):
 uv sync
 ```
 
+#### Download provider support
+
+Dataset downloads require `dhis2eo`, which is not yet on PyPI. Install it manually before triggering ingestions:
+
+```
+pip install "dhis2eo @ git+https://github.com/dhis2/dhis2eo.git@v1.2.0"
+```
+
+The core API (serving, STAC, OGC API, Zarr access) works without it — only `POST /ingestions` needs this package.
+
 Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime. See `.env.example` for the full list of available options.
 
 Start the app:

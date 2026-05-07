@@ -7,6 +7,16 @@ name = "climate-api"
 version = "0.1.0a1"
 requires-python = ">=3.13"
 description = "Climate and Earth Observation data API for DHIS2"
+license = { text = "BSD-2-Clause" }
+authors = [{ name = "DHIS2", email = "post@dhis2.org" }]
+readme = "README.md"
+keywords = ["dhis2", "climate", "zarr", "stac", "geospatial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+]
 dependencies = [
     "fastapi>=0.100.0",
     "jinja2>=3.1",
@@ -15,7 +25,6 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pygeoapi>=0.22.0",
     "pystac>=1.10,<2",
-    "dhis2eo==1.2.1",
     "geojson-pydantic>=2.1.0",
     "httpx>=0.28.1",
     "earthkit-transforms==0.5.*",
@@ -25,6 +34,10 @@ dependencies = [
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*",
 ]
+
+[project.urls]
+Repository = "https://github.com/dhis2/climate-api"
+Documentation = "https://github.com/dhis2/climate-api/tree/main/docs"
 
 [project.scripts]
 climate-api = "climate_api.cli:main"
@@ -70,7 +83,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["dhis2eo.*", "pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
+module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
 ignore_missing_imports = true
 
 [tool.pyright]
