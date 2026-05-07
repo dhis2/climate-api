@@ -25,7 +25,7 @@ try:
 except PackageNotFoundError:
     app_version = "unknown"
 
-ROOT_RESPONSES: dict[int, dict[str, Any]] = {
+ROOT_RESPONSES: dict[int | str, dict[str, Any]] = {
     200: {
         "description": "Landing page (HTML) or navigation document (JSON)",
         "content": {
