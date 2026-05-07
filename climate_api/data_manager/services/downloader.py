@@ -301,7 +301,7 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
         raise ModuleNotFoundError(
             f"Download provider package '{top_level}' is not installed. "
             f"Install it manually before triggering dataset downloads:\n\n"
-            f"  pip install \"{top_level} @ git+https://github.com/dhis2/{top_level}.git\"\n\n"
+            f'  pip install "{top_level} @ git+https://github.com/dhis2/{top_level}.git"\n\n'
             f"Once the package is on PyPI this step will not be required."
         ) from exc
     return getattr(module, function_name)  # type: ignore[no-any-return]
