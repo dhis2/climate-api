@@ -220,16 +220,15 @@
       import chroma from "https://esm.sh/chroma-js";
 
       // Suffix _r means the scale is reversed (matplotlib convention).
+      // chroma-js resolves ColorBrewer/D3 scale names case-insensitively.
       function buildColormap(name = "viridis") {
         const reversed = name.endsWith("_r");
-        const base = reversed ? name.slice(0, -2) : name;
-        // chroma-js uses title-case for ColorBrewer names (Blues, Reds, RdBu, Viridis…)
-        const scaleName = base.charAt(0).toUpperCase() + base.slice(1);
+        const scaleName = reversed ? name.slice(0, -2) : name;
         try {
           const colors = chroma.scale(scaleName).colors(256);
           return reversed ? colors.reverse() : colors;
         } catch {
-          return chroma.scale("Viridis").colors(256);
+          return chroma.scale("viridis").colors(256);
         }
       }
 
