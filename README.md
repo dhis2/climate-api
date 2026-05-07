@@ -120,7 +120,7 @@ else:
 
 The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to the resolved runtime data directory (for Docker: `/app/data/pygeoapi/pygeoapi-config.yml`).
 
-The base configuration is bundled with the package at `src/climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
+The base configuration is bundled with the package at `climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
 
 To validate the configuration manually:
 
