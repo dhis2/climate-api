@@ -399,7 +399,7 @@ wheels = [
 
 [[package]]
 name = "climate-api"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "dhis2eo" },
@@ -408,6 +408,7 @@ dependencies = [
     { name = "geojson-pydantic" },
     { name = "geozarr-toolkit" },
     { name = "httpx" },
+    { name = "jinja2" },
     { name = "metpy" },
     { name = "pygeoapi" },
     { name = "pystac" },
@@ -438,6 +439,7 @@ requires-dist = [
     { name = "geojson-pydantic", specifier = ">=2.1.0" },
     { name = "geozarr-toolkit", specifier = "==0.1.*" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "metpy", specifier = ">=1.7,<2" },
     { name = "pygeoapi", specifier = ">=0.22.0" },
     { name = "pystac", specifier = ">=1.10,<2" },

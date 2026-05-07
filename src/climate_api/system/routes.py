@@ -1,30 +1,24 @@
 """Root API endpoints."""
 
 import sys
-from importlib.metadata import version
+from importlib.metadata import version as _pkg_version
 
 from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from .schemas import AppInfo, HealthStatus, Link, RootResponse, Status
+from .schemas import AppInfo, HealthStatus, Status
+from .templates import ROOT_RESPONSES, app_version, render_landing, root_json, wants_json
 
 router = APIRouter()
 
 
-@router.get("/")
-def read_index(request: Request) -> RootResponse:
-    """Return a welcome message with navigation links."""
+@router.get("/", response_class=Response, responses=ROOT_RESPONSES)
+def read_index(request: Request) -> Response:
+    """Return the landing page (HTML) or a navigation object (JSON with ?f=json)."""
     base = str(request.base_url).rstrip("/")
-    return RootResponse(
-        message="Welcome to DHIS2 Climate API",
-        links=[
-            Link(href=f"{base}/ogcapi/", rel="ogcapi", title="OGC API"),
-            Link(href=f"{base}/stac/catalog.json", rel="stac", title="STAC Catalog"),
-            Link(href=f"{base}/extent", rel="extent", title="Extent"),
-            Link(href=f"{base}/ingestions", rel="ingestions", title="Ingestions"),
-            Link(href=f"{base}/datasets", rel="datasets", title="Datasets"),
-            Link(href=f"{base}/docs", rel="docs", title="API Docs"),
-        ],
-    )
+    if wants_json(request):
+        return JSONResponse(root_json(base).model_dump())
+    return HTMLResponse(render_landing(app_version, base))
 
 
 @router.get("/health")
@@ -37,8 +31,8 @@ def health() -> HealthStatus:
 def info() -> AppInfo:
     """Return application version and environment info."""
     return AppInfo(
-        app_version=version("climate-api"),
+        app_version=_pkg_version("climate-api"),
         python_version=sys.version,
-        pygeoapi_version=version("pygeoapi"),
-        uvicorn_version=version("uvicorn"),
+        pygeoapi_version=_pkg_version("pygeoapi"),
+        uvicorn_version=_pkg_version("uvicorn"),
     )
