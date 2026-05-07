@@ -21,7 +21,7 @@ def read_index(request: Request) -> Response:
     return HTMLResponse(render_landing(app_version, base))
 
 
-@router.get("/maps", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/map", response_class=HTMLResponse, include_in_schema=False)
 def maps(request: Request) -> HTMLResponse:
     """Return the interactive map viewer."""
     base = str(request.base_url).rstrip("/")
