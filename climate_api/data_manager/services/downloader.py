@@ -294,16 +294,7 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     parts = full_path.split(".")
     module_path = ".".join(parts[:-1])
     function_name = parts[-1]
-    top_level = parts[0]
-    try:
-        module = importlib.import_module(module_path)
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            f"Download provider package '{top_level}' is not installed. "
-            f"Install it manually before triggering dataset downloads:\n\n"
-            f'  pip install "{top_level} @ git+https://github.com/dhis2/{top_level}.git"\n\n'
-            f"Once the package is on PyPI this step will not be required."
-        ) from exc
+    module = importlib.import_module(module_path)
     return getattr(module, function_name)  # type: ignore[no-any-return]
 
 
