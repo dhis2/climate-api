@@ -217,59 +217,20 @@
 
     <script type="module">
       import { ZarrLayer } from "https://esm.sh/@carbonplan/zarr-layer";
+      import chroma from "https://esm.sh/chroma-js";
 
-      // Key color stops for each supported colormap (ColorBrewer / matplotlib).
-      // Expanded to 256 steps at runtime via linear interpolation.
-      const COLORMAP_STOPS = {
-        blues: [
-          [247, 251, 255], [222, 235, 247], [198, 219, 239],
-          [158, 202, 225], [107, 174, 214], [66, 146, 198],
-          [33, 113, 181], [8, 81, 156], [8, 48, 107],
-        ],
-        // rdbu_r: blue (cold) → white → red (hot)
-        rdbu_r: [
-          [5, 48, 97], [33, 102, 172], [67, 147, 195], [146, 197, 222],
-          [209, 229, 240], [247, 247, 247], [253, 219, 199], [244, 165, 130],
-          [214, 96, 77], [178, 24, 43], [103, 0, 31],
-        ],
-        viridis: [
-          [68, 1, 84], [72, 40, 120], [62, 73, 137], [49, 104, 142],
-          [38, 130, 142], [31, 158, 137], [53, 183, 121], [110, 206, 88],
-          [181, 222, 43], [253, 231, 37],
-        ],
-        greens: [
-          [247, 252, 245], [229, 245, 224], [199, 233, 192],
-          [161, 217, 155], [116, 196, 118], [65, 171, 93],
-          [35, 139, 69], [0, 109, 44], [0, 68, 27],
-        ],
-        greys: [
-          [255, 255, 255], [240, 240, 240], [217, 217, 217],
-          [189, 189, 189], [150, 150, 150], [115, 115, 115],
-          [82, 82, 82], [37, 37, 37], [0, 0, 0],
-        ],
-      };
-
-      function lerp(a, b, t) {
-        return [
-          Math.round(a[0] + (b[0] - a[0]) * t),
-          Math.round(a[1] + (b[1] - a[1]) * t),
-          Math.round(a[2] + (b[2] - a[2]) * t),
-        ];
-      }
-
-      function expandColormap(stops, n = 256) {
-        const result = [];
-        for (let i = 0; i < n; i++) {
-          const t = (i / (n - 1)) * (stops.length - 1);
-          const lo = Math.min(Math.floor(t), stops.length - 2);
-          result.push(lerp(stops[lo], stops[lo + 1], t - lo));
+      // Suffix _r means the scale is reversed (matplotlib convention).
+      function buildColormap(name = "viridis") {
+        const reversed = name.endsWith("_r");
+        const base = reversed ? name.slice(0, -2) : name;
+        // chroma-js uses title-case for ColorBrewer names (Blues, Reds, RdBu, Viridis…)
+        const scaleName = base.charAt(0).toUpperCase() + base.slice(1);
+        try {
+          const colors = chroma.scale(scaleName).colors(256);
+          return reversed ? colors.reverse() : colors;
+        } catch {
+          return chroma.scale("Viridis").colors(256);
         }
-        return result;
-      }
-
-      function buildColormap(name) {
-        const stops = COLORMAP_STOPS[name?.toLowerCase()] ?? COLORMAP_STOPS.viridis;
-        return expandColormap(stops);
       }
 
       // Resolve the temporal dimension key and step list from cube:dimensions.
