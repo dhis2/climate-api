@@ -22,41 +22,6 @@ def test_dataset_registry_requires_sync_kind(monkeypatch: pytest.MonkeyPatch, tm
         datasets.list_datasets()
 
 
-def test_dataset_registry_requires_ingestion_block(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    registry_file = tmp_path / "missing_ingestion.yaml"
-    registry_file.write_text(
-        """
-- id: missing_ingestion
-  variable: value
-  period_type: daily
-  sync_kind: temporal
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
-
-    with pytest.raises(ValueError, match="must define an 'ingestion' block"):
-        datasets.list_datasets()
-
-
-def test_dataset_registry_requires_ingestion_function(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    registry_file = tmp_path / "missing_function.yaml"
-    registry_file.write_text(
-        """
-- id: missing_function
-  variable: value
-  period_type: daily
-  sync_kind: temporal
-  ingestion: {}
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
-
-    with pytest.raises(ValueError, match="must define ingestion.function"):
-        datasets.list_datasets()
-
-
 def test_dataset_registry_rejects_unsupported_sync_kind(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -91,13 +56,59 @@ def test_dataset_registry_accepts_supported_sync_kind(
   period_type: daily
   sync_kind: temporal
   ingestion:
-    function: mypackage.sources.download
+    function: some.download.function
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     assert datasets.list_datasets()[0]["id"] == "valid_temporal"
+
+
+def test_dataset_registry_accepts_derived_sync_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "valid_derived.yaml"
+    registry_file.write_text(
+        """
+- id: derived_weekly
+  name: Derived weekly
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+  processing:
+    process_id: resample
+    source_dataset_id: source_daily
+    method: sum
+    week_start: monday
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    assert datasets.list_datasets()[0]["sync_kind"] == "derived"
+
+
+def test_dataset_registry_rejects_derived_sync_kind_without_processing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "derived_missing_processing.yaml"
+    registry_file.write_text(
+        """
+- id: derived_missing_processing
+  name: Derived missing processing
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="must define processing when sync_kind is derived"):
+        datasets.list_datasets()
 
 
 def test_dataset_registry_rejects_unsupported_sync_execution(
@@ -112,8 +123,6 @@ def test_dataset_registry_rejects_unsupported_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
-  ingestion:
-    function: mypackage.sources.download
   sync_execution: sometimes
 """,
         encoding="utf-8",
@@ -136,8 +145,6 @@ def test_dataset_registry_rejects_non_string_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
-  ingestion:
-    function: mypackage.sources.download
   sync_execution:
     - append
 """,
@@ -161,9 +168,9 @@ def test_dataset_registry_accepts_supported_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
-  ingestion:
-    function: mypackage.sources.download
   sync_execution: append
+  ingestion:
+    function: some.download.function
 """,
         encoding="utf-8",
     )
@@ -185,7 +192,7 @@ def test_dataset_registry_rejects_invalid_sync_availability_function(
   period_type: daily
   sync_kind: temporal
   ingestion:
-    function: mypackage.sources.download
+    function: some.download.function
   sync_availability:
     latest_available_function: 42
 """,
@@ -210,7 +217,7 @@ def test_dataset_registry_accepts_sync_availability_function(
   period_type: daily
   sync_kind: temporal
   ingestion:
-    function: mypackage.sources.download
+    function: some.download.function
   sync_availability:
     latest_available_function: climate_api.providers.availability.lagged_latest_available
 """,
@@ -221,3 +228,81 @@ def test_dataset_registry_accepts_sync_availability_function(
     assert datasets.list_datasets()[0]["sync_availability"]["latest_available_function"].endswith(
         "lagged_latest_available"
     )
+
+
+def test_dataset_registry_rejects_invalid_resample_method(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_resample_method.yaml"
+    registry_file.write_text(
+        """
+- id: derived_invalid_method
+  name: Derived invalid method
+  variable: value
+  period_type: weekly
+  sync_kind: derived
+  processing:
+    process_id: resample
+    source_dataset_id: source_daily
+    method: median
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="unsupported processing.method 'median'"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_rejects_processing_for_non_derived_sync_kind(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "temporal_with_processing.yaml"
+    registry_file.write_text(
+        """
+- id: temporal_with_processing
+  name: Temporal with processing
+  variable: value
+  period_type: weekly
+  sync_kind: temporal
+  ingestion:
+    function: some.download.function
+  processing:
+    process_id: resample
+    source_dataset_id: source_daily
+    method: sum
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="may only define processing when sync_kind is derived"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_rejects_week_start_for_non_weekly_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_resample_week_start.yaml"
+    registry_file.write_text(
+        """
+- id: derived_monthly_with_week_start
+  name: Derived monthly with week start
+  variable: value
+  period_type: monthly
+  sync_kind: derived
+  processing:
+    process_id: resample
+    source_dataset_id: source_daily
+    method: sum
+    week_start: monday
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="may only define processing.week_start when period_type is weekly"):
+        datasets.list_datasets()
