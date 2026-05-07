@@ -16,7 +16,6 @@ from fastapi import BackgroundTasks, HTTPException
 from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
-from ...shared.dhis2_adapter import create_client, get_org_units_geojson
 from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
@@ -299,18 +298,8 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     return getattr(module, function_name)  # type: ignore[no-any-return]
 
 
-def _get_default_bbox() -> list[float]:
-    """Compute the default download bbox from DHIS2 org units when needed."""
-    import geopandas as gpd
-
-    client = create_client()
-    org_units_geojson = get_org_units_geojson(client, level=2)
-    gdf = gpd.GeoDataFrame.from_features(org_units_geojson.get("features", []))
-    return list(map(float, gdf.total_bounds))
-
-
 def _resolve_bbox(*, bbox: list[float] | None) -> list[float]:
-    """Resolve bbox from request, env, or DHIS2-derived defaults."""
+    """Resolve bbox from request or environment."""
     if bbox is not None:
         return bbox
 
@@ -318,12 +307,9 @@ def _resolve_bbox(*, bbox: list[float] | None) -> list[float]:
     if env_bbox is not None:
         return env_bbox
 
-    try:
-        return _get_default_bbox()
-    except Exception as exc:
-        raise ValueError(
-            "A bbox is required for this dataset. Provide it in the request or set DOWNLOAD_BBOX in the environment."
-        ) from exc
+    raise ValueError(
+        "A bbox is required for this dataset. Provide it in the request or set DOWNLOAD_BBOX in the environment."
+    )
 
 
 def _bbox_from_env() -> list[float] | None:

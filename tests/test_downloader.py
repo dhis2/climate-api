@@ -97,7 +97,6 @@ def test_download_dataset_returns_400_for_missing_bbox(monkeypatch: pytest.Monke
     monkeypatch.delenv("DOWNLOAD_BBOX", raising=False)
     monkeypatch.delenv("DEFAULT_DOWNLOAD_BBOX", raising=False)
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
-    monkeypatch.setattr(downloader, "_get_default_bbox", _raise_default_bbox_error)
 
     with pytest.raises(HTTPException) as exc_info:
         downloader.download_dataset(
@@ -146,10 +145,6 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
     assert exc_info.value.status_code == 502
     assert "Upstream dataset download failed: provider timeout" == str(exc_info.value.detail)
-
-
-def _raise_default_bbox_error() -> list[float]:
-    raise RuntimeError("missing default bbox")
 
 
 # ---------------------------------------------------------------------------
