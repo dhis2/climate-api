@@ -1,7 +1,8 @@
 """Root API endpoints."""
 
 import sys
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -10,6 +11,11 @@ from .schemas import AppInfo, HealthStatus, Link, RootResponse, Status
 from .templates import render_landing, wants_json
 
 router = APIRouter()
+
+try:
+    _APP_VERSION = _pkg_version("climate-api")
+except PackageNotFoundError:
+    _APP_VERSION = "unknown"
 
 
 def _root_json(base: str) -> RootResponse:
@@ -26,13 +32,25 @@ def _root_json(base: str) -> RootResponse:
     )
 
 
-@router.get("/", response_class=Response)
+@router.get(
+    "/",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "Landing page (HTML) or navigation document (JSON)",
+            "content": {
+                "text/html": {"schema": {"type": "string"}},
+                "application/json": {"model": RootResponse},
+            },
+        }
+    },
+)
 def read_index(request: Request) -> Response:
     """Return the landing page (HTML) or a navigation object (JSON with ?f=json)."""
     base = str(request.base_url).rstrip("/")
     if wants_json(request):
         return JSONResponse(_root_json(base).model_dump())
-    return HTMLResponse(render_landing(version("climate-api")))
+    return HTMLResponse(render_landing(_APP_VERSION, base))
 
 
 @router.get("/health")
@@ -45,8 +63,8 @@ def health() -> HealthStatus:
 def info() -> AppInfo:
     """Return application version and environment info."""
     return AppInfo(
-        app_version=version("climate-api"),
+        app_version=_pkg_version("climate-api"),
         python_version=sys.version,
-        pygeoapi_version=version("pygeoapi"),
-        uvicorn_version=version("uvicorn"),
+        pygeoapi_version=_pkg_version("pygeoapi"),
+        uvicorn_version=_pkg_version("uvicorn"),
     )

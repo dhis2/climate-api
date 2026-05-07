@@ -207,7 +207,7 @@
         {% else %}
         <p class="note">
           No extent configured. Set <code>extent:</code> in
-          <code>CLIMATE_API_CONFIG</code> — see <a href="/docs">API docs</a> for
+          <code>CLIMATE_API_CONFIG</code> — see <a href="{{ base }}/docs">API docs</a> for
           details.
         </p>
         {% endif %}
@@ -231,7 +231,7 @@
             {% for ds in datasets %}
             <tr>
               <td>
-                <a href="/datasets/{{ ds.dataset_id }}"
+                <a href="{{ base }}/datasets/{{ ds.dataset_id }}"
                   >{{ ds.dataset_name }}</a
                 >
               </td>
@@ -254,11 +254,11 @@
         {% else %}
         <p class="note">
           No datasets ingested yet. Use
-          <a href="/docs#/Ingestions/create_ingestion_ingestions_post"
+          <a href="{{ base }}/docs#/Ingestions/create_ingestion_ingestions_post"
             >POST /ingestions</a
           >
           to ingest data, or
-          <a href="/docs#/Sync/trigger_sync_sync_post">POST /sync</a>
+          <a href="{{ base }}/docs#/Sync/trigger_sync_sync_post">POST /sync</a>
           to run an automated sync.
         </p>
         {% endif %}
@@ -270,7 +270,7 @@
         <ul class="links-list">
           <li>
             <span class="link-label"
-              ><a href="/docs">API documentation</a></span
+              ><a href="{{ base }}/docs">API documentation</a></span
             >
             <span class="link-desc"
               >Interactive Swagger UI for all endpoints</span
@@ -278,14 +278,22 @@
           </li>
           <li>
             <span class="link-label"
-              ><a href="/stac/catalog.json">STAC Catalog</a></span
+              ><a href="{{ base }}/ogcapi/">OGC API</a></span
+            >
+            <span class="link-desc"
+              >OGC API Features endpoint (pygeoapi)</span
+            >
+          </li>
+          <li>
+            <span class="link-label"
+              ><a href="{{ base }}/stac/catalog.json">STAC Catalog</a></span
             >
             <span class="link-desc"
               >SpatioTemporal Asset Catalog of published datasets</span
             >
           </li>
           <li>
-            <span class="link-label"><a href="/?f=json">Root (JSON)</a></span>
+            <span class="link-label"><a href="{{ base }}/?f=json">Root (JSON)</a></span>
             <span class="link-desc">This page as a JSON navigation object</span>
           </li>
         </ul>

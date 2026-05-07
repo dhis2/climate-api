@@ -1,6 +1,7 @@
 """Server-side HTML rendering for the Climate API management interface."""
 
 import importlib.resources
+import logging
 from typing import Any
 
 import jinja2
@@ -13,9 +14,11 @@ _env = jinja2.Environment(loader=jinja2.BaseLoader(), autoescape=True)
 
 _cache: dict[str, jinja2.Template] = {}
 
+_log = logging.getLogger(__name__)
+
 
 def get_template(name: str) -> jinja2.Template:
-    """Load and cache a Jinja2 template from the bundled data/templates/ directory."""
+    """Load and cache a Jinja2 template from the bundled templates/ directory."""
     if name not in _cache:
         resource = importlib.resources.files("climate_api") / "templates" / name
         _cache[name] = _env.from_string(resource.read_text(encoding="utf-8"))
@@ -30,18 +33,23 @@ def wants_json(request: Request) -> bool:
     return "application/json" in accept and "text/html" not in accept
 
 
-def render_landing(version: str) -> str:
+def render_landing(version: str, base: str) -> str:
     """Render the root landing page with live instance status."""
     try:
         extent: dict[str, Any] | None = get_extent()
+    except ValueError:
+        extent = None
     except Exception:
+        _log.exception("Unexpected error loading extent for landing page")
         extent = None
     try:
         datasets = list_datasets().items
     except Exception:
+        _log.exception("Unexpected error loading datasets for landing page")
         datasets = []
     return get_template("landing_page.html").render(
         version=version,
+        base=base,
         extent=extent,
         datasets=datasets,
     )

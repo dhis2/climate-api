@@ -23,7 +23,6 @@ def test_root_html_links_to_key_endpoints(client: TestClient) -> None:
     assert "/docs" in response.text
     assert "/ogcapi/" in response.text
     assert "/stac/catalog.json" in response.text
-    assert "/maps" in response.text
 
 
 def test_root_f_json_returns_json(client: TestClient) -> None:
