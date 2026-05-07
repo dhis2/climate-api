@@ -40,7 +40,7 @@ def _root_json(base: str) -> RootResponse:
             "description": "Landing page (HTML) or navigation document (JSON)",
             "content": {
                 "text/html": {"schema": {"type": "string"}},
-                "application/json": {"model": RootResponse},
+                "application/json": {"schema": RootResponse.model_json_schema()},
             },
         }
     },

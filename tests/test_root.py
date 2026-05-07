@@ -39,6 +39,18 @@ def test_root_accept_json_returns_json(client: TestClient) -> None:
     assert result.message == "Welcome to DHIS2 Climate API"
 
 
+def test_root_accept_json_and_html_equal_q_returns_json(client: TestClient) -> None:
+    response = client.get("/", headers={"accept": "application/json, text/html"})
+    assert response.status_code == 200
+    assert "application/json" in response.headers["content-type"]
+
+
+def test_root_accept_html_higher_q_returns_html(client: TestClient) -> None:
+    response = client.get("/", headers={"accept": "application/json;q=0.9, text/html;q=1.0"})
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
 def test_root_json_contains_links(client: TestClient) -> None:
     response = client.get("/?f=json")
     result = RootResponse.model_validate(response.json())

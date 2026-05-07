@@ -25,12 +25,39 @@ def get_template(name: str) -> jinja2.Template:
     return _cache[name]
 
 
+def _media_type_q(accept: str, media_type: str) -> float:
+    """Return the q-value for media_type in an Accept header, or -1.0 if absent."""
+    for item in accept.split(","):
+        parts = item.strip().split(";")
+        if parts[0].strip() != media_type:
+            continue
+        q = 1.0
+        for param in parts[1:]:
+            param = param.strip()
+            if param.startswith("q="):
+                try:
+                    q = float(param[2:])
+                except ValueError:
+                    pass
+        return q
+    return -1.0
+
+
 def wants_json(request: Request) -> bool:
-    """Return True if the client prefers a JSON response over HTML."""
+    """Return True if the client prefers a JSON response over HTML.
+
+    JSON is preferred when application/json is present with a q-value greater
+    than or equal to text/html. HTML wins only when text/html has a strictly
+    higher q-value, matching RFC 7231 content negotiation semantics.
+    """
     if request.query_params.get("f") == "json":
         return True
     accept = request.headers.get("accept", "")
-    return "application/json" in accept and "text/html" not in accept
+    if not accept:
+        return False
+    json_q = _media_type_q(accept, "application/json")
+    html_q = _media_type_q(accept, "text/html")
+    return json_q >= 0 and (html_q < 0 or json_q >= html_q)
 
 
 def render_landing(version: str, base: str) -> str:
