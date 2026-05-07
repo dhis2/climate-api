@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,35 @@ from xarray import DataTree
 
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services import downloader
+from climate_api.ingestions import services as ingestion_services
+
+
+def test_resolve_download_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as override:
+        monkeypatch.setenv("CACHE_OVERRIDE", override)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        assert downloader._resolve_download_dir() == Path(override)
+
+
+def test_resolve_download_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as xdg:
+        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", xdg)
+        assert downloader._resolve_download_dir() == Path(xdg) / "climate-api" / "downloads"
+
+
+def test_resolve_artifacts_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as override:
+        monkeypatch.setenv("CACHE_OVERRIDE", override)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        assert ingestion_services._resolve_artifacts_dir() == Path(override) / "artifacts"
+
+
+def test_resolve_artifacts_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as xdg:
+        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", xdg)
+        assert ingestion_services._resolve_artifacts_dir() == Path(xdg) / "climate-api" / "artifacts"
 
 
 def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,7 +58,7 @@ def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "ingestion": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.delenv("COUNTRY_CODE", raising=False)
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
@@ -62,7 +92,7 @@ def test_download_dataset_returns_400_for_missing_bbox(monkeypatch: pytest.Monke
 
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
-        "ingestion": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.delenv("DOWNLOAD_BBOX", raising=False)
     monkeypatch.delenv("DEFAULT_DOWNLOAD_BBOX", raising=False)
@@ -99,7 +129,7 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "ingestion": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
 

@@ -45,7 +45,7 @@ Each YAML in `data/datasets/` defines a dataset template. The `ingestion` block 
 
 ```yaml
 ingestion:
-  eo_function: dhis2eo.data.worldpop.pop_total.yearly.download
+  function: dhis2eo.data.worldpop.pop_total.yearly.download
   default_params: {} # passed to the download function
   multiscales: # optional — triggers pyramid build
     levels: 4

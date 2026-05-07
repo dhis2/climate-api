@@ -20,7 +20,11 @@ make sync
 
 ## Step 2: Configure the spatial extent
 
-The repo includes a default `climate-api.yaml` with Sierra Leone as the extent. Open it and replace the entry with your country:
+The repo includes `climate-api.yaml.example` with Sierra Leone as a starting point. Copy it to `climate-api.yaml` (which is gitignored so your local extent stays out of version control) and replace the entry with your country:
+
+```bash
+cp climate-api.yaml.example climate-api.yaml
+```
 
 ```yaml
 extent:
@@ -74,6 +78,12 @@ Alternatively, if the package is installed (e.g. via `pip install .`), you can s
 
 ```bash
 climate-api
+```
+
+When running the `climate-api` command from a directory other than the repo root, the relative path `./climate-api.yaml` in `CLIMATE_API_CONFIG` will not resolve correctly. Use an absolute path in that case:
+
+```bash
+CLIMATE_API_CONFIG=/path/to/your/climate-api.yaml climate-api
 ```
 
 ## Step 5: Verify the configured extent

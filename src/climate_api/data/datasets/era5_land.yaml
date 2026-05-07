@@ -9,7 +9,7 @@
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
   ingestion: 
-    eo_function: dhis2eo.data.destine.era5_land.hourly.download
+    function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['t2m']
   units: kelvin
@@ -29,7 +29,7 @@
     latest_available_function: climate_api.providers.availability.lagged_latest_available
     lag_hours: 120
   ingestion: 
-    eo_function: dhis2eo.data.destine.era5_land.hourly.download
+    function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['tp']
   pre_process: ['deaccumulate_era5']

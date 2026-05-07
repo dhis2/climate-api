@@ -102,7 +102,7 @@ def test_datasets_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch,
   period_type: daily
   sync_kind: static
   ingestion:
-    eo_function: mypackage.sources.download
+    function: mypackage.sources.download
 """,
         encoding="utf-8",
     )
@@ -117,6 +117,38 @@ def test_datasets_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch,
     assert "chirps3_precipitation_daily" in ids
 
 
+def test_datasets_dir_resolved_relative_to_config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """datasets_dir is resolved relative to the config file, not CWD.
+
+    This matters when running the installed `climate-api` CLI from a directory
+    other than the repo root, where a relative datasets_dir in the config must
+    still point at the correct sibling directory.
+    """
+    deployment_dir = tmp_path / "deployment"
+    deployment_dir.mkdir()
+    datasets_dir = deployment_dir / "datasets"
+    datasets_dir.mkdir()
+    (datasets_dir / "custom.yaml").write_text(
+        """
+- id: deployed_dataset
+  variable: val
+  period_type: daily
+  sync_kind: static
+  ingestion:
+    function: mypackage.sources.download
+""",
+        encoding="utf-8",
+    )
+    config_file = deployment_dir / "climate-api.yaml"
+    config_file.write_text("datasets_dir: ./datasets\n", encoding="utf-8")
+
+    monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+
+    ids = {d["id"] for d in dataset_registry.list_datasets()}
+    assert "deployed_dataset" in ids
+
+
 def test_datasets_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     datasets_dir = tmp_path / "datasets"
     datasets_dir.mkdir()
@@ -128,7 +160,7 @@ def test_datasets_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.Monk
   period_type: daily
   sync_kind: static
   ingestion:
-    eo_function: mypackage.sources.download
+    function: mypackage.sources.download
 """,
         encoding="utf-8",
     )

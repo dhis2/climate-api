@@ -56,7 +56,7 @@ def download_dataset(
     returns an empty list because no files have been created yet.
     """
     ingestion = dataset["ingestion"]
-    eo_download_func_path = ingestion["eo_function"]
+    eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
     before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
@@ -133,8 +133,9 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    # Normalise coordinate names to canonical form so all stored Zarr files are
-    # consistent regardless of what the upstream source uses.
+    # Normalise to canonical names (time/longitude/latitude) so all stored Zarr files
+    # are consistent regardless of what the upstream source uses (e.g. lon/lat, x/y).
+    # Downstream readers — pygeoapi, the /zarr endpoint, and the client — rely on this.
     time_dim = get_time_dim(ds)
     rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "longitude"), (lat_dim, "latitude")] if k != v}
     if rename_map:

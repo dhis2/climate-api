@@ -74,7 +74,7 @@ Create a directory for your custom templates and add a YAML file. Each file cont
   sync_kind: temporal
   sync_execution: append
   ingestion:
-    eo_function: mypackage.sources.enacts.download
+    function: mypackage.sources.enacts.download
   units: mm
   resolution: 4 km x 4 km
   source: ENACTS
@@ -109,7 +109,7 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 | Field                          | Required | Description |
 | ------------------------------ | -------- | ----------- |
-| `ingestion.eo_function`       | Yes | Dotted import path to the download function |
+| `ingestion.function`       | Yes | Dotted import path to the download function |
 | `ingestion.default_params`    | No  | Extra keyword arguments forwarded to the download function |
 | `ingestion.multiscales`       | No  | Build a multi-resolution Zarr pyramid (see below) |
 
@@ -135,7 +135,7 @@ sync_availability:
 
 ```yaml
 ingestion:
-  eo_function: mypackage.sources.enacts.download
+  function: mypackage.sources.enacts.download
   multiscales:
     levels: 4    # number of pyramid levels (default: 4)
     method: mean # aggregation method (default: mean)
@@ -190,5 +190,5 @@ The smallest valid template for a static dataset with no sync:
   period_type: daily
   sync_kind: static
   ingestion:
-    eo_function: mypackage.sources.my_source.download
+    function: mypackage.sources.my_source.download
 ```
