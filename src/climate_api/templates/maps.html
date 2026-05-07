@@ -443,6 +443,7 @@
 
         try {
           const cm = buildColormap(colormapName);
+          console.log("[maps] colormap:", colormapName, "→", Array.isArray(cm) ? `array[${cm.length}]` : typeof cm, cm?.[0]);
           const selector =
             timeSteps.length > 0 ? { [timeDimKey]: 0 } : {};
           activeLayer = new ZarrLayer({

@@ -7,7 +7,7 @@ sync: ## Install dependencies with uv
 	uv sync
 
 run: openapi ## Start the app with uvicorn
-	uv run uvicorn climate_api.main:app --reload
+	uv run uvicorn climate_api.main:app --reload --reload-include "*.html" --reload-include "*.yaml" --reload-include "*.yml"
 
 lint: ## Check linting, formatting, and types (no autofix)
 	uv run ruff check .
