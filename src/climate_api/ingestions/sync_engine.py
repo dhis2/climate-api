@@ -363,12 +363,12 @@ def _supports_append(source_dataset: dict[str, Any]) -> bool:
     """Return whether this template opts into V1 delta-download sync execution."""
     if source_dataset.get("sync_execution") != SyncAction.APPEND.value:
         return False
-    cache_info = source_dataset.get("cache_info")
-    if not isinstance(cache_info, dict):
+    ingestion = source_dataset.get("ingestion")
+    if not isinstance(ingestion, dict):
         return False
     # Multiscale stores are rebuilt as pyramids today; keep append opt-in to flat
     # canonical stores until pyramid delta behavior is explicitly designed.
-    if cache_info.get("multiscales"):
+    if ingestion.get("multiscales"):
         logger.warning(
             "Sync append execution is not supported for multiscale dataset '%s'; falling back to rematerialize",
             source_dataset.get("id", "<unknown>"),

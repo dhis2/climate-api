@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import os
 from datetime import UTC, datetime
 from importlib import import_module
@@ -16,10 +17,16 @@ from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
-CONFIG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config" / "pygeoapi"
-PYGEOAPI_BASE_CONFIG_PATH = CONFIG_DIR / "base.yml"
-PYGEOAPI_DIR = DATA_DIR / "pygeoapi"
+
+def _resolve_pygeoapi_dir() -> Path:
+    override = os.getenv("CACHE_OVERRIDE")
+    if override:
+        return Path(override) / "pygeoapi"
+    xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return xdg_data / "climate-api" / "pygeoapi"
+
+
+PYGEOAPI_DIR = _resolve_pygeoapi_dir()
 PYGEOAPI_CONFIG_PATH = PYGEOAPI_DIR / "pygeoapi-config.yml"
 PYGEOAPI_OPENAPI_PATH = PYGEOAPI_DIR / "pygeoapi-openapi.yml"
 
@@ -199,5 +206,6 @@ def _native_dataset_href(dataset_id: str) -> str:
 
 
 def _load_base_config() -> dict[str, Any]:
-    """Load the checked-in base pygeoapi config used for generated publication docs."""
-    return cast(dict[str, Any], yaml.safe_load(PYGEOAPI_BASE_CONFIG_PATH.read_text(encoding="utf-8")))
+    """Load the bundled base pygeoapi config via importlib.resources."""
+    resource = importlib.resources.files("climate_api") / "data" / "pygeoapi" / "base.yml"
+    return cast(dict[str, Any], yaml.safe_load(resource.read_text(encoding="utf-8")))

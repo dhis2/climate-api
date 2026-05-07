@@ -1,29 +1,29 @@
-"""Extent registry backed by YAML config files."""
+"""Extent registry backed by CLIMATE_API_CONFIG."""
 
-from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import HTTPException
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-EXTENTS_PATH = SCRIPT_DIR.parent.parent.parent / "data" / "extents.yaml"
+from climate_api import config as api_config
 
 
-def list_extents() -> list[dict[str, Any]]:
-    """Return configured extents for this Climate API instance."""
-    if not EXTENTS_PATH.exists():
-        return []
-    payload = yaml.safe_load(EXTENTS_PATH.read_text(encoding="utf-8")) or {}
-    extents = payload.get("extents", [])
-    if not isinstance(extents, list):
-        raise ValueError(f"Expected 'extents' list in {EXTENTS_PATH}")
-    return [extent for extent in extents if isinstance(extent, dict)]
+def get_extent() -> dict[str, Any] | None:
+    """Return the configured extent for this Climate API instance, or None if not set."""
+    extent = api_config.get_config().get("extent")
+    if extent is None:
+        return None
+    if not isinstance(extent, dict):
+        raise ValueError("extent in CLIMATE_API_CONFIG must be a mapping")
+    if not isinstance(extent.get("id"), str) or not extent["id"]:
+        raise ValueError("extent.id in CLIMATE_API_CONFIG must be a non-empty string")
+    if not isinstance(extent.get("bbox"), list) or len(extent["bbox"]) != 4:
+        raise ValueError("extent.bbox in CLIMATE_API_CONFIG must be a list of four numbers [xmin, ymin, xmax, ymax]")
+    return extent
 
 
 def get_extent_or_404(extent_id: str) -> dict[str, Any]:
-    """Return one configured extent or raise 404."""
-    for extent in list_extents():
-        if extent.get("id") == extent_id:
-            return extent
+    """Return the configured extent if its id matches, or raise 404."""
+    extent = get_extent()
+    if extent is not None and extent.get("id") == extent_id:
+        return extent
     raise HTTPException(status_code=404, detail=f"Extent '{extent_id}' not found")

@@ -286,10 +286,10 @@ def _public_zarr_asset_href(
     artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
 ) -> str:
-    cache_info = source_dataset.get("cache_info")
+    ingestion = source_dataset.get("ingestion")
     # Use dataset-template multiscale metadata so local and remote stores map to
     # the same public href contract without filesystem probing.
-    if isinstance(cache_info, dict) and cache_info.get("multiscales"):
+    if isinstance(ingestion, dict) and ingestion.get("multiscales"):
         return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
 

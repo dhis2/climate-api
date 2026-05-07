@@ -21,12 +21,20 @@ from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
-_download_dir = SCRIPT_DIR.parent.parent.parent.parent / "data" / "downloads"
-CACHE_OVERRIDE = os.getenv("CACHE_OVERRIDE")
-if CACHE_OVERRIDE:
-    _download_dir = Path(CACHE_OVERRIDE)
-DOWNLOAD_DIR = _download_dir
+
+def _resolve_download_dir() -> Path:
+    # CACHE_OVERRIDE keeps existing Docker/dev deployments working unchanged.
+    override = os.getenv("CACHE_OVERRIDE")
+    if override:
+        return Path(override)
+    # Default to an XDG-compliant user-writable location so the package works
+    # when installed with pip (where a package-relative path would land inside
+    # site-packages and typically be non-writable).
+    xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return xdg_data / "climate-api" / "downloads"
+
+
+DOWNLOAD_DIR = _resolve_download_dir()
 
 CRS = "EPSG:4326"
 
@@ -47,12 +55,12 @@ def download_dataset(
     When running in the background-task path, the download is deferred and this function
     returns an empty list because no files have been created yet.
     """
-    cache_info = dataset["cache_info"]
-    eo_download_func_path = cache_info["eo_function"]
+    ingestion = dataset["ingestion"]
+    eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
     before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
-    params = dict(cache_info.get("default_params", {}))
+    params = dict(ingestion.get("default_params", {}))
     params.update(
         {
             "start": start,
@@ -109,7 +117,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
-    cache_info = dataset["cache_info"]
+    ingestion = dataset["ingestion"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
@@ -124,6 +132,17 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     keep_coords = [get_time_dim(ds)] + dims
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
+
+    # Normalise to canonical names (time/longitude/latitude) so all stored Zarr files
+    # are consistent regardless of what the upstream source uses (e.g. lon/lat, x/y).
+    # Downstream readers — pygeoapi, the /zarr endpoint, and the client — rely on this.
+    time_dim = get_time_dim(ds)
+    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "longitude"), (lat_dim, "latitude")] if k != v}
+    if rename_map:
+        ds = ds.rename(rename_map)
+    lon_dim, lat_dim = "longitude", "latitude"
+    dims = [lon_dim, lat_dim]
+
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
 
     xmin = ds[lon_dim].min().item()
@@ -145,7 +164,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
 
-    multiscales = dict(cache_info.get("multiscales", {}))
+    multiscales = dict(ingestion.get("multiscales", {}))
 
     if multiscales:
         levels = multiscales.get("levels", 4)

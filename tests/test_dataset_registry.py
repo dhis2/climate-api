@@ -55,6 +55,8 @@ def test_dataset_registry_accepts_supported_sync_kind(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
 """,
         encoding="utf-8",
     )
@@ -75,6 +77,8 @@ def test_dataset_registry_rejects_unsupported_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
   sync_execution: sometimes
 """,
         encoding="utf-8",
@@ -97,6 +101,8 @@ def test_dataset_registry_rejects_non_string_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
   sync_execution:
     - append
 """,
@@ -120,6 +126,8 @@ def test_dataset_registry_accepts_supported_sync_execution(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
   sync_execution: append
 """,
         encoding="utf-8",
@@ -141,6 +149,8 @@ def test_dataset_registry_rejects_invalid_sync_availability_function(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
   sync_availability:
     latest_available_function: 42
 """,
@@ -164,6 +174,8 @@ def test_dataset_registry_accepts_sync_availability_function(
   variable: value
   period_type: daily
   sync_kind: temporal
+  ingestion:
+    function: mypackage.sources.download
   sync_availability:
     latest_available_function: climate_api.providers.availability.lagged_latest_available
 """,

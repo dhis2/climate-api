@@ -2,6 +2,7 @@
 __pycache__/
 .venv/
 .env
+climate-api.yaml
 eo_api.egg-info/
 data/downloads
 data/artifacts

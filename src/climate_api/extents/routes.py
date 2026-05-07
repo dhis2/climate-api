@@ -1,24 +1,20 @@
 """FastAPI routes for configured extent discovery."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from climate_api.extents import services
-from climate_api.extents.schemas import ExtentListResponse, ExtentRecord
+from climate_api.extents.schemas import ExtentRecord
 
 router = APIRouter()
 
 
-@router.get("", response_model=ExtentListResponse)
-def list_extents() -> ExtentListResponse:
-    """List configured extents for this Climate API instance."""
-    items = [_build_extent_record(extent) for extent in services.list_extents()]
-    return ExtentListResponse(items=items)
-
-
-@router.get("/{extent_id}", response_model=ExtentRecord)
-def get_extent(extent_id: str) -> ExtentRecord:
-    """Get one configured extent for this Climate API instance."""
-    return _build_extent_record(services.get_extent_or_404(extent_id))
+@router.get("", response_model=ExtentRecord)
+def get_extent() -> ExtentRecord:
+    """Return the configured extent for this Climate API instance."""
+    extent = services.get_extent()
+    if extent is None:
+        raise HTTPException(status_code=404, detail="No extent configured")
+    return _build_extent_record(extent)
 
 
 def _build_extent_record(extent: dict[str, object]) -> ExtentRecord:
