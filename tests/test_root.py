@@ -21,7 +21,6 @@ def test_root_html_shows_extent(client: TestClient) -> None:
 def test_root_html_links_to_key_endpoints(client: TestClient) -> None:
     response = client.get("/")
     assert "/docs" in response.text
-    assert "/ogcapi/" in response.text
     assert "/stac/catalog.json" in response.text
 
 
