@@ -333,6 +333,7 @@
         },
         center: [20, 5],
         zoom: 2,
+        fitBoundsOptions: { padding: 40 },
         attributionControl: { compact: true },
       });
 
@@ -355,7 +356,18 @@
         statusEl.className = isError ? "status error" : "status";
       }
 
+      async function fitToExtent() {
+        try {
+          const res = await fetch("{{ base }}/extent");
+          if (!res.ok) return;
+          const extent = await res.json();
+          const [xmin, ymin, xmax, ymax] = extent.bbox;
+          map.fitBounds([[xmin, ymin], [xmax, ymax]], { padding: 40, maxZoom: 10 });
+        } catch {}
+      }
+
       async function loadCatalog() {
+        await fitToExtent();
         try {
           const res = await fetch("{{ base }}/stac/catalog.json");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
