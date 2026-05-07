@@ -28,7 +28,7 @@ The Climate API is envisioned as the shared data infrastructure layer for the DH
 
 ### 2.1 Relationship to existing DHIS2 climate work
 
-The Climate API supplements and extends the existing DHIS2 climate data integration work documented at dhis2.org/climate/climate-data/. It is built on the same underlying Python libraries — dhis2eo and dhis2-python-client — but wraps them in a standardised API so that data workflows that currently require Python scripting or Google Earth Engine access can be configured and run without writing code.
+The Climate API supplements and extends the existing DHIS2 climate data integration work documented at dhis2.org/climate/climate-data/. It builds on the same broader ecosystem — especially `dhis2eo` and related DHIS2 climate tooling. The platform wraps climate and earth observation workflows in a standardised API so that data access, processing, and publication can be configured and run without writing code.
 
 ### 2.2 Scope of this document
 
@@ -228,7 +228,8 @@ Long-running jobs (ingestion, sync, aggregation) are executed asynchronously. Th
 | fsspec                        | Unified filesystem abstraction for storage backends (local, S3-compatible, Azure Blob, GCS, Ceph/RGW). Backend is environment-variable configuration only.                               |
 | zarr-layer (MapLibre)         | TypeScript library for rendering Zarr directly as a native MapLibre Custom Layer in the browser. GPU reprojection from EPSG:4326 to Spherical Mercator; uses multiscale levels per zoom. |
 | Docker                        | Containerised deployment. Supports local, cloud-hosted, and country sovereign deployments.                                                                                               |
-| dhis2eo + dhis2-python-client | Underlying Python libraries for data extraction and DHIS2 integration. The Climate API is a no-code layer built on top of these libraries.                                               |
+| dhis2eo                      | Core climate/EO extraction library used by the Climate API for upstream dataset access and processing integration.                                                                        |
+| dhis2-python-client          | Planned DHIS2 Web API integration library for future data value push and related DHIS2 write workflows.                                                                                  |
 | STAC                          | Complementary discovery and metadata catalogue layer. Each dataset exposed as a STAC Item with temporal, spatial, and access metadata.                                                   |
 
 ---
