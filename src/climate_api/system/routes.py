@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from .schemas import AppInfo, HealthStatus, Status
-from .templates import ROOT_RESPONSES, app_version, render_landing, root_json, wants_json
+from .templates import ROOT_RESPONSES, app_version, render_landing, render_maps, root_json, wants_json
 
 router = APIRouter()
 
@@ -19,6 +19,13 @@ def read_index(request: Request) -> Response:
     if wants_json(request):
         return JSONResponse(root_json(base).model_dump())
     return HTMLResponse(render_landing(app_version, base))
+
+
+@router.get("/maps", response_class=HTMLResponse, include_in_schema=False)
+def maps(request: Request) -> HTMLResponse:
+    """Return the interactive map viewer."""
+    base = str(request.base_url).rstrip("/")
+    return HTMLResponse(render_maps(base))
 
 
 @router.get("/health")

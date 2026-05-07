@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map viewer — DHIS2 Climate API</title>
+    <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        color: #1a2332;
+      }
+
+      .layout {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      header {
+        background: #1a2332;
+        color: #fff;
+        padding: 0.85rem 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-shrink: 0;
+        z-index: 10;
+      }
+      header h1 {
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      header .subtitle {
+        font-size: 0.825rem;
+        color: #8fa3b8;
+      }
+      header nav {
+        margin-left: auto;
+      }
+      header nav a {
+        color: #8fa3b8;
+        text-decoration: none;
+        font-size: 0.825rem;
+      }
+      header nav a:hover {
+        color: #fff;
+      }
+
+      .map-container {
+        position: relative;
+        flex: 1;
+      }
+
+      #map {
+        position: absolute;
+        inset: 0;
+      }
+
+      .panel {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        width: 272px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+      }
+
+      .panel-section label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #64748b;
+        display: block;
+        margin-bottom: 0.4rem;
+      }
+
+      select {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 5px;
+        font-size: 0.875rem;
+        background: #fff;
+        color: #1a2332;
+        cursor: pointer;
+      }
+      select:focus {
+        outline: 2px solid #0066cc;
+        outline-offset: 1px;
+      }
+
+      .time-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 0.4rem;
+      }
+      .time-value {
+        font-size: 0.825rem;
+        font-family: ui-monospace, "Cascadia Code", monospace;
+        color: #1a2332;
+      }
+      .time-count {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-family: ui-monospace, "Cascadia Code", monospace;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: #0066cc;
+        cursor: pointer;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        column-gap: 0.75rem;
+        row-gap: 0.2rem;
+        font-size: 0.8rem;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 0.75rem;
+      }
+      .meta-grid dt {
+        color: #64748b;
+      }
+      .meta-grid dd {
+        color: #1a2332;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status {
+        font-size: 0.8rem;
+        color: #64748b;
+        font-style: italic;
+      }
+      .status.error {
+        color: #b91c1c;
+        font-style: normal;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header>
+        <h1>Climate API</h1>
+        <span class="subtitle">Map viewer</span>
+        <nav><a href="{{ base }}/">Overview</a></nav>
+      </header>
+
+      <div class="map-container">
+        <div id="map"></div>
+
+        <div class="panel">
+          <div class="panel-section">
+            <label for="dataset-select">Dataset</label>
+            <select id="dataset-select">
+              <option value="">Select dataset...</option>
+            </select>
+          </div>
+
+          <div id="time-section" class="panel-section hidden">
+            <div class="time-header">
+              <label style="margin-bottom:0">Time step</label>
+              <span id="time-count" class="time-count"></span>
+            </div>
+            <div style="margin-bottom:0.4rem">
+              <span id="time-value" class="time-value">—</span>
+            </div>
+            <input type="range" id="time-slider" min="0" step="1" value="0" />
+          </div>
+
+          <dl id="dataset-meta" class="meta-grid hidden">
+            <dt>Source</dt>
+            <dd id="meta-source">—</dd>
+            <dt>Units</dt>
+            <dd id="meta-units">—</dd>
+          </dl>
+
+          <div id="status" class="status">Loading datasets...</div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { ZarrLayer } from "https://esm.sh/@carbonplan/zarr-layer";
+      import colormap from "https://esm.sh/colormap";
+
+      // Map from display colormap names to colormap-package names.
+      const COLORMAP_ALIASES = {
+        blues: "YIGnBu",
+        reds: "YIOrRd",
+        rdbu: "RdBu",
+        rdbu_r: "RdBu",
+        viridis: "viridis",
+        greens: "greens",
+        greys: "greys",
+        hot: "hot",
+        plasma: "plasma",
+        magma: "magma",
+        inferno: "inferno",
+      };
+
+      function buildColormap(name) {
+        const key = COLORMAP_ALIASES[name?.toLowerCase()] ?? "viridis";
+        const safe = Object.keys(COLORMAP_ALIASES).includes(name?.toLowerCase())
+          ? key
+          : "viridis";
+        try {
+          const colors = colormap({
+            colormap: safe,
+            nshades: 256,
+            format: "rba",
+            alpha: 1.0,
+          });
+          return new Uint8Array(
+            colors.flatMap(([r, g, b, a]) => [r, g, b, Math.round(a * 255)])
+          );
+        } catch {
+          const fallback = colormap({
+            colormap: "viridis",
+            nshades: 256,
+            format: "rba",
+            alpha: 1.0,
+          });
+          return new Uint8Array(
+            fallback.flatMap(([r, g, b, a]) => [r, g, b, Math.round(a * 255)])
+          );
+        }
+      }
+
+      // Resolve the temporal dimension key and step list from cube:dimensions.
+      function getTimeDimKey(dimensions) {
+        for (const [key, val] of Object.entries(dimensions ?? {})) {
+          if (val.type === "temporal") return key;
+        }
+        return "time";
+      }
+
+      function buildTimeSteps(dimensions) {
+        if (!dimensions) return [];
+        const timeDim = Object.values(dimensions).find(
+          (d) => d.type === "temporal"
+        );
+        if (!timeDim) return [];
+        if (Array.isArray(timeDim.values)) return timeDim.values;
+        const [start, end] = timeDim.extent ?? [];
+        const step = timeDim.step;
+        if (!start) return [];
+        if (!step || !end) return [start];
+        return generateDateRange(start, end, step);
+      }
+
+      function generateDateRange(start, end, step) {
+        const inc = parseDuration(step);
+        if (!inc) return [start];
+        const steps = [];
+        let cur = new Date(start);
+        const endDate = new Date(end);
+        // Guard against accidentally generating tens of thousands of steps.
+        while (cur <= endDate && steps.length < 5000) {
+          steps.push(cur.toISOString().slice(0, 10));
+          cur = new Date(cur.getTime() + inc);
+        }
+        return steps;
+      }
+
+      // Minimal ISO 8601 duration parser for common climate period types.
+      function parseDuration(iso) {
+        const m = iso.match(/^P(?:T(\d+)H|(\d+)D|(\d+)M|(\d+)Y)$/);
+        if (!m) return null;
+        if (m[1]) return parseInt(m[1]) * 3_600_000; // PT#H
+        if (m[2]) return parseInt(m[2]) * 86_400_000; // P#D
+        if (m[3]) return parseInt(m[3]) * 30 * 86_400_000; // P#M (approximation)
+        if (m[4]) return parseInt(m[4]) * 365 * 86_400_000; // P#Y (approximation)
+        return null;
+      }
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution:
+                '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            },
+          },
+          layers: [
+            {
+              id: "osm",
+              type: "raster",
+              source: "osm",
+              paint: { "raster-opacity": 0.5 },
+            },
+          ],
+        },
+        center: [20, 5],
+        zoom: 2,
+        attributionControl: { compact: true },
+      });
+
+      let activeLayer = null;
+      let timeSteps = [];
+      let timeDimKey = "time";
+
+      const selectEl = document.getElementById("dataset-select");
+      const timeSection = document.getElementById("time-section");
+      const timeSlider = document.getElementById("time-slider");
+      const timeValueEl = document.getElementById("time-value");
+      const timeCountEl = document.getElementById("time-count");
+      const datasetMeta = document.getElementById("dataset-meta");
+      const metaSource = document.getElementById("meta-source");
+      const metaUnits = document.getElementById("meta-units");
+      const statusEl = document.getElementById("status");
+
+      function setStatus(msg, isError = false) {
+        statusEl.textContent = msg;
+        statusEl.className = isError ? "status error" : "status";
+      }
+
+      async function loadCatalog() {
+        try {
+          const res = await fetch("{{ base }}/stac/catalog.json");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const catalog = await res.json();
+          const children =
+            catalog.links?.filter((l) => l.rel === "child") ?? [];
+          if (children.length === 0) {
+            setStatus(
+              "No published datasets found. Ingest and publish a dataset first."
+            );
+            return;
+          }
+          for (const link of children) {
+            const opt = document.createElement("option");
+            opt.value = link.href;
+            opt.textContent = link.title ?? link.href;
+            selectEl.appendChild(opt);
+          }
+          setStatus("Select a dataset to visualise it on the map.");
+        } catch (err) {
+          setStatus(`Failed to load catalog: ${err.message}`, true);
+        }
+      }
+
+      async function loadDataset(href) {
+        setStatus("Loading...");
+        if (activeLayer) {
+          try {
+            map.removeLayer("zarr-layer");
+          } catch {}
+          activeLayer = null;
+        }
+        timeSection.classList.add("hidden");
+        datasetMeta.classList.add("hidden");
+
+        let collection;
+        try {
+          const res = await fetch(href);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          collection = await res.json();
+        } catch (err) {
+          setStatus(`Failed to load collection: ${err.message}`, true);
+          return;
+        }
+
+        const renders = collection.renders?.default ?? {};
+        const zarr = collection.assets?.zarr;
+        if (!zarr?.href) {
+          setStatus("No Zarr asset found in this collection.");
+          return;
+        }
+
+        const clim = renders.rescale?.[0] ?? [0, 100];
+        const colormapName = renders.colormap_name ?? "viridis";
+        const variable =
+          renders["climate_api:variable"] ??
+          Object.keys(collection["cube:variables"] ?? {})[0] ??
+          "data";
+
+        const dimensions = collection["cube:dimensions"] ?? {};
+        timeDimKey = getTimeDimKey(dimensions);
+        timeSteps = buildTimeSteps(dimensions);
+
+        try {
+          const cm = buildColormap(colormapName);
+          const selector =
+            timeSteps.length > 0 ? { [timeDimKey]: 0 } : {};
+          activeLayer = new ZarrLayer({
+            id: "zarr-layer",
+            source: zarr.href,
+            variable,
+            clim,
+            colormap: cm,
+            selector,
+          });
+          map.addLayer(activeLayer);
+        } catch (err) {
+          setStatus(`Failed to create layer: ${err.message}`, true);
+          return;
+        }
+
+        // Zoom to dataset spatial extent.
+        const bbox = collection.extent?.spatial?.bbox?.[0];
+        if (bbox) {
+          map.fitBounds(
+            [
+              [bbox[0], bbox[1]],
+              [bbox[2], bbox[3]],
+            ],
+            { padding: 60, maxZoom: 8 }
+          );
+        }
+
+        // Time slider.
+        if (timeSteps.length > 1) {
+          timeSlider.max = timeSteps.length - 1;
+          timeSlider.value = 0;
+          timeValueEl.textContent = timeSteps[0];
+          timeCountEl.textContent = `1 / ${timeSteps.length}`;
+          timeSection.classList.remove("hidden");
+        }
+
+        // Metadata strip.
+        const source = collection.keywords?.find(
+          (k) =>
+            k !== "zarr" &&
+            k !== "stac" &&
+            k !== variable &&
+            k !== collection.id
+        );
+        metaSource.textContent =
+          renders["climate_api:units"]
+            ? source ?? "—"
+            : source ?? "—";
+        metaUnits.textContent =
+          renders["climate_api:units"] ??
+          collection["cube:variables"]?.[variable]?.unit ??
+          "—";
+        datasetMeta.classList.remove("hidden");
+
+        setStatus("");
+      }
+
+      selectEl.addEventListener("change", (e) => {
+        if (e.target.value) loadDataset(e.target.value);
+      });
+
+      timeSlider.addEventListener("input", (e) => {
+        const i = parseInt(e.target.value, 10);
+        timeValueEl.textContent = timeSteps[i] ?? "—";
+        timeCountEl.textContent = `${i + 1} / ${timeSteps.length}`;
+        activeLayer?.setSelector({ [timeDimKey]: i });
+      });
+
+      map.on("load", loadCatalog);
+    </script>
+  </body>
+</html>

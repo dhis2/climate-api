@@ -13,3 +13,7 @@
   resolution: 5 km x 5 km
   source: CHIRPS v3
   source_url: https://www.chc.ucsb.edu/data/chirps3
+  display:
+    colormap: blues
+    range: [0.0, 20.0]
+    nodata: 0.0

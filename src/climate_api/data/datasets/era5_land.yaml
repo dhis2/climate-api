@@ -17,6 +17,9 @@
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
   source_url: https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land
+  display:
+    colormap: rdbu_r
+    range: [15.0, 40.0]
 
 - id: era5land_precipitation_hourly
   name: Total precipitation (ERA5-Land)
@@ -38,3 +41,7 @@
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
   source_url: https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land
+  display:
+    colormap: blues
+    range: [0.0, 5.0]
+    nodata: 0.0

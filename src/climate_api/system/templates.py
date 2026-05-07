@@ -94,6 +94,11 @@ def wants_json(request: Request) -> bool:
     return json_q >= 0 and (html_q < 0 or json_q >= html_q)
 
 
+def render_maps(base: str) -> str:
+    """Render the map viewer page."""
+    return get_template("maps.html").render(base=base)
+
+
 def render_landing(version: str, base: str) -> str:
     """Render the root landing page with live instance status."""
     try:
