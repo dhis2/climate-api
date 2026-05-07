@@ -1,4 +1,4 @@
-# Implementation Status: Dataset Publication Slice
+# Implementation Status
 
 ## Purpose
 
@@ -6,14 +6,14 @@ This note captures the current implementation state of the branch after the API 
 
 It is intended to answer:
 
-1. what the branch now exposes
+1. what the main branch now exposes
 2. what is intentionally internal
 3. how the current pieces fit together
 4. what remains to be refined
 
-## Branch Direction
+## Current API surface
 
-The branch now centers on one narrow vertical slice:
+The main branch now centers on one narrow vertical slice:
 
 1. define dataset templates in the Climate API registry
 2. define configured extents for the Climate API instance
@@ -25,7 +25,7 @@ The branch now centers on one narrow vertical slice:
 The public surface is intentionally small:
 
 - `/ingestions`
-- `/extents`
+- `/extent`
 - `/datasets`
 - `/stac/...`
 - `/zarr/{dataset_id}`
@@ -47,13 +47,13 @@ The public surface is intentionally small:
 - [src/climate_api/providers/availability.py](../src/climate_api/providers/availability.py)
   - provider-specific sync availability policies
 - [src/climate_api/extents/routes.py](../src/climate_api/extents/routes.py)
-  - extent discovery endpoints
+  - extent discovery endpoint
 - [src/climate_api/extents/services.py](../src/climate_api/extents/services.py)
-  - YAML-backed extent registry
+  - extent registry backed by CLIMATE_API_CONFIG
 - [src/climate_api/publications/services.py](../src/climate_api/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
-- [data/extents.yaml](../data/extents.yaml)
-  - configured extents for the Climate API instance
+- `extent:` block in `climate-api.yaml` (CLIMATE_API_CONFIG)
+  - configured spatial extent for this Climate API instance
 
 ## What Was Achieved
 
@@ -93,8 +93,7 @@ Internal artifact records still exist, but they no longer define the public resp
 
 The branch exposes:
 
-- `GET /extents`
-- `GET /extents/{extent_id}`
+- `GET /extent`
 
 Extents are configured in YAML and currently include:
 
@@ -252,8 +251,7 @@ Implemented sync behavior:
 - `POST /ingestions`
 - `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
-- `GET /extents`
-- `GET /extents/{extent_id}`
+- `GET /extent`
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`

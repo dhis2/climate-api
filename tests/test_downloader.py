@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,35 @@ from xarray import DataTree
 
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services import downloader
+from climate_api.ingestions import services as ingestion_services
+
+
+def test_resolve_download_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as override:
+        monkeypatch.setenv("CACHE_OVERRIDE", override)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        assert downloader._resolve_download_dir() == Path(override)
+
+
+def test_resolve_download_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as xdg:
+        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", xdg)
+        assert downloader._resolve_download_dir() == Path(xdg) / "climate-api" / "downloads"
+
+
+def test_resolve_artifacts_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as override:
+        monkeypatch.setenv("CACHE_OVERRIDE", override)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        assert ingestion_services._resolve_artifacts_dir() == Path(override) / "artifacts"
+
+
+def test_resolve_artifacts_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as xdg:
+        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", xdg)
+        assert ingestion_services._resolve_artifacts_dir() == Path(xdg) / "climate-api" / "artifacts"
 
 
 def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,7 +58,7 @@ def test_download_dataset_returns_400_when_country_code_is_required(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.delenv("COUNTRY_CODE", raising=False)
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
@@ -62,7 +92,7 @@ def test_download_dataset_returns_400_for_missing_bbox(monkeypatch: pytest.Monke
 
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.delenv("DOWNLOAD_BBOX", raising=False)
     monkeypatch.delenv("DEFAULT_DOWNLOAD_BBOX", raising=False)
@@ -98,7 +128,7 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
     dataset: dict[str, Any] = {
         "id": "worldpop_population_yearly",
-        "cache_info": {"eo_function": "ignored.path"},
+        "ingestion": {"function": "ignored.path"},
     }
     monkeypatch.setattr(downloader, "_get_dynamic_function", lambda _: fake_download)
 
@@ -168,14 +198,14 @@ _FLAT_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
     "period_type": "yearly",
-    "cache_info": {},
+    "ingestion": {},
 }
 
 _PYRAMID_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
     "period_type": "yearly",
-    "cache_info": {"multiscales": {"levels": 2, "method": "mean"}},
+    "ingestion": {"multiscales": {"levels": 2, "method": "mean"}},
 }
 
 
@@ -259,6 +289,78 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
         result.close()
 
 
+def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Source coordinates (lat/lon, valid_time, x/y) are renamed to longitude/latitude/time."""
+    # Simulate ERA5-Land source with valid_time and lon/lat
+    ds_era5 = xr.Dataset(
+        {"t2m": (["valid_time", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
+        coords={
+            "valid_time": pd.date_range("2024-01-01", periods=2, freq="h"),
+            "lat": [10.0, 9.0, 8.0],
+            "lon": [30.0, 31.0, 32.0],
+        },
+    )
+    path = tmp_path / "era5_t2m_2024-01.nc"
+    ds_era5.to_netcdf(path)
+
+    dataset: dict[str, Any] = {
+        "id": "era5land_temperature_hourly",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "ingestion": {},
+    }
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+
+    downloader.build_dataset_zarr(dataset)
+
+    result = open_zarr_dataset(str(tmp_path / "era5land_temperature_hourly.zarr"))
+    try:
+        assert "time" in result.coords
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "valid_time" not in result.coords
+        assert "lat" not in result.coords
+        assert "lon" not in result.coords
+    finally:
+        result.close()
+
+
+def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Source coordinates using x/y spatial names are renamed to longitude/latitude."""
+    ds_xy = xr.Dataset(
+        {"precip": (["time", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
+        coords={
+            "time": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "y": [10.0, 9.0, 8.0],
+            "x": [30.0, 31.0, 32.0],
+        },
+    )
+    path = tmp_path / "chirps_xy_2024-01.nc"
+    ds_xy.to_netcdf(path)
+
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {},
+    }
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+
+    downloader.build_dataset_zarr(dataset)
+
+    result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
+    try:
+        assert "time" in result.coords
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "x" not in result.coords
+        assert "y" not in result.coords
+    finally:
+        result.close()
+
+
 def test_build_dataset_zarr_clips_to_requested_daily_range(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -269,7 +371,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
         "id": "chirps3_precipitation_daily",
         "variable": "precip",
         "period_type": "daily",
-        "cache_info": {},
+        "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
@@ -293,7 +395,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
 def _make_fake_pyramid(ds: xr.Dataset, zarr_path: Path) -> Pyramid:
     """Return a Pyramid whose .dt.to_zarr writes a minimal two-level DataTree store."""
     level0 = ds
-    level1 = ds.coarsen(lat=2, lon=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
+    level1 = ds.coarsen(latitude=2, longitude=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
     dt = DataTree.from_dict({"0": level0, "1": level1})
     return Pyramid(datatree=dt, encoding={})
 
@@ -333,5 +435,43 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
     try:
         assert "pop_total" in result.data_vars
         assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
+def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pyramid zarr store uses canonical longitude/latitude/time coordinate names."""
+    # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
+    nc_files = _write_nc_files(tmp_path)
+    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+
+    received: list[xr.Dataset] = []
+
+    def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
+        received.append(ds)
+        return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
+
+    monkeypatch.setattr(downloader, "create_pyramid", fake_create_pyramid)
+
+    downloader.build_dataset_zarr(_PYRAMID_DATASET)
+
+    # The dataset handed to create_pyramid must already carry canonical names.
+    assert len(received) == 1
+    ds_in = received[0]
+    assert "longitude" in ds_in.coords
+    assert "latitude" in ds_in.coords
+    assert "time" in ds_in.coords
+    assert "lon" not in ds_in.coords
+    assert "lat" not in ds_in.coords
+
+    # The written store must also expose canonical names when opened.
+    result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
+    try:
+        assert "longitude" in result.coords
+        assert "latitude" in result.coords
+        assert "time" in result.coords
     finally:
         result.close()

@@ -6,17 +6,16 @@ environment variables and logging are configured before other imports.
 
 import logging
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv  # noqa: E402
 
 # -- Load .env (must happen before pygeoapi reads PYGEOAPI_CONFIG) ------------
 load_dotenv()
 
-DEFAULT_PYGEOAPI_CONFIG = Path(__file__).resolve().parent.parent.parent / "data" / "pygeoapi" / "pygeoapi-config.yml"
-DEFAULT_PYGEOAPI_OPENAPI = Path(__file__).resolve().parent.parent.parent / "data" / "pygeoapi" / "pygeoapi-openapi.yml"
-os.environ.setdefault("PYGEOAPI_CONFIG", str(DEFAULT_PYGEOAPI_CONFIG))
-os.environ.setdefault("PYGEOAPI_OPENAPI", str(DEFAULT_PYGEOAPI_OPENAPI))
+from climate_api.publications.services import PYGEOAPI_CONFIG_PATH, PYGEOAPI_OPENAPI_PATH  # noqa: E402
+
+os.environ.setdefault("PYGEOAPI_CONFIG", str(PYGEOAPI_CONFIG_PATH))
+os.environ.setdefault("PYGEOAPI_OPENAPI", str(PYGEOAPI_OPENAPI_PATH))
 
 # -- climate_api / third-party logging setup ---------------------------------------
 eo_logger = logging.getLogger("climate_api")

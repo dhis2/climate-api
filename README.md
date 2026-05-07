@@ -4,7 +4,7 @@ Climate and Earth Observation data is distributed across dozens of providers —
 
 Each instance is configured for a specific country or region, and all data extraction, processing, and storage is scoped to that spatial extent. It abstracts data access across heterogeneous sources (CHIRPS, ERA5, WorldPop, and others), stores outputs as GeoZarr, and exposes them through standards-based endpoints.
 
-The platform is designed to operate independently of DHIS2 and can be deployed on local, cloud-hosted, or sovereign country infrastructure. See [docs/project_description.md](docs/project_description.md) for a full description of the vision and technical architecture, [docs/managed_data_api_guide.md](docs/managed_data_api_guide.md) for the current API surface, and [docs/roadmap.md](docs/roadmap.md) for the planned development steps.
+The platform is designed to operate independently of DHIS2 and can be deployed on local, cloud-hosted, or sovereign country infrastructure. See [docs/setup_guide.md](docs/setup_guide.md) for a step-by-step setup walkthrough, [docs/user_guide.md](docs/user_guide.md) for data access examples, [docs/managed_data_api_guide.md](docs/managed_data_api_guide.md) for the full API reference, and [docs/roadmap.md](docs/roadmap.md) for the planned development steps.
 
 > **Status: active development.** Current focus is on dataset ingestion, sync workflows, and GeoZarr storage. APIs and data models may change without notice.
 
@@ -18,14 +18,7 @@ Install dependencies (requires [uv](https://docs.astral.sh/uv/)):
 uv sync
 ```
 
-Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime.
-
-Key environment variables:
-
-- `DHIS2_BASE_URL` / `DHIS2_USERNAME` / `DHIS2_PASSWORD` — optional for now; reserved for future DHIS2 write/integration workflows
-- `CDSAPI_URL` / `CDSAPI_KEY` — required for ERA5-Land downloads
-- `DOWNLOAD_BBOX` — default `xmin,ymin,xmax,ymax` used when a dataset requires bbox and the request/extent does not provide one
-- `COUNTRY_CODE` — default country code for datasets that require one, such as WorldPop
+Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime. See `.env.example` for the full list of available options.
 
 Start the app:
 
@@ -41,7 +34,7 @@ If you cannot use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ### Using conda
@@ -50,7 +43,7 @@ uvicorn climate_api.main:app --reload
 conda create -n dhis2-climate-api python=3.13
 conda activate dhis2-climate-api
 pip install -e .
-uvicorn climate_api.main:app --reload
+python -m uvicorn climate_api.main:app --reload
 ```
 
 ## Development
@@ -74,38 +67,50 @@ Once running, the API is available at:
 
 | Endpoint                                  | Description                                |
 | ----------------------------------------- | ------------------------------------------ |
-| `http://localhost:8000/`                  | Welcome / health check                     |
+| `http://localhost:8000/`                  | Navigation document                        |
+| `http://localhost:8000/health`            | Health check                               |
 | `http://localhost:8000/docs`              | Interactive API documentation (Swagger UI) |
+| `http://localhost:8000/extent`           | Configured spatial extent                  |
+| `http://localhost:8000/datasets`          | Managed dataset catalogue                  |
 | `http://localhost:8000/stac/catalog.json` | STAC catalog for published GeoZarr data    |
+| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a managed dataset        |
 | `http://localhost:8000/ogcapi`            | OGC API root                               |
-| `http://localhost:8000/zarr/{dataset_id}` | GeoZarr store for a published dataset      |
 
 ## STAC
 
-Published Zarr-backed managed datasets are exposed under `/stac` as one STAC Collection per dataset.
+Published GeoZarr datasets are discoverable under `/stac` as one STAC Collection per dataset. Each collection includes a `zarr` asset with direct xarray-compatible access metadata derived from the live Zarr store.
 
-- `/stac/catalog.json` is the entrypoint catalog
-- `/stac/collections/{dataset_id}` exposes a Collection with a direct `/zarr/{dataset_id}` asset href
-- `xstac` derives Datacube metadata from the real Zarr-backed dataset
-- `pygeoapi` remains the OGC query layer under `/ogcapi`
+Discover available datasets and open one with xarray:
 
-Minimal example:
+The catalog is populated once at least one dataset has been ingested and published (see [docs/setup_guide.md](docs/setup_guide.md)).
 
 ```python
-import requests
+import httpx
 import xarray as xr
 
-collection = requests.get(
-    "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle"
-).json()
+catalog = httpx.get("http://127.0.0.1:8000/stac/catalog.json").json()
+children = [link for link in catalog["links"] if link["rel"] == "child"]
 
-asset = collection["assets"]["zarr"]
-ds = xr.open_zarr(asset["href"], consolidated=asset["xarray:open_kwargs"]["consolidated"])
+if not children:
+    print("No published datasets found. Run an ingestion first.")
+else:
+    for link in children:
+        print(link["title"], "—", link["href"])
+
+    collection = httpx.get(children[0]["href"]).json()
+    asset = collection["assets"]["zarr"]
+    ds = xr.open_zarr(
+        asset["href"],
+        consolidated=asset["xarray:open_kwargs"]["consolidated"],
+    )
+    print(ds)
 ```
 
 ## pygeoapi
 
-The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to `data/pygeoapi/pygeoapi-config.yml`.
+The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to the resolved runtime data directory (for Docker: `/app/data/pygeoapi/pygeoapi-config.yml`).
+
+The base configuration is bundled with the package at `src/climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
 
 To validate the configuration manually:
 
@@ -113,7 +118,7 @@ To validate the configuration manually:
 PYTHONPATH="$(pwd)/src" uv run pygeoapi config validate -c data/pygeoapi/pygeoapi-config.yml
 ```
 
-Regenerate after changes to `config/pygeoapi/base.yml` or publication logic:
+Regenerate after changes to publication logic:
 
 ```
 make openapi

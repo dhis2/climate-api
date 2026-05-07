@@ -5,7 +5,7 @@ This guide describes the current native FastAPI surface for Climate API and how 
 The current public story is:
 
 - run and inspect ingestion operations with `/ingestions`
-- discover configured extents with `/extents`
+- discover the configured extent with `/extent`
 - discover managed datasets with `/datasets`
 - discover published GeoZarr datasets with `/stac/catalog.json`
 - access raw Zarr data with `/zarr/{dataset_id}`
@@ -23,8 +23,7 @@ Operational note:
 - `POST /ingestions`
 - `GET /ingestions`
 - `GET /ingestions/{ingestion_id}`
-- `GET /extents`
-- `GET /extents/{extent_id}`
+- `GET /extent`
 - `GET /datasets`
 - `GET /datasets/{dataset_id}`
 - `GET /datasets/{dataset_id}/download`
@@ -39,29 +38,24 @@ Operational note:
 - `GET /ogcapi/collections/{dataset_id}`
 - `GET /ogcapi/collections/{dataset_id}/coverage`
 
-## 1. Discover configured extents
+## 1. Discover the configured extent
 
-Configured extents are setup-time Climate API configuration. They are read-only at runtime and are identified by `extent_id`.
+The configured extent is setup-time Climate API configuration. It is read-only at runtime and is identified by `extent_id`.
 
 Example:
 
 ```bash
-curl -s http://127.0.0.1:8000/extents | jq
+curl -s http://127.0.0.1:8000/extent | jq
 ```
 
 Example response:
 
 ```json
 {
-  "kind": "ExtentList",
-  "items": [
-    {
-      "extent_id": "sle",
-      "name": "Sierra Leone",
-      "description": "National extent for Sierra Leone.",
-      "bbox": [-13.5, 6.9, -10.1, 10.0]
-    }
-  ]
+  "extent_id": "sle",
+  "name": "Sierra Leone",
+  "description": null,
+  "bbox": [-13.5, 6.9, -10.1, 10.0]
 }
 ```
 
@@ -418,10 +412,10 @@ curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
 These commands assume the API is running on `http://127.0.0.1:8000` and that
 `jq` is available.
 
-### 1. Confirm configured extents
+### 1. Confirm configured extent
 
 ```bash
-curl -s "http://127.0.0.1:8000/extents" | jq
+curl -s "http://127.0.0.1:8000/extent" | jq
 ```
 
 Use an extent that has enough spatial metadata for the selected dataset. The
@@ -627,7 +621,7 @@ The current branch is no longer an artifact-first API.
 The public contract is now:
 
 - ingest with `/ingestions`
-- discover extents with `/extents`
+- discover the configured extent with `/extent`
 - discover managed datasets with `/datasets`
 - discover published Zarr-backed datasets with `/stac/catalog.json`
 - access raw native data with `/zarr/{dataset_id}`
