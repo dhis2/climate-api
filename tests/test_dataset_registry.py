@@ -22,6 +22,41 @@ def test_dataset_registry_requires_sync_kind(monkeypatch: pytest.MonkeyPatch, tm
         datasets.list_datasets()
 
 
+def test_dataset_registry_requires_ingestion_block(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    registry_file = tmp_path / "missing_ingestion.yaml"
+    registry_file.write_text(
+        """
+- id: missing_ingestion
+  variable: value
+  period_type: daily
+  sync_kind: temporal
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="must define an 'ingestion' block"):
+        datasets.list_datasets()
+
+
+def test_dataset_registry_requires_ingestion_function(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    registry_file = tmp_path / "missing_function.yaml"
+    registry_file.write_text(
+        """
+- id: missing_function
+  variable: value
+  period_type: daily
+  sync_kind: temporal
+  ingestion: {}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="must define ingestion.function"):
+        datasets.list_datasets()
+
+
 def test_dataset_registry_rejects_unsupported_sync_kind(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
