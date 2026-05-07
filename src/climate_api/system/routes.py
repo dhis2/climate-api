@@ -13,9 +13,9 @@ from .templates import render_landing, wants_json
 router = APIRouter()
 
 try:
-    _APP_VERSION = _pkg_version("climate-api")
+    _app_version = _pkg_version("climate-api")
 except PackageNotFoundError:
-    _APP_VERSION = "unknown"
+    _app_version = "unknown"
 
 
 def _root_json(base: str) -> RootResponse:
@@ -50,7 +50,7 @@ def read_index(request: Request) -> Response:
     base = str(request.base_url).rstrip("/")
     if wants_json(request):
         return JSONResponse(_root_json(base).model_dump())
-    return HTMLResponse(render_landing(_APP_VERSION, base))
+    return HTMLResponse(render_landing(_app_version, base))
 
 
 @router.get("/health")
