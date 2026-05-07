@@ -40,7 +40,7 @@ def render_landing(version: str) -> str:
         datasets = list_datasets().items
     except Exception:
         datasets = []
-    return get_template("index.html").render(
+    return get_template("landing_page.html").render(
         version=version,
         extent=extent,
         datasets=datasets,
