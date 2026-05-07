@@ -17,7 +17,7 @@ _cache: dict[str, jinja2.Template] = {}
 def get_template(name: str) -> jinja2.Template:
     """Load and cache a Jinja2 template from the bundled data/templates/ directory."""
     if name not in _cache:
-        resource = importlib.resources.files("climate_api") / "data" / "templates" / name
+        resource = importlib.resources.files("climate_api") / "templates" / name
         _cache[name] = _env.from_string(resource.read_text(encoding="utf-8"))
     return _cache[name]
 
