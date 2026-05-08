@@ -508,7 +508,10 @@
       });
 
       map.on("load", () => {
-        labelLayerId = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
+        const layers = map.getStyle().layers;
+        labelLayerId =
+          layers.find((l) => l.type === "line" && l.id.startsWith("boundary"))?.id ??
+          layers.find((l) => l.type === "symbol")?.id;
         loadCatalog();
       });
     </script>
