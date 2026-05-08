@@ -171,6 +171,25 @@
       .hidden {
         display: none !important;
       }
+
+      .legend-bar {
+        height: 10px;
+        border-radius: 3px;
+        margin-bottom: 0.3rem;
+      }
+      .legend-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        font-family: ui-monospace, "Cascadia Code", monospace;
+        color: #475569;
+      }
+      .legend-units {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        text-align: center;
+        margin-top: 0.2rem;
+      }
     </style>
   </head>
   <body>
@@ -209,6 +228,16 @@
             <dt>Units</dt>
             <dd id="meta-units">—</dd>
           </dl>
+
+          <div id="legend" class="panel-section hidden">
+            <label>Legend</label>
+            <div id="legend-bar" class="legend-bar"></div>
+            <div class="legend-labels">
+              <span id="legend-min"></span>
+              <span id="legend-max"></span>
+            </div>
+            <div id="legend-units" class="legend-units"></div>
+          </div>
 
           <div id="status" class="status">Loading datasets...</div>
         </div>
@@ -319,7 +348,24 @@
       const datasetMeta = document.getElementById("dataset-meta");
       const metaSource = document.getElementById("meta-source");
       const metaUnits = document.getElementById("meta-units");
+      const legendEl = document.getElementById("legend");
+      const legendBar = document.getElementById("legend-bar");
+      const legendMin = document.getElementById("legend-min");
+      const legendMax = document.getElementById("legend-max");
+      const legendUnits = document.getElementById("legend-units");
       const statusEl = document.getElementById("status");
+
+      function updateLegend(cm, clim, units) {
+        const stops = Array.from(
+          { length: 32 },
+          (_, i) => cm[Math.round((i * (cm.length - 1)) / 31)]
+        );
+        legendBar.style.background = `linear-gradient(to right, ${stops.join(", ")})`;
+        legendMin.textContent = clim[0];
+        legendMax.textContent = clim[1];
+        legendUnits.textContent = units ? `(${units})` : "";
+        legendEl.classList.remove("hidden");
+      }
 
       function setStatus(msg, isError = false) {
         statusEl.textContent = msg;
@@ -372,6 +418,7 @@
         }
         timeSection.classList.add("hidden");
         datasetMeta.classList.add("hidden");
+        legendEl.classList.add("hidden");
 
         let collection;
         try {
@@ -402,8 +449,9 @@
         timeDimKey = getTimeDimKey(dimensions);
         timeSteps = buildTimeSteps(dimensions);
 
+        let cm;
         try {
-          const cm = buildColormap(colormapName);
+          cm = buildColormap(colormapName);
           const zarrVersion = zarr["zarr:zarr_format"] ?? null;
           const selector =
             timeSteps.length > 0 ? { [timeDimKey]: 0 } : {};
@@ -413,7 +461,7 @@
             variable,
             clim,
             colormap: cm,
-            opacity: 0.75,
+            opacity: 0.6,
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
@@ -453,15 +501,15 @@
             k !== variable &&
             k !== collection.id
         );
-        metaSource.textContent =
-          renders["climate_api:units"]
-            ? source ?? "—"
-            : source ?? "—";
-        metaUnits.textContent =
+        const units =
           renders["climate_api:units"] ??
           collection["cube:variables"]?.[variable]?.unit ??
-          "—";
+          "";
+        metaSource.textContent = source ?? "—";
+        metaUnits.textContent = units || "—";
         datasetMeta.classList.remove("hidden");
+
+        updateLegend(cm, clim, units);
 
         setStatus("");
       }
