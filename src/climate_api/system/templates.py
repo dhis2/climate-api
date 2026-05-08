@@ -98,7 +98,7 @@ def wants_json(request: Request) -> bool:
 
 def render_maps(base: str) -> str:
     """Render the map viewer page."""
-    return get_template("maps.html").render(base=base)
+    return get_template("map-viewer.html").render(base=base)
 
 
 def _load_extent() -> dict[str, Any] | None:

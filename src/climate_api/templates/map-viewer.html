@@ -320,7 +320,6 @@
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
-      let labelLayerId;
 
       const selectEl = document.getElementById("dataset-select");
       const timeSection = document.getElementById("time-section");
@@ -443,28 +442,22 @@
             variable,
             clim,
             colormap: cm,
-            opacity: 0.6,
+            opacity: 1,
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
           });
-          map.addLayer(activeLayer, labelLayerId);
+          map.addLayer(activeLayer);
+          for (const layer of map.getStyle().layers) {
+            if ((layer.type === "line" && layer.id.startsWith("boundary")) || layer.type === "symbol") {
+              map.moveLayer(layer.id);
+            }
+          }
         } catch (err) {
           setStatus(`Failed to create layer: ${err.message}`, true);
           return;
         }
 
-        // Zoom to dataset spatial extent.
-        const bbox = collection.extent?.spatial?.bbox?.[0];
-        if (bbox) {
-          map.fitBounds(
-            [
-              [bbox[0], bbox[1]],
-              [bbox[2], bbox[3]],
-            ],
-            { padding: 60, maxZoom: 8 }
-          );
-        }
 
         // Time slider.
         if (timeSteps.length > 1) {
@@ -508,7 +501,6 @@
       });
 
       map.on("load", () => {
-        labelLayerId = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
         loadCatalog();
       });
     </script>
