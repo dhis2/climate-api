@@ -1,13 +1,15 @@
 """Root API endpoints."""
 
 import sys
+import urllib.parse
 from importlib.metadata import version as _pkg_version
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.responses import RedirectResponse
 
 from .schemas import AppInfo, HealthStatus, Status
-from .templates import ROOT_RESPONSES, app_version, render_landing, render_maps, root_json, wants_json
+from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, root_json, wants_json
 
 router = APIRouter()
 
@@ -26,6 +28,89 @@ def maps(request: Request) -> HTMLResponse:
     """Return the interactive map viewer."""
     base = str(request.base_url).rstrip("/")
     return HTMLResponse(render_maps(base))
+
+
+@router.get("/manage", response_class=HTMLResponse, include_in_schema=False)
+def manage(
+    request: Request,
+    message: str | None = None,
+    error: str | None = None,
+) -> HTMLResponse:
+    """Return the management interface for ingestion and sync operations."""
+    base = str(request.base_url).rstrip("/")
+    return HTMLResponse(render_manage(app_version, base, message=message, error=error))
+
+
+@router.post("/manage/ingest", include_in_schema=False)
+async def manage_ingest(request: Request) -> RedirectResponse:
+    """Handle ingest form submission and redirect to the management page."""
+    from fastapi import HTTPException
+
+    from climate_api.data_registry.services.datasets import get_dataset
+    from climate_api.extents.services import get_extent
+    from climate_api.ingestions.services import create_artifact
+
+    base = str(request.base_url).rstrip("/")
+    try:
+        form = await request.form()
+        dataset_id = str(form.get("dataset_id", ""))
+        start = str(form.get("start", ""))
+        end = str(form.get("end", "")) or None
+        publish = "publish" in form
+        overwrite = "overwrite" in form
+
+        template = get_dataset(dataset_id)
+        if template is None:
+            msg = urllib.parse.quote(f"Dataset template '{dataset_id}' not found")
+            return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+
+        extent = get_extent()
+        resolved_bbox = list(extent["bbox"]) if extent else None
+        extent_id = extent["id"] if extent else None
+        country_code = extent.get("country_code") if extent else None
+
+        create_artifact(
+            dataset=template,
+            start=start,
+            end=end,
+            extent_id=extent_id,
+            bbox=resolved_bbox,
+            country_code=country_code,
+            overwrite=overwrite,
+            prefer_zarr=True,
+            publish=publish,
+        )
+        name = urllib.parse.quote(template.get("name", dataset_id))
+        return RedirectResponse(f"{base}/manage?message=Ingested+{name}", status_code=303)
+    except HTTPException as exc:
+        msg = urllib.parse.quote(str(exc.detail))
+        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+    except Exception as exc:
+        msg = urllib.parse.quote(str(exc))
+        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+
+
+@router.post("/manage/sync", include_in_schema=False)
+async def manage_sync(request: Request) -> RedirectResponse:
+    """Handle sync form submission and redirect to the management page."""
+    from fastapi import HTTPException
+
+    from climate_api.ingestions.services import sync_dataset
+
+    base = str(request.base_url).rstrip("/")
+    try:
+        form = await request.form()
+        dataset_id = str(form.get("dataset_id", ""))
+        publish = "publish" in form
+
+        sync_dataset(dataset_id=dataset_id, end=None, prefer_zarr=True, publish=publish)
+        return RedirectResponse(f"{base}/manage?message=Sync+completed", status_code=303)
+    except HTTPException as exc:
+        msg = urllib.parse.quote(str(exc.detail))
+        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+    except Exception as exc:
+        msg = urllib.parse.quote(str(exc))
+        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
 
 
 @router.get("/health")
