@@ -143,6 +143,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     dims = [lon_dim, lat_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
+    ds = _apply_unit_conversion(ds, dataset)
 
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
@@ -241,6 +242,32 @@ def _select_time_range(
         selected.sizes[time_dim],
     )
     return selected
+
+
+_UNIT_CONVERSIONS: dict[tuple[str, str], tuple[str, float, float]] = {
+    # (from, to): (display_label, scale, offset) — applied as: value * scale + offset
+    ("kelvin", "degc"): ("degC", 1.0, -273.15),
+    ("m", "mm"): ("mm", 1000.0, 0.0),
+}
+
+
+def _apply_unit_conversion(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+    convert_to = dataset.get("convert_units")
+    if not convert_to:
+        return ds
+    units = dataset.get("units", "")
+    key = (units.lower(), convert_to.lower())
+    conversion = _UNIT_CONVERSIONS.get(key)
+    if conversion is None:
+        logger.warning("No unit conversion defined for %s -> %s; skipping", units, convert_to)
+        return ds
+    label, scale, offset = conversion
+    varname = dataset["variable"]
+    logger.info("Converting %s from %s to %s", varname, units, label)
+    da = ds[varname]
+    converted = da * scale + offset if scale != 1.0 else da + offset
+    ds = ds.assign({varname: converted.assign_attrs({**da.attrs, "units": label})})
+    return ds
 
 
 def _compute_time_space_chunks(
