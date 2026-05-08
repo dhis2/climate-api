@@ -320,7 +320,6 @@
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
-      let labelLayerId;
 
       const selectEl = document.getElementById("dataset-select");
       const timeSection = document.getElementById("time-section");
@@ -448,7 +447,12 @@
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
           });
-          map.addLayer(activeLayer, labelLayerId);
+          map.addLayer(activeLayer);
+          for (const layer of map.getStyle().layers) {
+            if ((layer.type === "line" && layer.id.startsWith("boundary")) || layer.type === "symbol") {
+              map.moveLayer(layer.id);
+            }
+          }
         } catch (err) {
           setStatus(`Failed to create layer: ${err.message}`, true);
           return;
@@ -508,10 +512,6 @@
       });
 
       map.on("load", () => {
-        const layers = map.getStyle().layers;
-        labelLayerId =
-          layers.find((l) => l.type === "line" && l.id.startsWith("boundary"))?.id ??
-          layers.find((l) => l.type === "symbol")?.id;
         loadCatalog();
       });
     </script>
