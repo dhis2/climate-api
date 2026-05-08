@@ -320,7 +320,6 @@
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
-      let initialZoomDone = false;
 
       const selectEl = document.getElementById("dataset-select");
       const timeSection = document.getElementById("time-section");
@@ -459,18 +458,6 @@
           return;
         }
 
-        // Zoom to dataset spatial extent on first load only.
-        const bbox = collection.extent?.spatial?.bbox?.[0];
-        if (bbox && !initialZoomDone) {
-          initialZoomDone = true;
-          map.fitBounds(
-            [
-              [bbox[0], bbox[1]],
-              [bbox[2], bbox[3]],
-            ],
-            { padding: 60, maxZoom: 8 }
-          );
-        }
 
         // Time slider.
         if (timeSteps.length > 1) {
