@@ -1,9 +1,7 @@
 import numpy as np
-import pytest
 import xarray as xr
 
 from climate_api.transforms import convert_units, deaccumulate_era5
-from climate_api.transforms.unit_conversion import _CONVERSIONS
 
 
 def _ds(varname: str, values: list[float], time_steps: int = 1) -> xr.Dataset:
@@ -71,18 +69,21 @@ class TestRunTransformsPipeline:
             "transforms": ["climate_api.transforms.convert_units"],
         }
         from climate_api.data_manager.services.downloader import _run_transforms
+
         result = _run_transforms(ds, dataset)
         np.testing.assert_allclose(result["t2m"].values, [0.0])
 
     def test_empty_transforms_is_noop(self):
         ds = _ds("x", [1.0, 2.0])
         from climate_api.data_manager.services.downloader import _run_transforms
+
         result = _run_transforms(ds, {"variable": "x", "transforms": []})
         np.testing.assert_array_equal(result["x"].values, ds["x"].values)
 
     def test_no_transforms_key_is_noop(self):
         ds = _ds("x", [1.0])
         from climate_api.data_manager.services.downloader import _run_transforms
+
         result = _run_transforms(ds, {"variable": "x"})
         np.testing.assert_array_equal(result["x"].values, ds["x"].values)
 
@@ -95,5 +96,6 @@ class TestRunTransformsPipeline:
             "transforms": [{"function": "climate_api.transforms.convert_units"}],
         }
         from climate_api.data_manager.services.downloader import _run_transforms
+
         result = _run_transforms(ds, dataset)
         np.testing.assert_allclose(result["t2m"].values, [0.0])
