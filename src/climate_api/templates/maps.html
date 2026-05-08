@@ -392,6 +392,7 @@
 
         const clim = renders.rescale?.[0] ?? [0, 100];
         const colormapName = renders.colormap_name ?? "viridis";
+        const fillValue = renders.nodata ?? null;
         const variable =
           renders["climate_api:variable"] ??
           Object.keys(collection["cube:variables"] ?? {})[0] ??
@@ -412,8 +413,10 @@
             variable,
             clim,
             colormap: cm,
+            opacity: 0.75,
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
+            ...(fillValue !== null && { fillValue }),
           });
           map.addLayer(activeLayer);
         } catch (err) {
