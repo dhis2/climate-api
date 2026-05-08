@@ -19,6 +19,6 @@
   source: WorldPop Global2
   source_url: https://hub.worldpop.org/project/categories?id=3
   display:
-    colormap: viridis
-    range: [0.0, 1000.0]
+    colormap: reds
+    range: [0.0, 25.0]
     nodata: 0.0

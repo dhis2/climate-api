@@ -7,7 +7,7 @@
   sync_execution: append
   sync_availability:
     latest_available_function: climate_api.providers.availability.chirps3_daily_latest_available
-  ingestion: 
+  ingestion:
     function: dhis2eo.data.chc.chirps3.daily.download
   units: mm
   resolution: 5 km x 5 km
@@ -16,4 +16,4 @@
   display:
     colormap: blues
     range: [0.0, 20.0]
-    nodata: 0.0
+    nodata: -9999.0
