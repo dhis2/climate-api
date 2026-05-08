@@ -310,26 +310,7 @@
 
       const map = new maplibregl.Map({
         container: "map",
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: "raster",
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-              tileSize: 256,
-              attribution:
-                '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            },
-          },
-          layers: [
-            {
-              id: "osm",
-              type: "raster",
-              source: "osm",
-              paint: { "raster-opacity": 0.5 },
-            },
-          ],
-        },
+        style: "https://tiles.openfreemap.org/styles/positron",
         center: [20, 5],
         zoom: 2,
         fitBoundsOptions: { padding: 40 },
@@ -339,6 +320,7 @@
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
+      let labelLayerId;
 
       const selectEl = document.getElementById("dataset-select");
       const timeSection = document.getElementById("time-section");
@@ -466,7 +448,7 @@
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
           });
-          map.addLayer(activeLayer);
+          map.addLayer(activeLayer, labelLayerId);
         } catch (err) {
           setStatus(`Failed to create layer: ${err.message}`, true);
           return;
@@ -525,7 +507,10 @@
         activeLayer?.setSelector({ [timeDimKey]: i });
       });
 
-      map.on("load", loadCatalog);
+      map.on("load", () => {
+        labelLayerId = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
+        loadCatalog();
+      });
     </script>
   </body>
 </html>
