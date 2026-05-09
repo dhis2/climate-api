@@ -14,7 +14,6 @@ import yaml
 
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
-from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
 
