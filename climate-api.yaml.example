@@ -10,4 +10,5 @@ extent:
 
 data_dir: ./data   # required — directory for downloaded NetCDF files and Zarr stores
 
-# templates_dir: ./templates/   # optional — root for custom templates; datasets go in templates/datasets/
+# plugins_dir: ./plugins/   # optional — root for custom dataset plugins; YAML templates go in plugins/datasets/
+# crs: EPSG:4326             # optional — CRS for stored GeoZarr files (default: EPSG:4326); use e.g. EPSG:25833 for UTM33

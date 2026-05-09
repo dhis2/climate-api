@@ -58,6 +58,23 @@ def _load_config() -> dict[str, Any]:
     return _cache
 
 
+DEFAULT_CRS = "EPSG:4326"
+
+
+def get_crs() -> str:
+    """Return the instance CRS from CLIMATE_API_CONFIG, defaulting to EPSG:4326.
+
+    Set `crs: EPSG:25833` in climate-api.yaml to store all GeoZarr files in a
+    national projection. All datasets within one instance share the same CRS.
+    """
+    raw = get_config().get("crs")
+    if raw is None:
+        return DEFAULT_CRS
+    if not isinstance(raw, str) or not raw:
+        raise ValueError(f"crs in CLIMATE_API_CONFIG must be a non-empty string, got {type(raw).__name__}")
+    return raw
+
+
 def get_data_dir() -> Path | None:
     """Return the data directory declared in CLIMATE_API_CONFIG.
 

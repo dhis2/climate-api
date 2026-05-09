@@ -33,8 +33,6 @@ def _resolve_download_dir() -> Path:
 
 DOWNLOAD_DIR = _resolve_download_dir()
 
-CRS = "EPSG:4326"
-
 
 def download_dataset(
     dataset: dict[str, Any],
@@ -131,14 +129,17 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     drop_coords = [c for c in ds.coords if c not in keep_coords]
     ds = ds.drop_vars(drop_coords)
 
-    # Normalise to canonical names (time/longitude/latitude) so all stored Zarr files
-    # are consistent regardless of what the upstream source uses (e.g. lon/lat, x/y).
-    # Downstream readers — pygeoapi, the /zarr endpoint, and the client — rely on this.
+    # Normalise to canonical names so all stored Zarr files are consistent.
+    # For WGS84 instances: rename spatial dims to longitude/latitude (degree values).
+    # For other CRS (e.g. UTM): rename to x/y to reflect projected metre coordinates.
+    crs = api_config.get_crs()
+    target_lon = "longitude" if crs == api_config.DEFAULT_CRS else "x"
+    target_lat = "latitude" if crs == api_config.DEFAULT_CRS else "y"
     time_dim = get_time_dim(ds)
-    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "longitude"), (lat_dim, "latitude")] if k != v}
+    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, target_lon), (lat_dim, target_lat)] if k != v}
     if rename_map:
         ds = ds.rename(rename_map)
-    lon_dim, lat_dim = "longitude", "latitude"
+    lon_dim, lat_dim = target_lon, target_lat
     dims = [lon_dim, lat_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
@@ -153,7 +154,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     # https://github.com/zarr-developers/geozarr-toolkit/issues/15
     geozarr_attrs = create_geozarr_attrs(
         dimensions=dims,
-        crs=CRS,
+        crs=crs,
         bbox=bbox,
         shape=shape,
     )
@@ -179,7 +180,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
         ds.load()
         ds.close()
 
-        ds = ds.proj.assign_crs(spatial_ref=CRS)
+        ds = ds.proj.assign_crs(spatial_ref=crs)
 
         # https://github.com/carbonplan/topozarr/issues/13
         pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method=method)

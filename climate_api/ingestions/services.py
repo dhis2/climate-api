@@ -12,10 +12,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+import pyproj
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
+from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
@@ -398,13 +400,40 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     store_root = _get_zarr_root_or_409(artifact)
 
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
+    crs = api_config.get_crs()
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
         "format": artifact.format,
         "path": ".",
+        "crs": crs,
+        "proj4": _crs_to_proj4(crs),
+        "bounds": _read_zarr_bounds(store_root),
         "entries": entries,
     }
+
+
+def _crs_to_proj4(crs: str) -> str:
+    """Convert an EPSG code or WKT string to a proj4 definition string."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        return pyproj.CRS.from_user_input(crs).to_proj4()
+
+
+def _read_zarr_bounds(store_root: Path) -> list[float] | None:
+    """Read the spatial:bbox from the zarr store root attributes, if present."""
+    for attrs_file in (store_root / "zarr.json", store_root / ".zattrs"):
+        if attrs_file.exists():
+            attrs = json.loads(attrs_file.read_text(encoding="utf-8"))
+            # zarr v3 stores root attrs under "attributes" key
+            if attrs_file.name == "zarr.json":
+                attrs = attrs.get("attributes", attrs)
+            bbox = attrs.get("spatial:bbox")
+            if isinstance(bbox, list) and len(bbox) == 4:
+                return [float(v) for v in bbox]
+    return None
 
 
 def get_dataset_zarr_store_file_or_404(
