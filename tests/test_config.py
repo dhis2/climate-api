@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from climate_api.config import get_config, get_data_dir
+from climate_api.config import DEFAULT_CRS, get_config, get_crs, get_data_dir
 from climate_api.data_registry.services import datasets as dataset_registry
 from climate_api.extents import services as extent_services
 
@@ -118,6 +118,34 @@ def test_builtin_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.Monke
     assert "era5land_temperature_hourly" in ids
     assert "era5land_precipitation_hourly" in ids
     assert "worldpop_population_yearly" in ids
+
+
+def test_get_crs_defaults_to_wgs84(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
+    assert get_crs() == DEFAULT_CRS
+
+
+def test_get_crs_reads_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\ncrs: EPSG:25833\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    assert get_crs() == "EPSG:25833"
+
+
+def test_get_crs_raises_for_invalid_value(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\ncrs: 42\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="crs in CLIMATE_API_CONFIG must be a non-empty string"):
+        get_crs()
+
+
+def test_get_crs_raises_for_unknown_epsg_code(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\ncrs: EPSG:999999\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="not a valid CRS"):
+        get_crs()
 
 
 def test_templates_dir_raises_with_migration_hint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

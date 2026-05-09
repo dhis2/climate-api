@@ -52,7 +52,7 @@ def download(
 
 Any extra keyword arguments from `default_params` in the YAML template are forwarded as additional kwargs.
 
-The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`y` → `latitude`, `lon`/`x` → `longitude`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
+The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`latitude` → `y`, `lon`/`longitude` → `x`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
 
 Install your package in the same environment as the Climate API:
 
