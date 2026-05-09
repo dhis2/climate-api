@@ -19,9 +19,11 @@ from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, Publi
 
 
 def _resolve_pygeoapi_dir() -> Path:
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override) / "pygeoapi"
+    from climate_api import config as api_config
+
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "pygeoapi"
     xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return xdg_data / "climate-api" / "pygeoapi"
 

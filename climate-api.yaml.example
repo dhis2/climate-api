@@ -8,4 +8,6 @@ extent:
   bbox: [-13.5, 6.9, -10.1, 10.0]
   country_code: SLE
 
-# datasets_dir: ./datasets/   # optional — custom templates merged with built-ins
+data_dir: ./data   # required — directory for downloaded NetCDF files and Zarr stores
+
+# templates_dir: ./templates/   # optional — root for custom templates; datasets go in templates/datasets/

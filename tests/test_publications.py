@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from climate_api.publications import services
@@ -9,21 +11,21 @@ def test_load_base_config_returns_mapping() -> None:
     assert "server" in config
 
 
-def test_resolve_pygeoapi_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+def test_resolve_pygeoapi_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from climate_api import config as api_config
+
+    monkeypatch.setattr(api_config, "get_data_dir", lambda: tmp_path / "data")
+    result = services._resolve_pygeoapi_dir()
+    assert result == tmp_path / "data" / "pygeoapi"
+
+
+def test_resolve_pygeoapi_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
     import tempfile
 
-    with tempfile.TemporaryDirectory() as override:
-        monkeypatch.setenv("CACHE_OVERRIDE", override)
-        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-        result = services._resolve_pygeoapi_dir()
-        assert str(result) == f"{override}/pygeoapi"
+    from climate_api import config as api_config
 
-
-def test_resolve_pygeoapi_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
-    import tempfile
-
+    monkeypatch.setattr(api_config, "get_data_dir", lambda: None)
     with tempfile.TemporaryDirectory() as xdg:
-        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", xdg)
         result = services._resolve_pygeoapi_dir()
         assert str(result) == f"{xdg}/climate-api/pygeoapi"

@@ -7,6 +7,8 @@ from typing import Any
 
 import yaml
 
+_MISSING = object()
+
 
 def _substitute_env_vars(text: str) -> str:
     """Replace ${VAR:-default} patterns with values from the environment."""
@@ -54,3 +56,31 @@ def _load_config() -> dict[str, Any]:
         raise ValueError(f"CLIMATE_API_CONFIG must be a YAML mapping at the top level: {path}")
     _cache = dict(loaded or {})
     return _cache
+
+
+def get_data_dir() -> Path | None:
+    """Return the data directory declared in CLIMATE_API_CONFIG.
+
+    Returns None when CLIMATE_API_CONFIG is unset or points to a file that does
+    not exist (e.g. CI environments where the config is gitignored).
+
+    Raises ValueError if the config file exists but data_dir is not set, so
+    misconfigured instances fail fast at startup rather than silently sharing
+    a default directory with other instances.
+
+    """
+    config_path = get_config_path()
+    if config_path is None or not config_path.exists():
+        return None
+
+    config = get_config()
+    raw = config.get("data_dir", _MISSING)
+    if raw is _MISSING:
+        raise ValueError(
+            "data_dir is required in CLIMATE_API_CONFIG when a config file is present. "
+            "Set it to the directory where downloaded data should be stored, "
+            "e.g. data_dir: ./data"
+        )
+    if not isinstance(raw, (str, Path)):
+        raise ValueError(f"data_dir in CLIMATE_API_CONFIG must be a path string, got {type(raw).__name__}")
+    return (config_path.parent / raw).resolve()
