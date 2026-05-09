@@ -69,7 +69,7 @@ def get_data_dir() -> Path | None:
     CACHE_OVERRIDE is a legacy escape hatch that bypasses config-level validation.
     """
     config_path = get_config_path()
-    if config_path is None:
+    if config_path is None or not config_path.exists():
         return None
 
     config = get_config()

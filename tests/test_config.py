@@ -12,6 +12,13 @@ def test_get_data_dir_returns_none_when_no_config(monkeypatch: pytest.MonkeyPatc
     assert get_data_dir() is None
 
 
+def test_get_data_dir_returns_none_when_config_path_set_but_file_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(tmp_path / "nonexistent.yaml"))
+    assert get_data_dir() is None
+
+
 def test_get_data_dir_raises_when_config_present_but_no_data_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
