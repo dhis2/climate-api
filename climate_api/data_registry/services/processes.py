@@ -119,7 +119,7 @@ def _validate_process(process: object, *, source: str) -> None:
         raise ValueError(f"Process '{process_id}' in {source} must define execution_function")
 
 
-def _get_dynamic_function(full_path: str):  # type: ignore[return]
+def _get_dynamic_function(full_path: str) -> Any:
     """Import and return a function given its dotted module path."""
     parts = full_path.split(".")
     module_path = ".".join(parts[:-1])
