@@ -36,6 +36,7 @@ dependencies = [
     "zarr>=3.1.6,<4",
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*",
+    "rioxarray>=0.17",
 ]
 
 [project.urls]

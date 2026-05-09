@@ -15,6 +15,8 @@
       begin: "1981-01-01"
       trs: http://www.opengis.net/def/uom/ISO-8601/0/Gregorian
       resolution: P1D
+  transforms:
+    - climate_api.transforms.reproject_to_instance_crs
   ingestion:
     function: dhis2eo.data.chc.chirps3.daily.download
   units: mm
