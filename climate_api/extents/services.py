@@ -21,9 +21,9 @@ def get_extent() -> dict[str, Any] | None:
     return extent
 
 
-def get_extent_or_404(extent_id: str) -> dict[str, Any]:
-    """Return the configured extent if its id matches, or raise 404."""
+def get_extent_or_404() -> dict[str, Any]:
+    """Return the configured extent or raise 404 if none is configured."""
     extent = get_extent()
-    if extent is not None and extent.get("id") == extent_id:
+    if extent is not None:
         return extent
-    raise HTTPException(status_code=404, detail=f"Extent '{extent_id}' not found")
+    raise HTTPException(status_code=404, detail="No extent is configured for this Climate API instance")

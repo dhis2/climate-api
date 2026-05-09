@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from starlette.responses import Response
 
 from climate_api.data_registry.routes import _get_dataset_or_404
-from climate_api.extents.services import get_extent_or_404
+from climate_api.extents.services import get_extent
 from climate_api.ingestions import services
 from climate_api.ingestions.schemas import (
     CreateIngestionRequest,
@@ -28,19 +28,13 @@ sync_router = APIRouter()
 def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
     """Create or update a managed dataset from a dataset template and configured extent."""
     dataset = _get_dataset_or_404(request.dataset_id)
-    resolved_bbox: list[float] | None = None
-    resolved_country_code: str | None = None
-    if request.extent_id is not None:
-        extent = get_extent_or_404(request.extent_id)
-        bbox = extent.get("bbox")
-        country_code = extent.get("country_code")
-        resolved_bbox = list(bbox) if isinstance(bbox, list) else resolved_bbox
-        resolved_country_code = country_code if isinstance(country_code, str) else resolved_country_code
+    extent = get_extent()
+    resolved_bbox = list(extent["bbox"]) if extent else None
+    resolved_country_code = extent.get("country_code") if extent else None
     artifact = services.create_artifact(
         dataset=dataset,
         start=request.start,
         end=request.end,
-        extent_id=request.extent_id,
         bbox=resolved_bbox,
         country_code=resolved_country_code,
         overwrite=request.overwrite,

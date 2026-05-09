@@ -44,7 +44,6 @@ def _artifact(
         request_scope=ArtifactRequestScope(
             start="2026-01-01",
             end=end,
-            extent_id="sle",
             bbox=(1.0, 2.0, 3.0, 4.0),
         ),
         coverage=ArtifactCoverage(
@@ -142,7 +141,6 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
 
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2026-02-10"
-    assert captured["extent_id"] == "sle"
     assert captured["bbox"] == [1.0, 2.0, 3.0, 4.0]
     assert captured["country_code"] == "SLE"
     assert result.sync_id == "a2"
@@ -488,7 +486,6 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
     assert response.status_code == 200
     assert response.json() == {
         "source_dataset_id": "chirps3_precipitation_daily",
-        "extent_id": "sle",
         "sync_kind": "temporal",
         "action": "rematerialize",
         "reason": "new_periods_available",
@@ -790,7 +787,6 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
 
     broken_plan = SyncDetail(
         source_dataset_id="chirps3_precipitation_daily",
-        extent_id="sle",
         sync_kind=SyncKind.TEMPORAL,
         action=SyncAction.APPEND,
         reason="new_periods_available_for_append",
@@ -833,8 +829,8 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(
         services,
-        "get_extent_or_404",
-        lambda _: {"id": "sle", "bbox": [-13.5, 6.9, -10.1, 10.0], "country_code": "SLE"},
+        "get_extent",
+        lambda: {"id": "sle", "bbox": [-13.5, 6.9, -10.1, 10.0], "country_code": "SLE"},
     )
 
     captured: dict[str, object] = {}
@@ -848,7 +844,6 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
             dataset=_dataset_detail(dataset_id),
             sync_detail=SyncDetail(
                 source_dataset_id="worldpop_population_yearly",
-                extent_id="sle",
                 sync_kind=SyncKind.RELEASE,
                 action=SyncAction.REMATERIALIZE,
                 reason="new_release_available",

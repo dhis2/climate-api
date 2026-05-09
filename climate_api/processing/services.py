@@ -21,7 +21,6 @@ def execute_resample(
     method: str,
     start: str,
     end: str | None = None,
-    extent_id: str | None = None,
     overwrite: bool = False,
     publish: bool = True,
     **_ignored: Any,
@@ -47,7 +46,6 @@ def execute_resample(
         method=method,
         start=start,
         end=end,
-        extent_id=extent_id,
         overwrite=overwrite,
         publish=publish,
     )
@@ -65,7 +63,6 @@ def run_resample_process(
     method: str,
     start: str,
     end: str | None,
-    extent_id: str | None,
     overwrite: bool,
     publish: bool,
 ) -> tuple[str, DatasetRecord]:
@@ -76,8 +73,6 @@ def run_resample_process(
         method=method,
         start=start,
         end=end,
-        extent_id=extent_id,
-        bbox=None,
         overwrite=overwrite,
         publish=publish,
     )

@@ -58,7 +58,6 @@ def test_post_resample_execution_returns_completed_response(
             "method": "sum",
             "start": "2026-01-05",
             "end": "2026-01-12",
-            "extent_id": "sle",
             "publish": True,
         },
     )
@@ -90,7 +89,6 @@ def test_post_resample_execution_passes_params_to_service(
             "method": "sum",
             "start": "2026-01-05",
             "end": "2026-01-12",
-            "extent_id": "sle",
             "overwrite": True,
             "publish": False,
         },
@@ -102,7 +100,6 @@ def test_post_resample_execution_passes_params_to_service(
     assert captured["method"] == "sum"
     assert captured["start"] == "2026-01-05"
     assert captured["end"] == "2026-01-12"
-    assert captured["extent_id"] == "sle"
     assert captured["overwrite"] is True
     assert captured["publish"] is False
 

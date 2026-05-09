@@ -44,7 +44,6 @@ def _artifact(
         request_scope=ArtifactRequestScope(
             start="2026-01-01",
             end=end,
-            extent_id="sle",
             bbox=(1.0, 2.0, 3.0, 4.0),
         ),
         coverage=ArtifactCoverage(
@@ -168,7 +167,7 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
     assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily_sle"
 
 
-def test_managed_dataset_id_prefers_extent_id_when_present() -> None:
+def test_managed_dataset_id_uses_stored_collection_id(monkeypatch: pytest.MonkeyPatch) -> None:
     artifact = _artifact(artifact_id="a1")
 
     assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily_sle"
@@ -178,7 +177,6 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     request_scope = ArtifactRequestScope(
         start="2026-01-01",
         end="2026-02-10",
-        extent_id="sle",
         bbox=(1.0, 2.0, 3.0, 4.0),
     )
     stale_artifact = _artifact(artifact_id="stale", end="2026-02-29")
@@ -200,7 +198,6 @@ def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyP
     request_scope = ArtifactRequestScope(
         start="2026-01-01",
         end="2026-02-10",
-        extent_id="sle",
         bbox=(1.0, 2.0, 3.0, 4.0),
     )
     stale_artifact = _artifact(artifact_id="stale", end="2026-02-10")
@@ -256,7 +253,6 @@ def test_temporal_coverage_matches_request_scope_allows_open_ended_reuse() -> No
     request_scope = ArtifactRequestScope(
         start="2026-01-01",
         end=None,
-        extent_id="sle",
         bbox=(1.0, 2.0, 3.0, 4.0),
     )
 
@@ -307,7 +303,6 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
         dataset=dataset,
         start="2020",
         end="2020",
-        extent_id="sle",
         bbox=[-13.5, 6.9, -10.1, 10.0],
         country_code="SLE",
         overwrite=False,
@@ -368,7 +363,6 @@ def test_create_artifact_normalizes_request_scope_to_dataset_period(
         dataset=dataset,
         start="2026-04-21T12:15:00",
         end="2026-04-21T13:45:00",
-        extent_id="sle",
         bbox=[1.0, 2.0, 3.0, 4.0],
         country_code=None,
         overwrite=False,
@@ -437,7 +431,6 @@ def test_create_artifact_defaults_omitted_end_to_dataset_native_period_for_downl
         dataset=dataset,
         start="2026-04-21T12:15:00",
         end=None,
-        extent_id="sle",
         bbox=[1.0, 2.0, 3.0, 4.0],
         country_code=None,
         overwrite=False,
@@ -485,7 +478,6 @@ def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
             dataset=dataset,
             start="2020",
             end="2020",
-            extent_id="sle",
             bbox=[-13.5, 6.9, -10.1, 10.0],
             country_code="SLE",
             overwrite=False,
@@ -547,7 +539,6 @@ def test_create_artifact_can_download_delta_while_recording_full_request_scope(
         end="2026-02-10",
         download_start="2026-02-01",
         download_end="2026-02-10",
-        extent_id="sle",
         bbox=[1.0, 2.0, 3.0, 4.0],
         country_code=None,
         overwrite=False,
@@ -581,7 +572,6 @@ def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.Monk
             end="2026-02-10",
             download_start=None,
             download_end="2026-02-10",
-            extent_id="sle",
             bbox=[1.0, 2.0, 3.0, 4.0],
             country_code=None,
             overwrite=False,
@@ -610,7 +600,6 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
             end="2026-02-10",
             download_start="2026-02-01",
             download_end="2026-02-11",
-            extent_id="sle",
             bbox=[1.0, 2.0, 3.0, 4.0],
             country_code=None,
             overwrite=False,
@@ -642,7 +631,6 @@ def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zar
     netcdf_existing.request_scope = ArtifactRequestScope(
         start="2026-01-01",
         end="2026-02-10",
-        extent_id="sle",
         bbox=(1.0, 2.0, 3.0, 4.0),
     )
 
@@ -675,7 +663,6 @@ def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zar
         end="2026-02-10",
         download_start="2026-02-01",
         download_end="2026-02-10",
-        extent_id="sle",
         bbox=[1.0, 2.0, 3.0, 4.0],
         country_code=None,
         overwrite=False,
@@ -731,7 +718,6 @@ def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false
         end="2026-02-10",
         download_start="2026-02-01",
         download_end="2026-02-10",
-        extent_id="sle",
         bbox=[1.0, 2.0, 3.0, 4.0],
         country_code=None,
         overwrite=False,
@@ -775,7 +761,6 @@ def test_create_artifact_delta_fails_when_canonical_zarr_build_fails(
             end="2026-02-10",
             download_start="2026-02-01",
             download_end="2026-02-10",
-            extent_id="sle",
             bbox=[1.0, 2.0, 3.0, 4.0],
             country_code=None,
             overwrite=False,
@@ -824,7 +809,6 @@ def test_create_artifact_delta_rejects_short_rebuilt_coverage(
             end="2026-02-10",
             download_start="2026-02-01",
             download_end="2026-02-10",
-            extent_id="sle",
             bbox=[1.0, 2.0, 3.0, 4.0],
             country_code=None,
             overwrite=False,

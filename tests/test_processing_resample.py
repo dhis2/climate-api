@@ -48,7 +48,6 @@ def _artifact(
         request_scope=ArtifactRequestScope(
             start=start,
             end=end,
-            extent_id="sle",
             bbox=(1.0, 2.0, 3.0, 4.0),
         ),
         coverage=ArtifactCoverage(
@@ -104,8 +103,6 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         method="mean",
         start="2026-01-01",
         end="2026-01-02",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -161,8 +158,6 @@ def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
         method="sum",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -184,8 +179,6 @@ def test_materialize_resampled_artifact_returns_404_when_source_dataset_template
             method="sum",
             start="2026-01-05",
             end="2026-01-12",
-            extent_id="sle",
-            bbox=None,
             overwrite=False,
             publish=False,
         )
@@ -231,8 +224,6 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -287,8 +278,6 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -347,8 +336,6 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
             method="sum",
             start="2026-03-02",  # 2026-W10 — well beyond source data
             end="2026-03-02",
-            extent_id="sle",
-            bbox=None,
             overwrite=False,
             publish=False,
         )
@@ -394,8 +381,6 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
         method="sum",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -450,8 +435,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -467,8 +450,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -516,8 +497,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -527,8 +506,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -576,8 +553,6 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -601,8 +576,6 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=True,
     )
@@ -651,8 +624,6 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=False,
         publish=False,
     )
@@ -669,8 +640,6 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
-        extent_id="sle",
-        bbox=None,
         overwrite=True,
         publish=False,
     )

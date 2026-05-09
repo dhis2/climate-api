@@ -21,7 +21,7 @@ from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
-from climate_api.extents.services import get_extent_or_404
+from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
@@ -150,7 +150,6 @@ def create_artifact(
     dataset: dict[str, object],
     start: str,
     end: str | None,
-    extent_id: str | None,
     bbox: list[float] | None,
     country_code: str | None,
     overwrite: bool,
@@ -180,7 +179,6 @@ def create_artifact(
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
-        extent_id=extent_id,
         bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
     )
     existing = _find_existing_artifact(
@@ -338,7 +336,6 @@ def store_materialized_zarr_artifact(
     dataset: dict[str, object],
     start: str,
     end: str | None,
-    extent_id: str | None,
     bbox: list[float] | None,
     zarr_path: Path,
     overwrite: bool,
@@ -351,7 +348,6 @@ def store_materialized_zarr_artifact(
     request_scope = ArtifactRequestScope(
         start=normalized_start,
         end=normalized_end,
-        extent_id=extent_id,
         bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
     )
     coverage_data = get_data_coverage_for_paths(dataset, zarr_path=str(zarr_path.resolve()))
@@ -400,11 +396,8 @@ def sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-    resolved_country_code: str | None = None
-    if latest_artifact.request_scope.extent_id is not None:
-        extent = get_extent_or_404(latest_artifact.request_scope.extent_id)
-        country_code = extent.get("country_code")
-        resolved_country_code = country_code if isinstance(country_code, str) else None
+    extent = get_extent()
+    resolved_country_code = extent.get("country_code") if extent else None
     try:
         return run_sync(
             latest_artifact=latest_artifact,
@@ -926,7 +919,6 @@ def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
             item["request_scope"] = {
                 "start": start,
                 "end": end,
-                "extent_id": None,
                 "bbox": bbox,
             }
     return item

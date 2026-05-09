@@ -55,7 +55,6 @@ def _artifact(
         request_scope=ArtifactRequestScope(
             start=temporal_start,
             end=temporal_end,
-            extent_id="sle",
             bbox=(1.0, 2.0, 3.0, 4.0),
         ),
         coverage=ArtifactCoverage(

@@ -66,8 +66,6 @@ def materialize_resampled_artifact(
     method: str,
     start: str,
     end: str | None,
-    extent_id: str | None,
-    bbox: list[float] | None,
     overwrite: bool,
     publish: bool,
 ) -> ArtifactRecord:
@@ -77,12 +75,7 @@ def materialize_resampled_artifact(
 
     existing = ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
-        request_scope=ArtifactRequestScope(
-            start=start,
-            end=resolved_end,
-            extent_id=extent_id,
-            bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None and extent_id is None else None,
-        ),
+        request_scope=ArtifactRequestScope(start=start, end=resolved_end),
         prefer_zarr=True,
     )
     if existing is not None and not overwrite:
@@ -94,18 +87,11 @@ def materialize_resampled_artifact(
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset template '{source_dataset_id}' not found")
 
-    source_artifact = _resolve_source_artifact(source_dataset_id=source_dataset_id, extent_id=extent_id, bbox=bbox)
+    source_artifact = _resolve_source_artifact(source_dataset_id=source_dataset_id)
     if source_artifact.format != ArtifactFormat.ZARR:
         raise HTTPException(status_code=409, detail="Resampling currently requires a Zarr-backed source artifact")
 
-    source_bbox = bbox
-    if source_bbox is None and source_artifact.request_scope.bbox is not None:
-        source_bbox = list(source_artifact.request_scope.bbox)
-    target_managed_dataset_id = managed_dataset_id_for_scope(
-        target_dataset_id,
-        extent_id=extent_id,
-        bbox=source_bbox if extent_id is None else None,
-    )
+    target_managed_dataset_id = managed_dataset_id_for_scope(target_dataset_id)
     zarr_path = DERIVED_DATA_DIR / f"{target_managed_dataset_id}.zarr"
 
     source_ds = open_zarr_dataset(source_artifact.path or source_artifact.asset_paths[0])
@@ -122,8 +108,6 @@ def materialize_resampled_artifact(
             raise HTTPException(status_code=409, detail="Source artifact does not contain any complete target periods")
         existing_realized = _find_existing_resampled_artifact(
             target_dataset_id=target_dataset_id,
-            extent_id=extent_id,
-            bbox=source_bbox if extent_id is None else None,
             start=start,
             resampled=resampled,
         )
@@ -145,21 +129,15 @@ def materialize_resampled_artifact(
         dataset=target_dataset,
         start=start,
         end=resolved_end,
-        extent_id=extent_id,
-        bbox=source_bbox if extent_id is None else None,
+        bbox=None,
         zarr_path=zarr_path,
         overwrite=overwrite,
         publish=publish,
     )
 
 
-def _resolve_source_artifact(
-    *,
-    source_dataset_id: str,
-    extent_id: str | None,
-    bbox: list[float] | None,
-) -> ArtifactRecord:
-    managed_dataset_id = managed_dataset_id_for_scope(source_dataset_id, extent_id=extent_id, bbox=bbox)
+def _resolve_source_artifact(*, source_dataset_id: str) -> ArtifactRecord:
+    managed_dataset_id = managed_dataset_id_for_scope(source_dataset_id)
     return ingestion_services.get_latest_artifact_for_dataset_or_404(managed_dataset_id)
 
 
@@ -230,8 +208,6 @@ def _drop_incomplete_edge_periods(
 def _find_existing_resampled_artifact(
     *,
     target_dataset_id: str,
-    extent_id: str | None,
-    bbox: list[float] | None,
     start: str,
     resampled: xr.Dataset,
 ) -> ArtifactRecord | None:
@@ -239,12 +215,7 @@ def _find_existing_resampled_artifact(
     realized_end = _coerce_numpy_datetime(resampled[time_dim].values[-1]).strftime("%Y-%m-%d")
     return ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
-        request_scope=ArtifactRequestScope(
-            start=start,
-            end=realized_end,
-            extent_id=extent_id,
-            bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
-        ),
+        request_scope=ArtifactRequestScope(start=start, end=realized_end),
         prefer_zarr=True,
     )
 

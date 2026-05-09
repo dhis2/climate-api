@@ -69,13 +69,9 @@ class ArtifactRequestScope(BaseModel):
 
     start: str = Field(description="Requested start period for the ingestion or sync operation.")
     end: str | None = Field(default=None, description="Requested end period for the ingestion or sync operation.")
-    extent_id: str | None = Field(
-        default=None,
-        description="Configured Climate API extent identifier used to resolve spatial scope for this request.",
-    )
     bbox: tuple[float, float, float, float] | None = Field(
         default=None,
-        description="Requested bounding box when the artifact was created from an explicit bbox.",
+        description="Requested bounding box when the artifact was created.",
     )
 
 
@@ -111,10 +107,6 @@ class CreateIngestionRequest(BaseModel):
     dataset_id: str = Field(description="Source dataset template id from the Climate API registry.")
     start: str = Field(description="Start period to ingest.")
     end: str | None = Field(default=None, description="Optional end period to ingest.")
-    extent_id: str | None = Field(
-        default=None,
-        description="Configured Climate API extent identifier used to resolve spatial scope for this ingestion.",
-    )
     overwrite: bool = Field(
         default=False,
         description="Whether to force regeneration of an existing matching artifact.",
@@ -287,7 +279,6 @@ class SyncDetail(BaseModel):
     """
 
     source_dataset_id: str = Field(description="Source dataset template id used to plan the sync.")
-    extent_id: str | None = Field(default=None, description="Configured extent id used to scope the managed dataset.")
     sync_kind: SyncKind = Field(description="Sync planning mode declared by the dataset template.")
     action: SyncAction = Field(description="Planner-selected sync action.")
     reason: str = Field(description="Stable machine-readable reason for the selected action.")
