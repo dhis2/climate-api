@@ -292,12 +292,17 @@ def _public_zarr_asset_href(
     artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
 ) -> str:
-    ingestion = source_dataset.get("ingestion")
-    # Use dataset-template multiscale metadata so local and remote stores map to
-    # the same public href contract without filesystem probing.
-    if isinstance(ingestion, dict) and ingestion.get("multiscales"):
+    artifact_path = _artifact_store_path(artifact)
+    if _is_pyramid_zarr(artifact_path):
         return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
+
+
+def _is_pyramid_zarr(artifact_path: str) -> bool:
+    """Return True if artifact_path is a multiscale pyramid zarr store."""
+    if "://" in artifact_path:
+        return False
+    return (Path(artifact_path) / "0").is_dir()
 
 
 def _abs_url(request: Request, path: str) -> str:

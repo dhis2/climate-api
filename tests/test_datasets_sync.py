@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, tzinfo
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,6 +30,7 @@ def _artifact(
     managed_dataset_id: str = "chirps3_precipitation_daily_sle",
     created_at: str = "2026-01-10T00:00:00+00:00",
     end: str = "2026-01-10",
+    path: str = "/tmp/chirps3_precipitation_daily.zarr",
 ) -> ArtifactRecord:
     return ArtifactRecord(
         artifact_id=artifact_id,
@@ -36,8 +38,8 @@ def _artifact(
         dataset_name="CHIRPS3 precipitation",
         variable="precip",
         format=ArtifactFormat.ZARR,
-        path="/tmp/chirps3_precipitation_daily.zarr",
-        asset_paths=["/tmp/chirps3_precipitation_daily.zarr"],
+        path=path,
+        asset_paths=[path],
         variables=["precip"],
         request_scope=ArtifactRequestScope(
             start="2026-01-01",
@@ -207,15 +209,21 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert result.sync_detail.delta_end == "2026-02-10"
 
 
-def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
+def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
+    # Simulate a pyramid zarr on disk by creating a "0/" subdirectory.
+    zarr_path = tmp_path / "worldpop_population_yearly.zarr"
+    (zarr_path / "0").mkdir(parents=True)
+
     dataset_id = "worldpop_population_yearly_sle"
     latest = _artifact(
         artifact_id="a1",
         source_dataset_id="worldpop_population_yearly",
         managed_dataset_id=dataset_id,
         end="2024",
+        path=str(zarr_path),
     )
     monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
     monkeypatch.setattr(
@@ -225,7 +233,7 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_multiscales(
             "id": "worldpop_population_yearly",
             "period_type": "yearly",
             "sync": {"kind": "temporal", "execution": "append"},
-            "ingestion": {"multiscales": {"levels": 4}},
+            "ingestion": {},
         },
     )
 

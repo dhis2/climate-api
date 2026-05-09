@@ -20,8 +20,6 @@
       resolution: P1Y
   ingestion:
     function: dhis2eo.data.worldpop.pop_total.yearly.download
-    multiscales:
-      levels: 4
     default_params:
       version: global2
   units: people
