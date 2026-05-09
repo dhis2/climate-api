@@ -13,6 +13,7 @@ extent:
   name: Sierra Leone
   bbox: [-13.5, 6.9, -10.1, 10.0]
   country_code: SLE
+data_dir: ./data
 """
 
 
