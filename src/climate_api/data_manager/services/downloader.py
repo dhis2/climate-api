@@ -16,19 +16,20 @@ from fastapi import BackgroundTasks, HTTPException
 from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
+from climate_api import config as api_config
+
 from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
 
 def _resolve_download_dir() -> Path:
-    # CACHE_OVERRIDE keeps existing Docker/dev deployments working unchanged.
     override = os.getenv("CACHE_OVERRIDE")
     if override:
         return Path(override)
-    # Default to an XDG-compliant user-writable location so the package works
-    # when installed with pip (where a package-relative path would land inside
-    # site-packages and typically be non-writable).
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "downloads"
     xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return xdg_data / "climate-api" / "downloads"
 

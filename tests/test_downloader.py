@@ -23,9 +23,19 @@ def test_resolve_download_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatc
         assert downloader._resolve_download_dir() == Path(override)
 
 
-def test_resolve_download_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_download_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nextent:\n  id: test\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert downloader._resolve_download_dir() == tmp_path / "data" / "downloads"
+
+
+def test_resolve_download_dir_uses_xdg_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
     with tempfile.TemporaryDirectory() as xdg:
         monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", xdg)
         assert downloader._resolve_download_dir() == Path(xdg) / "climate-api" / "downloads"
 
@@ -37,9 +47,19 @@ def test_resolve_artifacts_dir_uses_cache_override(monkeypatch: pytest.MonkeyPat
         assert ingestion_services._resolve_artifacts_dir() == Path(override) / "artifacts"
 
 
-def test_resolve_artifacts_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_artifacts_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nextent:\n  id: test\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert ingestion_services._resolve_artifacts_dir() == tmp_path / "data" / "artifacts"
+
+
+def test_resolve_artifacts_dir_uses_xdg_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
     with tempfile.TemporaryDirectory() as xdg:
         monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", xdg)
         assert ingestion_services._resolve_artifacts_dir() == Path(xdg) / "climate-api" / "artifacts"
 

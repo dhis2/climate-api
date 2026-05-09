@@ -2,9 +2,31 @@ from pathlib import Path
 
 import pytest
 
-from climate_api.config import get_config
+from climate_api.config import get_config, get_data_dir
 from climate_api.data_registry.services import datasets as dataset_registry
 from climate_api.extents import services as extent_services
+
+
+def test_get_data_dir_returns_none_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
+    assert get_data_dir() is None
+
+
+def test_get_data_dir_raises_when_config_present_but_no_data_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("extent:\n  id: nor\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="data_dir is required"):
+        get_data_dir()
+
+
+def test_get_data_dir_resolves_relative_to_config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    assert get_data_dir() == tmp_path / "data"
 
 
 def test_get_config_returns_empty_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
