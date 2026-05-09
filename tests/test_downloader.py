@@ -182,6 +182,12 @@ def test_validate_spatial_coverage_passes_when_no_bbox() -> None:
     downloader._validate_spatial_coverage(dataset, bbox=None)
 
 
+def test_validate_spatial_coverage_passes_when_template_bbox_malformed() -> None:
+    extents: dict[str, Any] = {"spatial": {"bbox": "not-a-list"}}
+    dataset: dict[str, Any] = {"id": "bad_template", "ingestion": {}, "extents": extents}
+    downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
+
+
 def test_validate_spatial_coverage_passes_when_bbox_inside_extents() -> None:
     dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "extents": _CHIRPS3_EXTENTS}
     downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
@@ -210,6 +216,31 @@ def test_validate_spatial_coverage_raises_when_bbox_outside_lon_extents() -> Non
         downloader._validate_spatial_coverage(dataset, bbox=[70.0, -10.0, 90.0, 10.0])
     assert exc_info.value.status_code == 400
     assert "Longitude" in str(exc_info.value.detail)
+
+
+def test_download_dataset_validates_env_bbox_against_extents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Coverage validation uses the env fallback bbox when no bbox is passed in the request."""
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"function": "ignored.path"},
+        "extents": _CHIRPS3_EXTENTS,
+    }
+    monkeypatch.setenv("DOWNLOAD_BBOX", "4.5,57.9,31.1,71.2")
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=None,
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
 
 
 def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(

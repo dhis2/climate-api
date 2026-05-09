@@ -59,9 +59,12 @@ def _load_config() -> dict[str, Any]:
 
 
 def get_data_dir() -> Path | None:
-    """Return the data directory declared in CLIMATE_API_CONFIG, or None if no config is present.
+    """Return the data directory declared in CLIMATE_API_CONFIG.
 
-    Raises ValueError if a config file is present but data_dir is not set, so
+    Returns None when CLIMATE_API_CONFIG is unset or points to a file that does
+    not exist (e.g. CI environments where the config is gitignored).
+
+    Raises ValueError if the config file exists but data_dir is not set, so
     misconfigured instances fail fast at startup rather than silently sharing
     a default directory with other instances.
 

@@ -52,7 +52,7 @@ def download_dataset(
     When running in the background-task path, the download is deferred and this function
     returns an empty list because no files have been created yet.
     """
-    _validate_spatial_coverage(dataset, bbox)
+    _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
     ingestion = dataset["ingestion"]
     eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
@@ -297,7 +297,7 @@ def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None
     if not spatial:
         return
     cov_bbox = spatial.get("bbox")
-    if not cov_bbox:
+    if not isinstance(cov_bbox, (list, tuple)) or len(cov_bbox) != 4:
         return
     cov_xmin, cov_ymin, cov_xmax, cov_ymax = cov_bbox
     xmin, ymin, xmax, ymax = bbox
