@@ -140,6 +140,14 @@ def test_get_crs_raises_for_invalid_value(monkeypatch: pytest.MonkeyPatch, tmp_p
         get_crs()
 
 
+def test_get_crs_raises_for_unknown_epsg_code(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\ncrs: EPSG:999999\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="not a valid CRS"):
+        get_crs()
+
+
 def test_templates_dir_raises_with_migration_hint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config_file = tmp_path / "climate-api.yaml"
     config_file.write_text(f"templates_dir: {tmp_path / 'templates'}\n", encoding="utf-8")

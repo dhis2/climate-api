@@ -400,7 +400,8 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     store_root = _get_zarr_root_or_409(artifact)
 
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
-    crs = api_config.get_crs()
+    store_attrs = _read_zarr_attrs(store_root)
+    crs = (store_attrs.get("proj:code") if store_attrs else None) or api_config.get_crs()
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
@@ -408,31 +409,41 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
         "path": ".",
         "crs": crs,
         "proj4": _crs_to_proj4(crs),
-        "bounds": _read_zarr_bounds(store_root),
+        "bounds": _read_zarr_bounds(store_attrs),
         "entries": entries,
     }
 
 
-def _crs_to_proj4(crs: str) -> str:
-    """Convert an EPSG code or WKT string to a proj4 definition string."""
+def _crs_to_proj4(crs: str) -> str | None:
+    """Convert an EPSG code or WKT string to a proj4 definition string, or None on failure."""
     import warnings
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        return pyproj.CRS.from_user_input(crs).to_proj4()
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            return pyproj.CRS.from_user_input(crs).to_proj4()
+    except (pyproj.exceptions.CRSError, Exception):
+        return None
 
 
-def _read_zarr_bounds(store_root: Path) -> list[float] | None:
-    """Read the spatial:bbox from the zarr store root attributes, if present."""
+def _read_zarr_attrs(store_root: Path) -> dict[str, object] | None:
+    """Read the root attributes from a Zarr store, normalising v2/v3 layout differences."""
     for attrs_file in (store_root / "zarr.json", store_root / ".zattrs"):
         if attrs_file.exists():
             attrs = json.loads(attrs_file.read_text(encoding="utf-8"))
-            # zarr v3 stores root attrs under "attributes" key
             if attrs_file.name == "zarr.json":
                 attrs = attrs.get("attributes", attrs)
-            bbox = attrs.get("spatial:bbox")
-            if isinstance(bbox, list) and len(bbox) == 4:
-                return [float(v) for v in bbox]
+            return attrs
+    return None
+
+
+def _read_zarr_bounds(store_attrs: dict[str, object] | None) -> list[float] | None:
+    """Extract the spatial:bbox from pre-read zarr store attributes."""
+    if store_attrs is None:
+        return None
+    bbox = store_attrs.get("spatial:bbox")
+    if isinstance(bbox, list) and len(bbox) == 4:
+        return [float(v) for v in bbox]
     return None
 
 
