@@ -1,9 +1,12 @@
 """Time helpers shared across Climate API modules."""
 
+import re
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+
+_WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
 
 
 def _normalize_datetime_for_period(value: datetime) -> datetime:
@@ -13,6 +16,14 @@ def _normalize_datetime_for_period(value: datetime) -> datetime:
     return value
 
 
+def _coerce_numpy_datetime(value: object) -> datetime:
+    """Convert a numpy or Python datetime-like scalar to a datetime."""
+    if isinstance(value, datetime):
+        return value
+    np_value = np.datetime64(cast(Any, value))
+    return datetime.fromisoformat(np.datetime_as_string(np_value, unit="s"))
+
+
 def datetime_to_period_string(value: datetime, period_type: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
@@ -20,11 +31,14 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
     if period_type == "daily":
         return value.date().isoformat()
+    if period_type == "weekly":
+        iso_year, iso_week, _ = value.isocalendar()
+        return f"{iso_year:04d}-W{iso_week:02d}"
     if period_type == "monthly":
         return f"{value.year:04d}-{value.month:02d}"
     if period_type == "yearly":
         return str(value.year)
-    return value.isoformat()
+    raise ValueError(f"Unsupported period_type '{period_type}'")
 
 
 def utc_now() -> datetime:
@@ -44,6 +58,16 @@ def parse_hourly_period_string(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
+def parse_weekly_period_string(value: str) -> datetime:
+    """Parse a dataset-native weekly period string or full ISO datetime."""
+    match = _WEEKLY_PERIOD_PATTERN.fullmatch(value)
+    if match is not None:
+        iso_year = int(match.group("year"))
+        iso_week = int(match.group("week"))
+        return datetime.combine(date.fromisocalendar(iso_year, iso_week, 1), datetime.min.time())
+    return datetime.fromisoformat(value)
+
+
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
     if period_type == "hourly":
@@ -56,6 +80,11 @@ def normalize_period_string(value: str, period_type: str) -> str:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
+    if period_type == "weekly":
+        try:
+            return datetime_to_period_string(parse_weekly_period_string(value), period_type)
+        except ValueError as exc:
+            raise ValueError(f"Invalid weekly period '{value}'; expected YYYY-Www or ISO datetime") from exc
     if period_type == "monthly":
         try:
             if len(value) == 7:
@@ -78,6 +107,8 @@ def normalize_period_string(value: str, period_type: str) -> str:
 def parse_period_string_to_datetime(value: str) -> datetime:
     """Parse a dataset-native period string to a UTC datetime."""
     normalized = value.strip()
+    if _WEEKLY_PERIOD_PATTERN.fullmatch(normalized) is not None:
+        return parse_weekly_period_string(normalized).replace(tzinfo=UTC)
     if "T" not in normalized:
         if len(normalized) == 4:
             normalized = f"{normalized}-01-01T00:00:00"
@@ -94,9 +125,14 @@ def parse_period_string_to_datetime(value: str) -> datetime:
 
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
-    # TODO: this and numpy_period_string should be merged
-    s = np.datetime_as_string(datetimes, unit="s")
+    if period_type != "weekly":
+        lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
+        return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
-    # Map periods to string lengths: YYYY-MM-DDTHH (13), YYYY-MM-DD (10), etc.
-    lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
-    return s.astype(f"U{lengths[period_type]}")
+    arr = np.asarray(datetimes, dtype="datetime64[s]")
+    to_period_string = np.vectorize(
+        lambda value: datetime_to_period_string(_coerce_numpy_datetime(value), period_type),
+        otypes=[str],
+    )
+    result = to_period_string(arr)
+    return cast(np.ndarray[Any, Any], result.astype("U8"))

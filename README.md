@@ -18,6 +18,7 @@ Install dependencies (requires [uv](https://docs.astral.sh/uv/)):
 uv sync
 ```
 
+
 Copy `.env.example` to `.env` and adjust values as needed. Environment variables are loaded automatically from `.env` at runtime. See `.env.example` for the full list of available options.
 
 Start the app:
@@ -110,7 +111,7 @@ else:
 
 The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to the resolved runtime data directory (for Docker: `/app/data/pygeoapi/pygeoapi-config.yml`).
 
-The base configuration is bundled with the package at `src/climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
+The base configuration is bundled with the package at `climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
 
 To validate the configuration manually:
 
