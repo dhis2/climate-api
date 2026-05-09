@@ -9,7 +9,6 @@ from climate_api.main import app
 
 _TEST_CONFIG = """\
 extent:
-  id: sle
   name: Sierra Leone
   bbox: [-13.5, 6.9, -10.1, 10.0]
   country_code: SLE

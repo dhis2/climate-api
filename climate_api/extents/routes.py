@@ -20,11 +20,10 @@ def get_extent() -> ExtentRecord:
 def _build_extent_record(extent: dict[str, object]) -> ExtentRecord:
     bbox = extent.get("bbox")
     if not (isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(value, int | float) for value in bbox)):
-        raise ValueError(f"Invalid bbox in extent config for '{extent.get('id')}'")
+        raise ValueError("Invalid bbox in extent config")
     name = extent.get("name")
     description = extent.get("description")
     return ExtentRecord(
-        extent_id=str(extent["id"]),
         name=name if isinstance(name, str) else None,
         description=description if isinstance(description, str) else None,
         bbox=(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])),

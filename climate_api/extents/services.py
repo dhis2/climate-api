@@ -14,8 +14,6 @@ def get_extent() -> dict[str, Any] | None:
         return None
     if not isinstance(extent, dict):
         raise ValueError("extent in CLIMATE_API_CONFIG must be a mapping")
-    if not isinstance(extent.get("id"), str) or not extent["id"]:
-        raise ValueError("extent.id in CLIMATE_API_CONFIG must be a non-empty string")
     if not isinstance(extent.get("bbox"), list) or len(extent["bbox"]) != 4:
         raise ValueError("extent.bbox in CLIMATE_API_CONFIG must be a list of four numbers [xmin, ymin, xmax, ymax]")
     return extent

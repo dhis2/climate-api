@@ -180,7 +180,6 @@ plugins/
 
 ```yaml
 extent:
-  id: rwa
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
 

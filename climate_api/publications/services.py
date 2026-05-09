@@ -173,10 +173,8 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
 
 
 def managed_dataset_id_for_scope(dataset_id: str) -> str:
-    """Build a stable managed dataset identifier for the configured extent."""
-    extent = get_extent()
-    scope_key = extent["id"] if extent else "global"
-    return f"{dataset_id}_{scope_key}"
+    """Return a stable managed dataset identifier for the single configured extent."""
+    return dataset_id
 
 
 def _collection_id_for(record: ArtifactRecord) -> str:

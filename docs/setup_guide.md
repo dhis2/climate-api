@@ -28,7 +28,6 @@ cp climate-api.yaml.example climate-api.yaml
 
 ```yaml
 extent:
-  id: rwa
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
   country_code: RWA
@@ -40,7 +39,6 @@ Field reference:
 
 | Field          | Required | Description |
 | -------------- | -------- | ----------- |
-| `id`           | Yes | Short identifier used in dataset IDs and API paths (e.g. `chirps3_precipitation_daily_rwa`) |
 | `name`         | No  | Human-readable name shown in API responses |
 | `bbox`         | Yes | Bounding box as `[xmin, ymin, xmax, ymax]` in WGS84 decimal degrees |
 | `country_code` | No  | ISO 3166-1 alpha-3 code — required for WorldPop downloads |
@@ -53,7 +51,6 @@ Values can reference environment variables using `${VAR:-default}` syntax:
 
 ```yaml
 extent:
-  id: ${EXTENT_ID:-rwa}
   name: ${EXTENT_NAME:-Rwanda}
   bbox: [28.8, -2.9, 30.9, -1.0]
 ```
