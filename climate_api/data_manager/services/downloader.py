@@ -164,11 +164,10 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     logger.info("Saving to optimized zarr file")
     zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
 
-    multiscales = dict(ingestion.get("multiscales", {}))
-
-    if multiscales:
-        levels = multiscales.get("levels", 4)
-        method = multiscales.get("method", "mean")
+    if _needs_pyramid(ds, lon_dim, lat_dim):
+        levels = _pyramid_levels(ds, lon_dim, lat_dim)
+        method = ingestion.get("pyramid_method", "mean")
+        logger.info("Building %d-level pyramid (max dim %d pixels)", levels, max(ds.sizes[lon_dim], ds.sizes[lat_dim]))
 
         # Add multiscales convention metadata to the zarr attributes
         zarr_conventions = geozarr_attrs.get("zarr_conventions", [])
@@ -202,8 +201,8 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
         pyramid.dt.close()
 
     else:
+        logger.info("Building flat zarr (max dim %d pixels)", max(ds.sizes[lon_dim], ds.sizes[lat_dim]))
         # determine optimal chunk sizes
-        logger.info("Determining optimal chunk size for zarr archive")
         ds_autochunk = ds.chunk("auto").unify_chunks()
         uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
         time_space_chunks = _compute_time_space_chunks(ds, dataset)
@@ -217,6 +216,25 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     ds.close()
     logger.info("Finished cache optimization")
+
+
+_PYRAMID_PIXEL_THRESHOLD = 2048 * 2048
+_PYRAMID_MAX_LEVELS = 8
+_PYRAMID_TARGET_TILE_SIZE = 512
+
+
+def _needs_pyramid(ds: xr.Dataset, x_dim: str, y_dim: str) -> bool:
+    """Return True when the spatial extent is large enough to benefit from a pyramid."""
+    return ds.sizes[x_dim] * ds.sizes[y_dim] > _PYRAMID_PIXEL_THRESHOLD
+
+
+def _pyramid_levels(ds: xr.Dataset, x_dim: str, y_dim: str) -> int:
+    """Compute the number of pyramid levels needed to reach a manageable tile size."""
+    import math
+
+    max_dim = max(ds.sizes[x_dim], ds.sizes[y_dim])
+    levels = math.ceil(math.log2(max_dim / _PYRAMID_TARGET_TILE_SIZE))
+    return max(2, min(levels, _PYRAMID_MAX_LEVELS))
 
 
 def _select_time_range(

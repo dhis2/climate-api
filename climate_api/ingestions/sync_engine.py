@@ -109,7 +109,7 @@ def plan_sync(
                 target_end=latest_available_end,
                 target_end_source=target_end_source,
             )
-        action = SyncAction.APPEND if _supports_append(source_dataset) else SyncAction.REMATERIALIZE
+        action = SyncAction.APPEND if _supports_append(source_dataset, latest_artifact) else SyncAction.REMATERIALIZE
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
@@ -365,18 +365,18 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     )
 
 
-def _supports_append(source_dataset: dict[str, Any]) -> bool:
+def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> bool:
     """Return whether this template opts into V1 delta-download sync execution."""
+    from pathlib import Path
+
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
-    ingestion = source_dataset.get("ingestion")
-    if not isinstance(ingestion, dict):
-        return False
-    # Multiscale stores are rebuilt as pyramids today; keep append opt-in to flat
-    # canonical stores until pyramid delta behavior is explicitly designed.
-    if ingestion.get("multiscales"):
+    # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
+    # Detect this from the existing artifact's on-disk structure rather than YAML.
+    artifact_path = latest_artifact.path
+    if artifact_path and (Path(artifact_path) / "0").exists():
         logger.warning(
-            "Sync append execution is not supported for multiscale dataset '%s'; falling back to rematerialize",
+            "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
             source_dataset.get("id", "<unknown>"),
         )
         return False

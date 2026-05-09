@@ -324,7 +324,7 @@ _PYRAMID_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
     "period_type": "yearly",
-    "ingestion": {"multiscales": {"levels": 2, "method": "mean"}},
+    "ingestion": {},
 }
 
 
@@ -522,6 +522,7 @@ def test_build_dataset_zarr_pyramid_copies_time_to_root(tmp_path: Path, monkeypa
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
 
     def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
         return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
@@ -540,6 +541,7 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
 
     def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
         return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
@@ -564,6 +566,7 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
 
     received: list[xr.Dataset] = []
 

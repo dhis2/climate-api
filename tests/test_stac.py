@@ -280,7 +280,9 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
 def test_collection_uses_level0_href_for_multiscale_store(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    artifact = _artifact(artifact_id="a1", path=str(tmp_path / "chirps3_precipitation_daily.zarr"))
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
+    (zarr_path / "0").mkdir(parents=True)
+    artifact = _artifact(artifact_id="a1", path=str(zarr_path))
     monkeypatch.setattr(
         ingestion_services,
         "list_artifacts",
@@ -289,7 +291,7 @@ def test_collection_uses_level0_href_for_multiscale_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {"multiscales": {"levels": 2}}},
+        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {}},
     )
     monkeypatch.setattr(
         stac_services,
@@ -325,7 +327,7 @@ def test_collection_uses_level0_href_for_remote_multiscale_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {"multiscales": {"levels": 2}}},
+        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {}},
     )
     monkeypatch.setattr(
         stac_services,
@@ -341,6 +343,7 @@ def test_collection_uses_level0_href_for_remote_multiscale_store(
     )
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
+    monkeypatch.setattr(stac_services, "_is_pyramid_zarr", lambda _: True)
 
     response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
 
