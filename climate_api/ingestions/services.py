@@ -423,7 +423,7 @@ def _crs_to_proj4(crs: str) -> str | None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             return pyproj.CRS.from_user_input(crs).to_proj4()
-    except (pyproj.exceptions.CRSError, Exception):
+    except Exception:
         return None
 
 

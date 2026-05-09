@@ -67,7 +67,8 @@ def get_crs() -> str:
     Set `crs: EPSG:25833` in climate-api.yaml to store all GeoZarr files in a
     national projection. All datasets within one instance share the same CRS.
     """
-    import pyproj
+    from pyproj import CRS
+    from pyproj.exceptions import CRSError
 
     raw = get_config().get("crs")
     if raw is None:
@@ -76,8 +77,8 @@ def get_crs() -> str:
         raise ValueError(f"crs in CLIMATE_API_CONFIG must be a non-empty string, got {type(raw).__name__}")
     crs = raw.strip()
     try:
-        pyproj.CRS.from_user_input(crs)
-    except pyproj.exceptions.CRSError as exc:
+        CRS.from_user_input(crs)
+    except CRSError as exc:
         raise ValueError(f"crs '{crs}' in CLIMATE_API_CONFIG is not a valid CRS: {exc}") from exc
     return crs
 
