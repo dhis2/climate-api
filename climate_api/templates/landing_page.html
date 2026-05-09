@@ -196,7 +196,7 @@
         {% if extent %}
         <dl class="status-grid">
           <dt>Extent</dt>
-          <dd>{{ extent.name or extent.id }} <code>{{ extent.id }}</code></dd>
+          <dd>{{ extent.name or "Unnamed extent" }}</dd>
           <dt>Bounding box</dt>
           <dd><code>{{ extent.bbox | join(", ") }}</code></dd>
           {% if extent.country_code %}
