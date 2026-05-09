@@ -76,20 +76,6 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
-    if sync_kind == SyncKind.DERIVED:
-        return SyncDetail(
-            source_dataset_id=latest_artifact.dataset_id,
-            extent_id=latest_artifact.request_scope.extent_id,
-            sync_kind=sync_kind,
-            action=SyncAction.NOT_SYNCABLE,
-            reason="derived_sync_not_implemented",
-            message="This derived dataset does not support sync execution yet.",
-            current_start=current_start,
-            current_end=current_end,
-            target_end=current_end,
-            target_end_source="current_coverage",
-        )
-
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None

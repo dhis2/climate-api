@@ -440,25 +440,6 @@ def test_plan_sync_static_policy_ignores_period_normalization() -> None:
     assert result.reason == "static_dataset"
 
 
-def test_plan_sync_derived_policy_returns_not_syncable_without_download_path() -> None:
-    latest = _artifact(
-        artifact_id="a1",
-        source_dataset_id="chirps3_precipitation_weekly",
-        managed_dataset_id="chirps3_precipitation_weekly_sle",
-        end="2026-W17",
-    )
-
-    result = sync_engine.plan_sync(
-        source_dataset={"id": "chirps3_precipitation_weekly", "period_type": "weekly", "sync_kind": "derived"},
-        latest_artifact=latest,
-        requested_end=None,
-    )
-
-    assert result.sync_kind == SyncKind.DERIVED
-    assert result.action == SyncAction.NOT_SYNCABLE
-    assert result.reason == "derived_sync_not_implemented"
-
-
 def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
     dataset_id = "chirps3_precipitation_daily_sle"
     latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")

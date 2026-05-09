@@ -2,9 +2,14 @@
 
 from fastapi import APIRouter, HTTPException
 
-from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.processing import services
-from climate_api.processing.schemas import ResampleProcessRequest, ResampleProcessResponse
+from climate_api.processing.schemas import (
+    _SUPPORTED_PERIOD_TYPES,
+    _SUPPORTED_RESAMPLE_METHODS,
+    _WEEK_STARTS,
+    ResampleProcessRequest,
+    ResampleProcessResponse,
+)
 
 router = APIRouter()
 
@@ -12,18 +17,30 @@ router = APIRouter()
 @router.post("/{process_id}/execution", response_model=ResampleProcessResponse)
 def run_process_execution(process_id: str, request: ResampleProcessRequest) -> ResampleProcessResponse:
     """Materialize a derived dataset by executing the named process."""
-    dataset = registry_datasets.get_dataset(request.dataset_id)
-    if dataset is None:
-        raise HTTPException(status_code=404, detail=f"Dataset template '{request.dataset_id}' not found")
-    if dataset.get("sync_kind") != "derived":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dataset '{request.dataset_id}' is not a derived dataset and cannot be processed here",
-        )
     if process_id != "resample":
         raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+    if request.period_type not in _SUPPORTED_PERIOD_TYPES:
+        supported = ", ".join(sorted(_SUPPORTED_PERIOD_TYPES))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported period_type '{request.period_type}'. Supported: {supported}",
+        )
+    if request.method not in _SUPPORTED_RESAMPLE_METHODS:
+        supported = ", ".join(sorted(_SUPPORTED_RESAMPLE_METHODS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported method '{request.method}'. Supported: {supported}",
+        )
+    if request.week_start not in _WEEK_STARTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported week_start '{request.week_start}'. Supported: {', '.join(sorted(_WEEK_STARTS))}",
+        )
     artifact_id, dataset_summary = services.run_resample_process(
-        dataset=dataset,
+        source_dataset_id=request.source_dataset_id,
+        period_type=request.period_type,
+        method=request.method,
+        week_start=request.week_start,
         start=request.start,
         end=request.end,
         extent_id=request.extent_id,

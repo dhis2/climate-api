@@ -6,12 +6,19 @@ from pydantic import BaseModel, Field
 
 from climate_api.ingestions.schemas import DatasetRecord
 
+_SUPPORTED_RESAMPLE_METHODS = {"mean", "sum", "min", "max"}
+_SUPPORTED_PERIOD_TYPES = {"daily", "weekly", "monthly", "yearly"}
+_WEEK_STARTS = {"monday", "sunday"}
+
 
 class ResampleProcessRequest(BaseModel):
-    """Request payload for materializing a derived resampled dataset."""
+    """Request payload for materializing a resampled derived dataset."""
 
-    dataset_id: str = Field(description="Target derived dataset template id from the Climate API registry.")
-    start: str = Field(description="Start period to materialize in the target dataset period format.")
+    source_dataset_id: str = Field(description="Managed dataset id of the source dataset to resample from.")
+    period_type: str = Field(description="Target period type: daily, weekly, monthly, or yearly.")
+    method: str = Field(description="Aggregation method: mean, sum, min, or max.")
+    week_start: str = Field(default="monday", description="First day of the week when period_type is weekly.")
+    start: str = Field(description="Start period to materialize in the target period format.")
     end: str | None = Field(default=None, description="Optional end period to materialize.")
     extent_id: str | None = Field(
         default=None,

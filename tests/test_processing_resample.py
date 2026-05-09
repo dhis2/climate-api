@@ -84,13 +84,6 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         start="2026-01-01T00",
         end="2026-01-02T23",
     )
-    target_dataset = {
-        "id": "era5land_temperature_daily",
-        "name": "ERA5-Land daily temperature",
-        "variable": "value",
-        "period_type": "daily",
-        "processing": {"process_id": "resample", "source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -106,7 +99,9 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
     )
 
     artifact = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-02",
         extent_id="sle",
@@ -115,7 +110,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         publish=False,
     )
 
-    assert artifact.dataset_id == "era5land_temperature_daily"
+    assert artifact.dataset_id == "era5land_temperature_hourly_daily_mean"
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-01-02"
     result = xr.open_zarr(artifact.path, consolidated=True)
@@ -146,13 +141,6 @@ def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
         start="2026-01-01",
         end="2026-01-02",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_hourly",
-        "name": "CHIRPS hourly precipitation",
-        "variable": "value",
-        "period_type": "hourly",
-        "processing": {"process_id": "resample", "source_dataset_id": "chirps3_precipitation_daily", "method": "sum"},
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -169,7 +157,9 @@ def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
 
     with pytest.raises(resample.HTTPException, match="Resampling requires a coarser target period than source"):
         resample.materialize_resampled_artifact(
-            target_dataset=target_dataset,
+            source_dataset_id="chirps3_precipitation_daily",
+            period_type="hourly",
+            method="sum",
             start="2026-01-01T00",
             end="2026-01-01T23",
             extent_id="sle",
@@ -180,22 +170,11 @@ def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
 
 
 def test_materialize_resampled_artifact_returns_404_when_source_dataset_template_is_missing() -> None:
-    target_dataset = {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "missing_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
-
     with pytest.raises(resample.HTTPException, match="Source dataset template 'missing_daily' not found"):
         resample.materialize_resampled_artifact(
-            target_dataset=target_dataset,
+            source_dataset_id="missing_daily",
+            period_type="weekly",
+            method="sum",
             start="2026-W02",
             end="2026-W03",
             extent_id="sle",
@@ -225,18 +204,6 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         start="2026-01-05",
         end="2026-01-14",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -252,7 +219,9 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
     )
 
     artifact = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="chirps3_precipitation_daily",
+        period_type="weekly",
+        method="sum",
         start="2026-W02",
         end="2026-W03",
         extent_id="sle",
@@ -290,18 +259,6 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
         start="2026-01-07",
         end="2026-01-18",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -317,7 +274,9 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
     )
 
     artifact = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="chirps3_precipitation_daily",
+        period_type="weekly",
+        method="sum",
         start="2026-W02",
         end="2026-W03",
         extent_id="sle",
@@ -355,18 +314,6 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
         start="2026-01-01",
         end="2026-01-07",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -386,7 +333,9 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
         match="Source artifact contains no data for the requested resample range",
     ):
         resample.materialize_resampled_artifact(
-            target_dataset=target_dataset,
+            source_dataset_id="chirps3_precipitation_daily",
+            period_type="weekly",
+            method="sum",
             start="2026-W10",
             end="2026-W10",
             extent_id="sle",
@@ -416,17 +365,6 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
         start="2026-01-01",
         end="2026-01-31",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_monthly",
-        "name": "CHIRPS monthly precipitation",
-        "variable": "value",
-        "period_type": "monthly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-        },
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -442,7 +380,9 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
     )
 
     artifact = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="chirps3_precipitation_daily",
+        period_type="monthly",
+        method="sum",
         start="2026-01",
         end="2026-01",
         extent_id="sle",
@@ -480,13 +420,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
         start="2026-01-01T00",
         end="2026-01-01T23",
     )
-    target_dataset = {
-        "id": "era5land_temperature_daily",
-        "name": "ERA5-Land daily temperature",
-        "variable": "value",
-        "period_type": "daily",
-        "processing": {"process_id": "resample", "source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -502,7 +435,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
     )
 
     first = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",
@@ -517,7 +452,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
         lambda _: pytest.fail("existing derived artifact should be reused before resolving source artifact"),
     )
     second = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",
@@ -549,18 +486,6 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
         start="2026-01-05",
         end="2026-01-14",
     )
-    target_dataset = {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -576,7 +501,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
     )
 
     first = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="chirps3_precipitation_daily",
+        period_type="weekly",
+        method="sum",
         start="2026-W02",
         end="2026-W03",
         extent_id="sle",
@@ -585,7 +512,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
         publish=False,
     )
     second = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="chirps3_precipitation_daily",
+        period_type="weekly",
+        method="sum",
         start="2026-W02",
         end="2026-W03",
         extent_id="sle",
@@ -617,13 +546,6 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
         start="2026-01-01T00",
         end="2026-01-01T23",
     )
-    target_dataset = {
-        "id": "era5land_temperature_daily",
-        "name": "ERA5-Land daily temperature",
-        "variable": "value",
-        "period_type": "daily",
-        "processing": {"process_id": "resample", "source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -639,7 +561,9 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
     )
 
     existing = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",
@@ -662,7 +586,9 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
     monkeypatch.setattr(resample.ingestion_services, "publish_artifact_record", _publish_artifact_record)
 
     reused = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",
@@ -695,13 +621,6 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
         start="2026-01-01T00",
         end="2026-01-01T23",
     )
-    target_dataset = {
-        "id": "era5land_temperature_daily",
-        "name": "ERA5-Land daily temperature",
-        "variable": "value",
-        "period_type": "daily",
-        "processing": {"process_id": "resample", "source_dataset_id": "era5land_temperature_hourly", "method": "mean"},
-    }
 
     monkeypatch.setattr(
         resample.registry_datasets,
@@ -717,7 +636,9 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
     )
 
     first = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",
@@ -733,7 +654,9 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
     updated_ds.to_zarr(source_path, mode="w", consolidated=True)
 
     second = resample.materialize_resampled_artifact(
-        target_dataset=target_dataset,
+        source_dataset_id="era5land_temperature_hourly",
+        period_type="daily",
+        method="mean",
         start="2026-01-01",
         end="2026-01-01",
         extent_id="sle",

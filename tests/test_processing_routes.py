@@ -4,7 +4,6 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
     CoverageSpatial,
@@ -16,29 +15,13 @@ from climate_api.ingestions.schemas import (
 from climate_api.processing import services as processing_services
 
 
-def _target_dataset() -> dict[str, object]:
-    return {
-        "id": "chirps3_precipitation_weekly",
-        "name": "CHIRPS weekly precipitation",
-        "variable": "value",
-        "period_type": "weekly",
-        "sync_kind": "derived",
-        "processing": {
-            "process_id": "resample",
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "method": "sum",
-            "week_start": "monday",
-        },
-    }
-
-
 def _dataset_record(dataset_id: str) -> DatasetRecord:
     return DatasetRecord(
         dataset_id=dataset_id,
-        source_dataset_id="chirps3_precipitation_weekly",
+        source_dataset_id="chirps3_precipitation_daily_weekly_sum",
         dataset_name="CHIRPS weekly precipitation",
         short_name="CHIRPS weekly",
-        variable="value",
+        variable="precip",
         period_type="weekly",
         units="mm",
         resolution="5 km x 5 km",
@@ -61,21 +44,21 @@ def test_post_resample_execution_returns_completed_response(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(registry_datasets, "get_dataset", lambda _: _target_dataset())
     monkeypatch.setattr(
         processing_services,
         "run_resample_process",
-        lambda **kwargs: ("artifact-123", _dataset_record("chirps3_precipitation_weekly_sle")),
+        lambda **kwargs: ("artifact-123", _dataset_record("chirps3_precipitation_daily_weekly_sum_sle")),
     )
 
     response = client.post(
         "/processes/resample/execution",
         json={
-            "dataset_id": "chirps3_precipitation_weekly",
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "period_type": "weekly",
+            "method": "sum",
             "start": "2026-W02",
             "end": "2026-W03",
             "extent_id": "sle",
-            "overwrite": False,
             "publish": True,
         },
     )
@@ -84,26 +67,27 @@ def test_post_resample_execution_returns_completed_response(
     payload = response.json()
     assert payload["artifact_id"] == "artifact-123"
     assert payload["status"] == "completed"
-    assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_weekly_sle"
+    assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_daily_weekly_sum_sle"
 
 
-def test_post_resample_execution_passes_target_dataset_and_extent_scope(
+def test_post_resample_execution_passes_params_to_service(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
-    monkeypatch.setattr(registry_datasets, "get_dataset", lambda _: _target_dataset())
 
     def fake_run_resample_process(**kwargs: object) -> tuple[str, DatasetRecord]:
         captured.update(kwargs)
-        return "artifact-456", _dataset_record("chirps3_precipitation_weekly_sle")
+        return "artifact-456", _dataset_record("chirps3_precipitation_daily_weekly_sum_sle")
 
     monkeypatch.setattr(processing_services, "run_resample_process", fake_run_resample_process)
 
     response = client.post(
         "/processes/resample/execution",
         json={
-            "dataset_id": "chirps3_precipitation_weekly",
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "period_type": "weekly",
+            "method": "sum",
             "start": "2026-W02",
             "end": "2026-W03",
             "extent_id": "sle",
@@ -113,7 +97,9 @@ def test_post_resample_execution_passes_target_dataset_and_extent_scope(
     )
 
     assert response.status_code == 200
-    assert captured["dataset"]["id"] == "chirps3_precipitation_weekly"
+    assert captured["source_dataset_id"] == "chirps3_precipitation_daily"
+    assert captured["period_type"] == "weekly"
+    assert captured["method"] == "sum"
     assert captured["start"] == "2026-W02"
     assert captured["end"] == "2026-W03"
     assert captured["extent_id"] == "sle"
@@ -121,45 +107,35 @@ def test_post_resample_execution_passes_target_dataset_and_extent_scope(
     assert captured["publish"] is False
 
 
-def test_post_resample_execution_returns_404_for_unknown_dataset(
+def test_post_resample_execution_returns_400_for_unsupported_period_type(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(registry_datasets, "get_dataset", lambda _: None)
-
     response = client.post(
         "/processes/resample/execution",
         json={
-            "dataset_id": "nonexistent_dataset",
-            "start": "2026-W02",
-        },
-    )
-
-    assert response.status_code == 404
-
-
-def test_post_resample_execution_returns_400_for_non_derived_dataset(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    non_derived_dataset = {
-        "id": "chirps3_precipitation_daily",
-        "name": "CHIRPS daily precipitation",
-        "variable": "precip",
-        "period_type": "daily",
-        "sync_kind": "temporal",
-        "ingestion": {"function": "some.download.function"},
-    }
-    monkeypatch.setattr(registry_datasets, "get_dataset", lambda _: non_derived_dataset)
-
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "dataset_id": "chirps3_precipitation_daily",
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "period_type": "dekadal",
+            "method": "sum",
             "start": "2026-01-01",
         },
     )
+    assert response.status_code == 400
 
+
+def test_post_resample_execution_returns_400_for_unsupported_method(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = client.post(
+        "/processes/resample/execution",
+        json={
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "period_type": "weekly",
+            "method": "median",
+            "start": "2026-W01",
+        },
+    )
     assert response.status_code == 400
 
 
@@ -167,14 +143,13 @@ def test_post_unknown_process_id_returns_404(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(registry_datasets, "get_dataset", lambda _: _target_dataset())
-
     response = client.post(
         "/processes/unknown_process/execution",
         json={
-            "dataset_id": "chirps3_precipitation_weekly",
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "period_type": "weekly",
+            "method": "sum",
             "start": "2026-W02",
         },
     )
-
     assert response.status_code == 404

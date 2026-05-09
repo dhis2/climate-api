@@ -15,10 +15,8 @@ logger = logging.getLogger(__name__)
 # When set, only this directory is loaded (no built-ins, no config override).
 CONFIGS_DIR: Path | None = None
 
-SUPPORTED_SYNC_KINDS = {"temporal", "release", "static", "derived"}
+SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
-SUPPORTED_RESAMPLE_METHODS = {"mean", "sum", "min", "max"}
-SUPPORTED_WEEK_STARTS = {"monday", "sunday"}
 
 
 def list_datasets() -> list[dict[str, Any]]:
@@ -137,74 +135,16 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
-    if sync_kind != "derived":
-        ingestion = dataset.get("ingestion")
-        if not isinstance(ingestion, dict):
-            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an 'ingestion' block")
-        function = ingestion.get("function")
-        if not isinstance(function, str) or not function:
-            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.function")
-
-    processing = dataset.get("processing")
-    if sync_kind == "derived":
-        if processing is None:
-            raise ValueError(
-                f"Dataset template '{dataset_id}' in {source} must define processing when sync_kind is derived"
-            )
-        _validate_processing_config(processing, dataset=dataset, dataset_id=dataset_id, source=source)
-    elif processing is not None:
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} may only define processing when sync_kind is derived"
-        )
+    ingestion = dataset.get("ingestion")
+    if not isinstance(ingestion, dict):
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an 'ingestion' block")
+    function = ingestion.get("function")
+    if not isinstance(function, str) or not function:
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.function")
 
     sync_availability = dataset.get("sync_availability")
     if sync_availability is not None:
         _validate_sync_availability(sync_availability, dataset_id=dataset_id, source=source)
-
-
-def _validate_processing_config(processing: object, *, dataset: dict[str, Any], dataset_id: str, source: str) -> None:
-    """Validate a processing block for a derived dataset."""
-    if not isinstance(processing, dict):
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid processing block")
-    process_id = processing.get("process_id")
-    if not isinstance(process_id, str) or not process_id:
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define processing.process_id")
-    if process_id == "resample":
-        _validate_resample_params(processing, dataset=dataset, dataset_id=dataset_id, source=source)
-    else:
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has unsupported processing.process_id '{process_id}'"
-        )
-
-
-def _validate_resample_params(params: dict[str, Any], *, dataset: dict[str, Any], dataset_id: str, source: str) -> None:
-    """Validate the parameters for a resample processing block."""
-    source_dataset_id = params.get("source_dataset_id")
-    if not isinstance(source_dataset_id, str) or not source_dataset_id:
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define processing.source_dataset_id")
-    method = params.get("method")
-    if not isinstance(method, str) or not method:
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define processing.method")
-    if method not in SUPPORTED_RESAMPLE_METHODS:
-        supported = ", ".join(sorted(SUPPORTED_RESAMPLE_METHODS))
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has unsupported processing.method '{method}'. "
-            f"Supported values: {supported}"
-        )
-    week_start = params.get("week_start")
-    period_type = dataset.get("period_type")
-    if week_start is not None:
-        if period_type != "weekly":
-            raise ValueError(
-                f"Dataset template '{dataset_id}' in {source} may only define processing.week_start "
-                "when period_type is weekly"
-            )
-        if week_start not in SUPPORTED_WEEK_STARTS:
-            supported = ", ".join(sorted(SUPPORTED_WEEK_STARTS))
-            raise ValueError(
-                f"Dataset template '{dataset_id}' in {source} has unsupported processing.week_start "
-                f"'{week_start}'. Supported values: {supported}"
-            )
 
 
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:

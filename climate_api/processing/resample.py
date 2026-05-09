@@ -7,7 +7,7 @@ import os
 import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 import xarray as xr
@@ -27,9 +27,11 @@ logger = logging.getLogger(__name__)
 
 def _derived_data_dir() -> Path:
     """Return the directory used to store derived Zarr artifacts."""
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override) / "derived"
+    from climate_api import config as api_config
+
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "derived"
     return Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "climate-api" / "derived"
 
 
@@ -37,9 +39,17 @@ DERIVED_DATA_DIR: Path = _derived_data_dir()
 _PERIOD_ORDER = {"hourly": 0, "daily": 1, "weekly": 2, "monthly": 3, "yearly": 4}
 
 
+def derived_dataset_id(*, source_dataset_id: str, period_type: str, method: str) -> str:
+    """Return the stable derived dataset id auto-generated from source + parameters."""
+    return f"{source_dataset_id}_{period_type}_{method}"
+
+
 def materialize_resampled_artifact(
     *,
-    target_dataset: dict[str, Any],
+    source_dataset_id: str,
+    period_type: str,
+    method: str,
+    week_start: str = "monday",
     start: str,
     end: str | None,
     extent_id: str | None,
@@ -48,21 +58,15 @@ def materialize_resampled_artifact(
     publish: bool,
 ) -> ArtifactRecord:
     """Materialize a derived dataset by resampling an existing managed source dataset."""
-    processing_config = _require_processing_config(target_dataset)
-    resolved_end = end or ingestion_services._default_request_end(str(target_dataset["period_type"]))
-    normalized_start = ingestion_services._normalize_request_period(
-        start,
-        period_type=str(target_dataset["period_type"]),
-        field_name="start",
-    )
+    target_dataset_id = derived_dataset_id(source_dataset_id=source_dataset_id, period_type=period_type, method=method)
+    resolved_end = end or ingestion_services._default_request_end(period_type)
+    normalized_start = ingestion_services._normalize_request_period(start, period_type=period_type, field_name="start")
     normalized_end = ingestion_services._normalize_request_period(
-        resolved_end,
-        period_type=str(target_dataset["period_type"]),
-        field_name="end",
+        resolved_end, period_type=period_type, field_name="end"
     )
 
     existing = ingestion_services._find_existing_artifact(
-        dataset_id=str(target_dataset["id"]),
+        dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(
             start=normalized_start,
             end=normalized_end,
@@ -76,17 +80,12 @@ def materialize_resampled_artifact(
             return ingestion_services.publish_artifact_record(existing.artifact_id)
         return existing
 
-    source_dataset_id = str(processing_config["source_dataset_id"])
     source_dataset = registry_datasets.get_dataset(source_dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset template '{source_dataset_id}' not found")
 
-    _validate_period_hierarchy(source_period_type=str(source_dataset["period_type"]), target_dataset=target_dataset)
-    source_artifact = _resolve_source_artifact(
-        source_dataset_id=source_dataset_id,
-        extent_id=extent_id,
-        bbox=bbox,
-    )
+    _validate_period_hierarchy(source_period_type=str(source_dataset["period_type"]), target_period_type=period_type)
+    source_artifact = _resolve_source_artifact(source_dataset_id=source_dataset_id, extent_id=extent_id, bbox=bbox)
     if source_artifact.format != ArtifactFormat.ZARR:
         raise HTTPException(status_code=409, detail="Resampling currently requires a Zarr-backed source artifact")
 
@@ -94,7 +93,7 @@ def materialize_resampled_artifact(
     if source_bbox is None and source_artifact.request_scope.bbox is not None:
         source_bbox = list(source_artifact.request_scope.bbox)
     target_managed_dataset_id = managed_dataset_id_for_scope(
-        str(target_dataset["id"]),
+        target_dataset_id,
         extent_id=extent_id,
         bbox=source_bbox if extent_id is None else None,
     )
@@ -105,15 +104,17 @@ def materialize_resampled_artifact(
         resampled = _resample_dataset(
             source_ds=source_ds,
             source_period_type=str(source_dataset["period_type"]),
-            resample_config=processing_config,
-            target_period_type=str(target_dataset["period_type"]),
+            method=method,
+            week_start=week_start,
+            target_period_type=period_type,
             start=normalized_start,
             end=normalized_end,
         )
         if resampled.sizes.get(get_time_dim(resampled), 0) == 0:
             raise HTTPException(status_code=409, detail="Source artifact does not contain any complete target periods")
         existing_realized = _find_existing_resampled_artifact(
-            target_dataset=target_dataset,
+            target_dataset_id=target_dataset_id,
+            period_type=period_type,
             extent_id=extent_id,
             bbox=source_bbox if extent_id is None else None,
             start=normalized_start,
@@ -127,6 +128,12 @@ def materialize_resampled_artifact(
     finally:
         source_ds.close()
 
+    target_dataset: dict[str, object] = {
+        "id": target_dataset_id,
+        "name": target_dataset_id,
+        "variable": source_dataset.get("variable", "value"),
+        "period_type": period_type,
+    }
     return ingestion_services.store_materialized_zarr_artifact(
         dataset=target_dataset,
         start=normalized_start,
@@ -139,24 +146,7 @@ def materialize_resampled_artifact(
     )
 
 
-def _require_processing_config(target_dataset: dict[str, Any]) -> dict[str, Any]:
-    """Return the resample parameters for a derived dataset or raise 400."""
-    processing = target_dataset.get("processing")
-    if not isinstance(processing, dict):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dataset '{target_dataset.get('id')}' is not configured for resampling",
-        )
-    if processing.get("process_id") != "resample":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dataset '{target_dataset.get('id')}' does not use the resample process",
-        )
-    return processing
-
-
-def _validate_period_hierarchy(*, source_period_type: str, target_dataset: dict[str, Any]) -> None:
-    target_period_type = str(target_dataset["period_type"])
+def _validate_period_hierarchy(*, source_period_type: str, target_period_type: str) -> None:
     if source_period_type not in _PERIOD_ORDER or target_period_type not in _PERIOD_ORDER:
         raise HTTPException(
             status_code=400,
@@ -185,7 +175,8 @@ def _resample_dataset(
     *,
     source_ds: xr.Dataset,
     source_period_type: str,
-    resample_config: dict[str, Any],
+    method: str,
+    week_start: str,
     target_period_type: str,
     start: str,
     end: str,
@@ -204,16 +195,11 @@ def _resample_dataset(
 
     with xr.set_options(keep_attrs=True):
         resampler = subset.resample(
-            {
-                time_dim: _resample_frequency(
-                    target_period_type=target_period_type,
-                    week_start=str(resample_config.get("week_start", "monday")),
-                )
-            },
+            {time_dim: _resample_frequency(target_period_type=target_period_type, week_start=week_start)},
             label="left",
             closed="left",
         )
-        result = cast(xr.Dataset, getattr(resampler, str(resample_config["method"]))())
+        result = cast(xr.Dataset, getattr(resampler, method)())
     result = _drop_incomplete_edge_periods(
         result=result,
         source_start=source_start,
@@ -269,7 +255,8 @@ def _drop_incomplete_edge_periods(
 
 def _find_existing_resampled_artifact(
     *,
-    target_dataset: dict[str, Any],
+    target_dataset_id: str,
+    period_type: str,
     extent_id: str | None,
     bbox: list[float] | None,
     start: str,
@@ -278,10 +265,10 @@ def _find_existing_resampled_artifact(
     time_dim = get_time_dim(resampled)
     realized_end = datetime_to_period_string(
         _coerce_numpy_datetime(resampled[time_dim].values[-1]).replace(tzinfo=UTC),
-        str(target_dataset["period_type"]),
+        period_type,
     )
     return ingestion_services._find_existing_artifact(
-        dataset_id=str(target_dataset["id"]),
+        dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(
             start=start,
             end=realized_end,
