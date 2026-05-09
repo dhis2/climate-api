@@ -16,19 +16,17 @@ from fastapi import BackgroundTasks, HTTPException
 from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
+from climate_api import config as api_config
+
 from .utils import get_lon_lat_dims, get_time_dim
 
 logger = logging.getLogger(__name__)
 
 
 def _resolve_download_dir() -> Path:
-    # CACHE_OVERRIDE keeps existing Docker/dev deployments working unchanged.
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override)
-    # Default to an XDG-compliant user-writable location so the package works
-    # when installed with pip (where a package-relative path would land inside
-    # site-packages and typically be non-writable).
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "downloads"
     xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return xdg_data / "climate-api" / "downloads"
 
@@ -54,6 +52,7 @@ def download_dataset(
     When running in the background-task path, the download is deferred and this function
     returns an empty list because no files have been created yet.
     """
+    _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
     ingestion = dataset["ingestion"]
     eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
@@ -298,6 +297,39 @@ def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     if optimized.exists():
         return optimized
     return None
+
+
+def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:
+    """Raise HTTP 400 if the request bbox falls outside the dataset's declared extents."""
+    extents = dataset.get("extents")
+    if not extents or bbox is None:
+        return
+    spatial = extents.get("spatial")
+    if not spatial:
+        return
+    cov_bbox = spatial.get("bbox")
+    if not isinstance(cov_bbox, (list, tuple)) or len(cov_bbox) != 4:
+        return
+    cov_xmin, cov_ymin, cov_xmax, cov_ymax = cov_bbox
+    xmin, ymin, xmax, ymax = bbox
+    if ymin > cov_ymax or ymax < cov_ymin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset['id']}' does not cover this extent. "
+                f"Latitude coverage: {cov_ymin}°–{cov_ymax}°, "
+                f"requested: {ymin}°–{ymax}°."
+            ),
+        )
+    if xmin > cov_xmax or xmax < cov_xmin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset['id']}' does not cover this extent. "
+                f"Longitude coverage: {cov_xmin}°–{cov_xmax}°, "
+                f"requested: {xmin}°–{xmax}°."
+            ),
+        )
 
 
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:

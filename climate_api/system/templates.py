@@ -2,6 +2,7 @@
 
 import importlib.resources
 import logging
+from datetime import date
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 import jinja2
 from fastapi import Request
 
+from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.services import list_datasets
 
@@ -94,23 +96,60 @@ def wants_json(request: Request) -> bool:
     return json_q >= 0 and (html_q < 0 or json_q >= html_q)
 
 
+def render_maps(base: str) -> str:
+    """Render the map viewer page."""
+    return get_template("map-viewer.html").render(base=base)
+
+
+def _load_extent() -> dict[str, Any] | None:
+    try:
+        return get_extent()
+    except ValueError:
+        return None
+    except Exception:
+        _log.exception("Unexpected error loading extent")
+        return None
+
+
+def _load_templates() -> list[dict[str, Any]]:
+    try:
+        return registry_datasets.list_datasets()
+    except Exception:
+        _log.exception("Unexpected error loading dataset templates")
+        return []
+
+
+def _load_datasets() -> list[Any]:
+    try:
+        return list_datasets().items
+    except Exception:
+        _log.exception("Unexpected error loading datasets")
+        return []
+
+
 def render_landing(version: str, base: str) -> str:
     """Render the root landing page with live instance status."""
-    try:
-        extent: dict[str, Any] | None = get_extent()
-    except ValueError:
-        extent = None
-    except Exception:
-        _log.exception("Unexpected error loading extent for landing page")
-        extent = None
-    try:
-        datasets = list_datasets().items
-    except Exception:
-        _log.exception("Unexpected error loading datasets for landing page")
-        datasets = []
     return get_template("landing_page.html").render(
         version=version,
         base=base,
-        extent=extent,
-        datasets=datasets,
+        extent=_load_extent(),
+        datasets=_load_datasets(),
+        templates=_load_templates(),
+    )
+
+
+def render_manage(version: str, base: str, message: str | None = None, error: str | None = None) -> str:
+    """Render the management page."""
+    today = date.today().isoformat()
+    year_ago = date.today().replace(year=date.today().year - 1).isoformat()
+    return get_template("manage.html").render(
+        version=version,
+        base=base,
+        extent=_load_extent(),
+        templates=_load_templates(),
+        datasets=_load_datasets(),
+        today=today,
+        year_ago=year_ago,
+        message=message,
+        error=error,
     )
