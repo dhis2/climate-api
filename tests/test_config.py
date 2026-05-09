@@ -120,8 +120,57 @@ def test_builtin_datasets_include_chirps_era5_worldpop(monkeypatch: pytest.Monke
     assert "worldpop_population_yearly" in ids
 
 
-def test_templates_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    datasets_subdir = tmp_path / "templates" / "datasets"
+def test_templates_dir_raises_with_migration_hint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text(f"templates_dir: {tmp_path / 'templates'}\n", encoding="utf-8")
+    monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+
+    with pytest.raises(ValueError, match="templates_dir"):
+        dataset_registry.list_datasets()
+
+
+def test_plugins_dir_adds_root_to_sys_path_and_makes_modules_importable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    plugins_dir = tmp_path / "plugins"
+    pkg_dir = plugins_dir / "myplugin"
+    pkg_dir.mkdir(parents=True)
+    (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (pkg_dir / "source.py").write_text("VALUE = 42\n", encoding="utf-8")
+    (plugins_dir / "datasets").mkdir()
+    (plugins_dir / "datasets" / "custom.yaml").write_text(
+        """
+- id: plugin_dataset
+  name: Plugin dataset
+  variable: val
+  period_type: daily
+  sync_kind: static
+  ingestion:
+    function: myplugin.source.download
+""",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text(f"plugins_dir: {plugins_dir}\n", encoding="utf-8")
+    monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    root_str = str(plugins_dir.resolve())
+    monkeypatch.syspath_prepend("")  # ensure clean sys.path state without the plugins root
+
+    dataset_registry.list_datasets()
+
+    import sys
+
+    assert root_str in sys.path
+    import importlib
+
+    mod = importlib.import_module("myplugin.source")
+    assert mod.VALUE == 42
+
+
+def test_plugins_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    datasets_subdir = tmp_path / "plugins" / "datasets"
     datasets_subdir.mkdir(parents=True)
     (datasets_subdir / "custom.yaml").write_text(
         """
@@ -136,7 +185,7 @@ def test_templates_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch
         encoding="utf-8",
     )
     config_file = tmp_path / "climate-api.yaml"
-    config_file.write_text(f"templates_dir: {tmp_path / 'templates'}\n", encoding="utf-8")
+    config_file.write_text(f"plugins_dir: {tmp_path / 'plugins'}\n", encoding="utf-8")
 
     monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
@@ -146,15 +195,15 @@ def test_templates_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch
     assert "chirps3_precipitation_daily" in ids
 
 
-def test_templates_dir_resolved_relative_to_config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """templates_dir is resolved relative to the config file, not CWD.
+def test_plugins_dir_resolved_relative_to_config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """plugins_dir is resolved relative to the config file, not CWD.
 
     This matters when running the installed `climate-api` CLI from a directory
-    other than the repo root, where a relative templates_dir in the config must
+    other than the repo root, where a relative plugins_dir in the config must
     still point at the correct sibling directory.
     """
     deployment_dir = tmp_path / "deployment"
-    datasets_subdir = deployment_dir / "templates" / "datasets"
+    datasets_subdir = deployment_dir / "plugins" / "datasets"
     datasets_subdir.mkdir(parents=True)
     (datasets_subdir / "custom.yaml").write_text(
         """
@@ -168,7 +217,7 @@ def test_templates_dir_resolved_relative_to_config_file(monkeypatch: pytest.Monk
         encoding="utf-8",
     )
     config_file = deployment_dir / "climate-api.yaml"
-    config_file.write_text("templates_dir: ./templates\n", encoding="utf-8")
+    config_file.write_text("plugins_dir: ./plugins\n", encoding="utf-8")
 
     monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
@@ -177,8 +226,8 @@ def test_templates_dir_resolved_relative_to_config_file(monkeypatch: pytest.Monk
     assert "deployed_dataset" in ids
 
 
-def test_templates_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    datasets_subdir = tmp_path / "templates" / "datasets"
+def test_plugins_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    datasets_subdir = tmp_path / "plugins" / "datasets"
     datasets_subdir.mkdir(parents=True)
     (datasets_subdir / "chirps3.yaml").write_text(
         """
@@ -193,7 +242,7 @@ def test_templates_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.Mon
         encoding="utf-8",
     )
     config_file = tmp_path / "climate-api.yaml"
-    config_file.write_text(f"templates_dir: {tmp_path / 'templates'}\n", encoding="utf-8")
+    config_file.write_text(f"plugins_dir: {tmp_path / 'plugins'}\n", encoding="utf-8")
 
     monkeypatch.setattr(dataset_registry, "CONFIGS_DIR", None)
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
