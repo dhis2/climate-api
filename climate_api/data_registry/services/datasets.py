@@ -2,6 +2,7 @@
 
 import importlib.resources
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,9 @@ def list_datasets() -> list[dict[str, Any]]:
             )
         config_path = api_config.get_config_path()
         root = (config_path.parent / config_templates_dir).resolve() if config_path else Path(config_templates_dir)
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
         datasets_subdir = root / "datasets"
         if datasets_subdir.is_dir():
             for dataset in _load_from_dir(datasets_subdir):
