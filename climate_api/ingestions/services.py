@@ -275,9 +275,11 @@ def create_artifact(
     )
     if not coverage_data.get("has_data", True):
         raise HTTPException(status_code=409, detail="Downloaded artifact contains no data for the requested scope")
+    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
+        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
     )
     if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
         raise HTTPException(
@@ -357,9 +359,11 @@ def store_materialized_zarr_artifact(
     coverage_data = get_data_coverage_for_paths(dataset, zarr_path=str(zarr_path.resolve()))
     if not coverage_data.get("has_data", True):
         raise HTTPException(status_code=409, detail="Materialized artifact contains no data for the requested scope")
+    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
+        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
     )
     request_scope = request_scope.model_copy(update={"end": coverage.temporal.end})
 

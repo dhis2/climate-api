@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import xarray as xr
+from pyproj import Transformer
 
 from ...data_manager.services.downloader import get_cache_files, get_zarr_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
@@ -88,8 +89,11 @@ def get_data_coverage_for_paths(
             compat="override",
         )
 
+    from climate_api import config as api_config
+
+    native_crs = api_config.get_crs() or "EPSG:4326"
     try:
-        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
+        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]), native_crs=native_crs)
     finally:
         ds.close()
 
@@ -122,7 +126,7 @@ def _open_zarr(zarr_path: str) -> xr.Dataset:
     return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
 
 
-def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any]:
+def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
     """Summarize temporal and spatial coverage for an already opened dataset."""
     if any(size == 0 for size in ds.sizes.values()):
         return {
@@ -130,6 +134,7 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any
             "coverage": {
                 "temporal": {"start": None, "end": None},
                 "spatial": {"xmin": None, "ymin": None, "xmax": None, "ymax": None},
+                "spatial_wgs84": None,
             },
         }
 
@@ -142,11 +147,19 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any
     xmin, xmax = ds[x_dim].min().item(), ds[x_dim].max().item()
     ymin, ymax = ds[y_dim].min().item(), ds[y_dim].max().item()
 
+    spatial_wgs84 = None
+    wgs84 = "EPSG:4326"
+    if native_crs.upper() != wgs84:
+        transformer = Transformer.from_crs(native_crs, wgs84, always_xy=True)
+        lon_min, lat_min, lon_max, lat_max = transformer.transform_bounds(xmin, ymin, xmax, ymax)
+        spatial_wgs84 = {"xmin": lon_min, "ymin": lat_min, "xmax": lon_max, "ymax": lat_max}
+
     return {
         "has_data": True,
         "coverage": {
             "temporal": {"start": start, "end": end},
             "spatial": {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax},
+            "spatial_wgs84": spatial_wgs84,
         },
     }
 

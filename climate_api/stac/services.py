@@ -146,7 +146,7 @@ def _build_collection_template(
     zarr_href: str,
     source_dataset: dict[str, Any],
 ) -> pystac.Collection:
-    spatial = artifact.coverage.spatial
+    spatial = artifact.coverage.spatial_wgs84 or artifact.coverage.spatial
     temporal = artifact.coverage.temporal
     template = pystac.Collection(
         id=dataset_id,
@@ -349,7 +349,7 @@ def _round_spatial_steps(collection: dict[str, Any]) -> None:
 
 
 def _override_spatial_extent_from_artifact(collection: dict[str, Any], artifact: ArtifactRecord) -> None:
-    spatial = artifact.coverage.spatial
+    spatial = artifact.coverage.spatial_wgs84 or artifact.coverage.spatial
     collection["extent"]["spatial"]["bbox"] = [[spatial.xmin, spatial.ymin, spatial.xmax, spatial.ymax]]
 
 

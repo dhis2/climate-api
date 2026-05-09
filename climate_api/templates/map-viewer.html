@@ -431,9 +431,9 @@
         timeDimKey = getTimeDimKey(dimensions);
         timeSteps = buildTimeSteps(dimensions);
 
-        // Always pass the STAC spatial bbox as explicit bounds so ZarrLayer
-        // positions the layer in WGS84 regardless of the store's native CRS.
-        // The API guarantees extent.spatial.bbox is always in WGS84.
+        // Pass the STAC spatial bbox as explicit bounds so ZarrLayer positions
+        // the layer correctly for projected-CRS stores (e.g. EPSG:25833).
+        // extent.spatial.bbox is always in WGS84 (reprojected at ingest time).
         const stacBbox = collection.extent?.spatial?.bbox?.[0] ?? null;
 
         let cm;
