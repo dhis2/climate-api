@@ -12,8 +12,13 @@ def get_time_dim(ds: Any) -> str:
 
 
 def get_lon_lat_dims(ds: Any) -> tuple[str, str]:
-    """Return ``(lon, lat)`` dimension names from a dataset."""
-    for lon_name, lat_name in [("lon", "lat"), ("longitude", "latitude"), ("x", "y")]:
-        if hasattr(ds, lat_name):
+    """Return ``(lon, lat)`` dimension names from a dataset.
+
+    Only considers names that are actual dimensions (not 2D auxiliary coordinates),
+    so datasets with both x/y dimensions and lon/lat auxiliary coords are handled correctly.
+    """
+    actual_dims: set[str] = set(getattr(ds, "dims", {}) or {})
+    for lon_name, lat_name in [("x", "y"), ("lon", "lat"), ("longitude", "latitude")]:
+        if lon_name in actual_dims and lat_name in actual_dims:
             return lon_name, lat_name
     raise ValueError(f"Unable to find space dimension: {getattr(ds, 'coords', repr(ds))}")
