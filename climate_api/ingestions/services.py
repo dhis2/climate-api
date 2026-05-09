@@ -489,13 +489,26 @@ def _read_zarr_attrs(store_root: Path) -> dict[str, object] | None:
 
 
 def _read_zarr_bounds(store_attrs: dict[str, object] | None) -> list[float] | None:
-    """Extract the spatial:bbox from pre-read zarr store attributes."""
+    """Extract the spatial:bbox from pre-read zarr store attributes, reprojected to WGS84.
+
+    Map clients (zarr-layer) expect bounds in geographic coordinates regardless of the
+    store's native CRS, so we reproject here when the store CRS is not WGS84/CRS84.
+    """
     if store_attrs is None:
         return None
     bbox = store_attrs.get("spatial:bbox")
-    if isinstance(bbox, list) and len(bbox) == 4:
-        return [float(v) for v in bbox]
-    return None
+    if not (isinstance(bbox, list) and len(bbox) == 4):
+        return None
+    xmin, ymin, xmax, ymax = (float(v) for v in bbox)
+    native_crs = store_attrs.get("proj:code")
+    if isinstance(native_crs, str) and native_crs not in ("EPSG:4326", "CRS84", "OGC:CRS84"):
+        try:
+            transformer = pyproj.Transformer.from_crs(native_crs, "EPSG:4326", always_xy=True)
+            xmin, ymin = transformer.transform(xmin, ymin)
+            xmax, ymax = transformer.transform(xmax, ymax)
+        except Exception:
+            pass
+    return [xmin, ymin, xmax, ymax]
 
 
 def get_dataset_zarr_store_file_or_404(
