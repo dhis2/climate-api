@@ -51,9 +51,6 @@ logger = logging.getLogger(__name__)
 def _resolve_artifacts_dir() -> Path:
     from climate_api import config as api_config
 
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override) / "artifacts"
     data_dir = api_config.get_data_dir()
     if data_dir is not None:
         return data_dir / "artifacts"

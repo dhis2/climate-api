@@ -65,8 +65,6 @@ def get_data_dir() -> Path | None:
     misconfigured instances fail fast at startup rather than silently sharing
     a default directory with other instances.
 
-    Callers should check CACHE_OVERRIDE themselves before calling this function;
-    CACHE_OVERRIDE is a legacy escape hatch that bypasses config-level validation.
     """
     config_path = get_config_path()
     if config_path is None or not config_path.exists():

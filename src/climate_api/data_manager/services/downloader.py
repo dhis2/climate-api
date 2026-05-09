@@ -24,9 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_download_dir() -> Path:
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override)
     data_dir = api_config.get_data_dir()
     if data_dir is not None:
         return data_dir / "downloads"
