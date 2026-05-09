@@ -451,7 +451,7 @@ def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> 
     nodata = display.get("nodata")
     if nodata is not None:
         render["nodata"] = float(nodata)
-    units = source_dataset.get("convert_units") or source_dataset.get("units")
+    units = source_dataset.get("units")
     if isinstance(units, str):
         render["climate_api:units"] = units
     return {"default": render}

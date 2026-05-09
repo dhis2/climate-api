@@ -58,7 +58,7 @@ def plan_sync(
     """
     sync_kind_value = source_dataset.get("sync", {}).get("kind")
     if not isinstance(sync_kind_value, str) or not sync_kind_value:
-        raise ValueError("source_dataset must define sync_kind for sync planning")
+        raise ValueError("source_dataset must define sync.kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end

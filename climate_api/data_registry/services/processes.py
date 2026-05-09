@@ -114,6 +114,10 @@ def _validate_process(process: object, *, source: str) -> None:
     if not isinstance(process_id, str) or not process_id:
         raise ValueError(f"{source} contains a process definition with a missing or invalid id")
 
+    name = process.get("name")
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"Process '{process_id}' in {source} must define name")
+
     execution_function = process.get("execution_function")
     if not isinstance(execution_function, str) or not execution_function:
         raise ValueError(f"Process '{process_id}' in {source} must define execution_function")

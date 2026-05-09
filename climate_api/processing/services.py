@@ -10,7 +10,8 @@ from fastapi import HTTPException
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import DatasetRecord
 from climate_api.processing.resample import materialize_resampled_artifact
-from climate_api.processing.schemas import _SUPPORTED_RESAMPLE_METHODS
+
+_SUPPORTED_RESAMPLE_METHODS: frozenset[str] = frozenset({"mean", "sum", "min", "max"})
 
 
 def execute_resample(

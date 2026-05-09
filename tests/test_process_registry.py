@@ -30,6 +30,19 @@ def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch
     assert process_registry.get_process("does_not_exist") is None
 
 
+def test_process_registry_rejects_missing_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "no_name.yaml").write_text(
+        "- id: no_name\n  execution_function: mypackage.execute\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match="must define name"):
+        process_registry.list_processes()
+
+
 def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "plugins" / "processes"
     processes_subdir.mkdir(parents=True)

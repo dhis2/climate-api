@@ -410,7 +410,7 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
 def test_plan_sync_requires_sync_kind() -> None:
     latest = _artifact(artifact_id="a1", end="2026-01-31")
 
-    with pytest.raises(ValueError, match="must define sync_kind"):
+    with pytest.raises(ValueError, match="must define sync.kind"):
         sync_engine.plan_sync(
             source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily"},
             latest_artifact=latest,
