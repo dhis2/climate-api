@@ -6,6 +6,7 @@ climate-api.yaml
 eo_api.egg-info/
 data/downloads
 data/artifacts
+data/derived
 data/pygeoapi
 docs/internal/
 site/
