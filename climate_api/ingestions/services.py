@@ -401,7 +401,8 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
 
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
     store_attrs = _read_zarr_attrs(store_root)
-    crs = (store_attrs.get("proj:code") if store_attrs else None) or api_config.get_crs()
+    store_crs = store_attrs.get("proj:code") if store_attrs else None
+    crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
@@ -430,9 +431,9 @@ def _read_zarr_attrs(store_root: Path) -> dict[str, object] | None:
     """Read the root attributes from a Zarr store, normalising v2/v3 layout differences."""
     for attrs_file in (store_root / "zarr.json", store_root / ".zattrs"):
         if attrs_file.exists():
-            attrs = json.loads(attrs_file.read_text(encoding="utf-8"))
+            attrs: dict[str, object] = json.loads(attrs_file.read_text(encoding="utf-8"))
             if attrs_file.name == "zarr.json":
-                attrs = attrs.get("attributes", attrs)
+                attrs = attrs.get("attributes", attrs)  # type: ignore[assignment]
             return attrs
     return None
 
