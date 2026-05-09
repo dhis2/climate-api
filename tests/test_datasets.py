@@ -28,7 +28,7 @@ def _artifact(
     *,
     artifact_id: str,
     source_dataset_id: str = "chirps3_precipitation_daily",
-    managed_dataset_id: str = "chirps3_precipitation_daily_sle",
+    managed_dataset_id: str = "chirps3_precipitation_daily",
     created_at: str = "2026-01-10T00:00:00+00:00",
     end: str = "2026-01-10",
 ) -> ArtifactRecord:
@@ -109,7 +109,7 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
 
     assert len(result.items) == 1
     dataset = result.items[0]
-    assert dataset.dataset_id == "chirps3_precipitation_daily_sle"
+    assert dataset.dataset_id == "chirps3_precipitation_daily"
     assert dataset.source_dataset_id == "chirps3_precipitation_daily"
     assert dataset.period_type == "daily"
     assert dataset.units == "mm"
@@ -120,10 +120,10 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
 
 
 def test_dataset_links_include_stac_for_published_zarr() -> None:
-    links = services._dataset_links("chirps3_precipitation_daily_sle", _artifact(artifact_id="a1"))
+    links = services._dataset_links("chirps3_precipitation_daily", _artifact(artifact_id="a1"))
 
     assert any(
-        link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily_sle" for link in links
+        link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links
     )
 
 
@@ -133,8 +133,8 @@ def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
     netcdf = _artifact(artifact_id="a2")
     netcdf.format = ArtifactFormat.NETCDF
 
-    unpublished_links = services._dataset_links("chirps3_precipitation_daily_sle", unpublished)
-    netcdf_links = services._dataset_links("chirps3_precipitation_daily_sle", netcdf)
+    unpublished_links = services._dataset_links("chirps3_precipitation_daily", unpublished)
+    netcdf_links = services._dataset_links("chirps3_precipitation_daily", netcdf)
 
     assert all(link.rel != "stac" for link in unpublished_links)
     assert all(link.rel != "stac" for link in netcdf_links)
@@ -164,13 +164,13 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
 
     assert result.kind == "IngestionList"
     assert [item.ingestion_id for item in result.items] == ["a2", "a1"]
-    assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily_sle"
+    assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily"
 
 
-def test_managed_dataset_id_uses_stored_collection_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_managed_dataset_id_is_derived_from_dataset_id(monkeypatch: pytest.MonkeyPatch) -> None:
     artifact = _artifact(artifact_id="a1")
 
-    assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily_sle"
+    assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily"
 
 
 def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:

@@ -183,7 +183,7 @@ def _collection_id_for(record: ArtifactRecord) -> str:
 
 def managed_dataset_id_for(record: ArtifactRecord) -> str:
     """Return the stable managed dataset id for a stored record."""
-    return record.publication.collection_id or _collection_id_for(record)
+    return _collection_id_for(record)
 
 
 def _native_dataset_href(dataset_id: str) -> str:

@@ -34,7 +34,7 @@ def _artifact(
     dataset_id: str = "chirps3_precipitation_daily",
     dataset_name: str = "CHIRPS3 precipitation",
     variable: str = "precip",
-    managed_dataset_id: str = "chirps3_precipitation_daily_sle",
+    managed_dataset_id: str = "chirps3_precipitation_daily",
     status: PublicationStatus = PublicationStatus.PUBLISHED,
     format: ArtifactFormat = ArtifactFormat.ZARR,
     path: str | None = "/tmp/chirps3_precipitation_daily.zarr",
@@ -135,7 +135,7 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
         "_build_collection_with_xstac",
         lambda **_: {
             "type": "Collection",
-            "id": "chirps3_precipitation_daily_sle",
+            "id": "chirps3_precipitation_daily",
             "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
             "cube:dimensions": {
                 "x": {
@@ -176,13 +176,13 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     )
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["type"] == "Collection"
     assert payload["description"] == "Published GeoZarr dataset for CHIRPS3 precipitation"
-    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily_sle")
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily")
     assert payload["assets"]["zarr"]["xarray:open_kwargs"] == {"consolidated": True}
     assert payload["extent"]["temporal"]["interval"] == [["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]]
     assert payload["cube:dimensions"]["x"]["step"] == 0.05
@@ -214,7 +214,7 @@ def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: py
         "_build_collection_with_xstac",
         lambda **_: {
             "type": "Collection",
-            "id": "chirps3_precipitation_daily_sle",
+            "id": "chirps3_precipitation_daily",
             "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
             "cube:dimensions": {"time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}},
             "cube:variables": {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}},
@@ -224,11 +224,11 @@ def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: py
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["links"][0]["href"] == "https://climate.example.org/stac/collections/chirps3_precipitation_daily_sle"
+    assert payload["links"][0]["href"] == "https://climate.example.org/stac/collections/chirps3_precipitation_daily"
 
 
 def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -237,7 +237,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
         dataset_id="era5land_temperature_hourly",
         dataset_name="ERA5-Land temperature",
         variable="t2m",
-        managed_dataset_id="era5land_temperature_hourly_sle",
+        managed_dataset_id="era5land_temperature_hourly",
         path="/tmp/era5land_temperature_hourly.zarr",
         temporal_start="2026-01-01T00",
         temporal_end="2026-01-01T12",
@@ -257,7 +257,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
         "_build_collection_with_xstac",
         lambda **_: {
             "type": "Collection",
-            "id": "era5land_temperature_hourly_sle",
+            "id": "era5land_temperature_hourly",
             "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
             "cube:dimensions": {
                 "valid_time": {"type": "temporal", "extent": ["2026-01-01T00", "2026-01-01T12"]},
@@ -269,7 +269,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/era5land_temperature_hourly_sle")
+    response = client.get("/stac/collections/era5land_temperature_hourly")
 
     assert response.status_code == 200
     payload = response.json()
@@ -297,7 +297,7 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
         "_build_collection_with_xstac",
         lambda **_: {
             "type": "Collection",
-            "id": "chirps3_precipitation_daily_sle",
+            "id": "chirps3_precipitation_daily",
             "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
             "cube:dimensions": {"time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}},
             "cube:variables": {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}},
@@ -307,11 +307,11 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily_sle/0")
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily/0")
 
 
 def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
@@ -333,7 +333,7 @@ def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
         "_build_collection_with_xstac",
         lambda **_: {
             "type": "Collection",
-            "id": "chirps3_precipitation_daily_sle",
+            "id": "chirps3_precipitation_daily",
             "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
             "cube:dimensions": {"time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}},
             "cube:variables": {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}},
@@ -344,11 +344,11 @@ def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
     monkeypatch.setattr(stac_services, "_is_pyramid_zarr", lambda _: True)
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily_sle/0")
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily/0")
 
 
 def test_collection_returns_404_for_unknown_dataset(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -380,7 +380,7 @@ def test_catalog_prefers_latest_artifact_per_managed_dataset(
     payload = response.json()
     child_links = [link for link in payload["links"] if link["rel"] == "child"]
     assert len(child_links) == 1
-    assert "chirps3_precipitation_daily_sle" in child_links[0]["href"]
+    assert "chirps3_precipitation_daily" in child_links[0]["href"]
 
 
 def test_catalog_sorts_child_links_by_managed_dataset_id(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -389,13 +389,13 @@ def test_catalog_sorts_child_links_by_managed_dataset_id(client: TestClient, mon
         "list_artifacts",
         lambda: SimpleNamespace(
             items=[
-                _artifact(artifact_id="a1", managed_dataset_id="worldpop_population_yearly_sle"),
+                _artifact(artifact_id="a1", managed_dataset_id="worldpop_population_yearly"),
                 _artifact(
                     artifact_id="a2",
                     dataset_id="aa_dataset",
                     dataset_name="AA Dataset",
                     variable="value",
-                    managed_dataset_id="aa_dataset_sle",
+                    managed_dataset_id="aa_dataset",
                     path="/tmp/aa_dataset.zarr",
                 ),
             ]
@@ -419,7 +419,7 @@ def test_build_collection_with_xstac_normalizes_pystac_collection(
 
     artifact = _artifact(artifact_id="a1")
     template = pystac.Collection(
-        id="chirps3_precipitation_daily_sle",
+        id="chirps3_precipitation_daily",
         description="template",
         extent=pystac.Extent(
             spatial=pystac.SpatialExtent([[1.0, 2.0, 3.0, 4.0]]),
@@ -438,7 +438,7 @@ def test_build_collection_with_xstac_normalizes_pystac_collection(
 
     assert isinstance(payload, dict)
     assert payload["type"] == "Collection"
-    assert payload["id"] == "chirps3_precipitation_daily_sle"
+    assert payload["id"] == "chirps3_precipitation_daily"
 
 
 def test_collection_reuses_cached_xstac_payload(
@@ -478,8 +478,8 @@ def test_collection_reuses_cached_xstac_payload(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    first_response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
-    second_response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    first_response = client.get("/stac/collections/chirps3_precipitation_daily")
+    second_response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
@@ -537,15 +537,15 @@ def test_collection_preserves_template_links_when_xstac_mutates_template(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
     links = {link["rel"]: link["href"] for link in payload["links"]}
-    assert links["self"].endswith("/stac/collections/chirps3_precipitation_daily_sle")
+    assert links["self"].endswith("/stac/collections/chirps3_precipitation_daily")
     assert links["root"].endswith("/stac/catalog.json")
     assert links["parent"].endswith("/stac/catalog.json")
-    assert links["alternate"].endswith("/datasets/chirps3_precipitation_daily_sle")
+    assert links["alternate"].endswith("/datasets/chirps3_precipitation_daily")
 
 
 def test_collection_returns_500_for_missing_artifact_store_metadata(
@@ -555,7 +555,7 @@ def test_collection_returns_500_for_missing_artifact_store_metadata(
     monkeypatch.setattr(ingestion_services, "list_artifacts", lambda: SimpleNamespace(items=[artifact]))
     monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 500
     assert "no readable storage path metadata" in response.json()["detail"]
@@ -579,7 +579,7 @@ def test_collection_returns_503_when_zarr_store_cannot_be_opened(
         raise_file_not_found,
     )
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily_sle")
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 503
     assert "temporarily unavailable" in response.json()["detail"]
@@ -587,7 +587,7 @@ def test_collection_returns_503_when_zarr_store_cannot_be_opened(
 
 def test_build_collection_with_xstac_reads_normalised_zarr_coordinates(tmp_path: Path) -> None:
     """STAC collection metadata is derived correctly from a normalised longitude/latitude/time store."""
-    zarr_path = tmp_path / "chirps3_precipitation_daily_sle.zarr"
+    zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
     ds = xr.Dataset(
         {"precip": (["time", "latitude", "longitude"], np.ones((5, 3, 3), dtype="float32"))},
         coords={
@@ -601,7 +601,7 @@ def test_build_collection_with_xstac_reads_normalised_zarr_coordinates(tmp_path:
     artifact = _artifact(artifact_id="a1", path=str(zarr_path))
 
     template = pystac.Collection(
-        id="chirps3_precipitation_daily_sle",
+        id="chirps3_precipitation_daily",
         description="test",
         extent=pystac.Extent(
             spatial=pystac.SpatialExtent([[1.0, 2.0, 3.0, 4.0]]),
