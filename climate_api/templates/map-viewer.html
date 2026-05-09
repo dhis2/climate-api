@@ -433,7 +433,8 @@
 
         // Pass the STAC spatial bbox as explicit bounds so ZarrLayer positions
         // the layer correctly for projected-CRS stores (e.g. EPSG:25833).
-        // extent.spatial.bbox is always in WGS84 (reprojected at ingest time).
+        // WGS84 for datasets ingested after spatial_wgs84 was introduced; legacy
+        // records without it fall back to native-CRS coordinates.
         const stacBbox = collection.extent?.spatial?.bbox?.[0] ?? null;
 
         let cm;
