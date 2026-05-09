@@ -431,6 +431,11 @@
         timeDimKey = getTimeDimKey(dimensions);
         timeSteps = buildTimeSteps(dimensions);
 
+        // Always pass the STAC spatial bbox as explicit bounds so ZarrLayer
+        // positions the layer in WGS84 regardless of the store's native CRS.
+        // The API guarantees extent.spatial.bbox is always in WGS84.
+        const stacBbox = collection.extent?.spatial?.bbox?.[0] ?? null;
+
         let cm;
         try {
           cm = buildColormap(colormapName);
@@ -447,6 +452,7 @@
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
+            ...(stacBbox !== null && { bounds: stacBbox }),
           });
           map.addLayer(activeLayer);
           for (const layer of map.getStyle().layers) {
