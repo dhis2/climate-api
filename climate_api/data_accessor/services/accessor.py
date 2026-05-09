@@ -59,9 +59,12 @@ def get_data(
 
 def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
     """Return temporal and spatial coverage metadata for downloaded data."""
+    from climate_api import config as api_config
+
+    native_crs = api_config.get_crs() or "EPSG:4326"
     ds = get_data(dataset)
     try:
-        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]))
+        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]), native_crs=native_crs)
     finally:
         ds.close()
 

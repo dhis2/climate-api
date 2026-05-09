@@ -433,9 +433,9 @@
 
         // Pass the STAC spatial bbox as explicit bounds so ZarrLayer positions
         // the layer correctly for projected-CRS stores (e.g. EPSG:25833).
-        // WGS84 for datasets ingested after spatial_wgs84 was introduced; legacy
-        // records without it fall back to native-CRS coordinates.
-        const stacBbox = collection.extent?.spatial?.bbox?.[0] ?? null;
+        // WGS84 for datasets with spatial_wgs84; legacy projected records fall
+        // back to native-CRS coordinates and may not position correctly.
+        const stacBbox = collection.extent?.spatial?.bbox?.[0];
 
         let cm;
         try {
@@ -453,7 +453,7 @@
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
-            ...(stacBbox !== null && { bounds: stacBbox }),
+            ...(stacBbox !== undefined && { bounds: stacBbox }),
           });
           map.addLayer(activeLayer);
           for (const layer of map.getStyle().layers) {
