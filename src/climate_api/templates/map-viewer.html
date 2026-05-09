@@ -502,6 +502,7 @@
       });
 
       map.on("load", () => {
+        map.setProjection({ type: "globe" });
         loadCatalog();
       });
     </script>
