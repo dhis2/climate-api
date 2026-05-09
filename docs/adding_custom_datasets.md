@@ -2,7 +2,7 @@
 
 This guide explains how to add a new dataset source to your Climate API instance — for example a national meteorological service, a regional satellite product, or a custom model output.
 
-The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `templates_dir` in your `climate-api.yaml` at a directory containing your own YAML template files.
+The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `plugins_dir` in your `climate-api.yaml` at a plugins directory. That directory serves two purposes: YAML dataset templates go in its `datasets/` subfolder, and Python download modules placed directly under it are importable by their dotted path (e.g. `mypackage.sources.download`) without installing them as a package.
 
 ## Overview
 
@@ -157,12 +157,12 @@ ingestion:
     method: mean # aggregation method (default: mean)
 ```
 
-## Step 3: Point the instance at your templates directory
+## Step 3: Point the instance at your plugins directory
 
-Add `templates_dir` to your `climate-api.yaml` and place your YAML file in the `datasets/` subfolder:
+Add `plugins_dir` to your `climate-api.yaml` and place your YAML file in the `datasets/` subfolder:
 
 ```
-templates/
+plugins/
 └── datasets/
     └── enacts_rainfall.yaml
 ```
@@ -174,10 +174,10 @@ extent:
   bbox: [28.8, -2.9, 30.9, -1.0]
 
 data_dir: ./data
-templates_dir: ./templates/
+plugins_dir: ./plugins/
 ```
 
-All `*.yaml` and `*.yml` files in `templates_dir/datasets/` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
+All `*.yaml` and `*.yml` files in `plugins_dir/datasets/` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
 
 ## Step 4: Ingest and publish
 

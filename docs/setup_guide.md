@@ -200,7 +200,7 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
   }' | jq
 ```
 
-ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner will not request data from the last 120 hours. This can be adjusted by placing a custom `era5_land.yaml` in `templates_dir/datasets/` — see `adding_custom_datasets.md`.
+ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner will not request data from the last 120 hours. This can be adjusted by placing a custom `era5_land.yaml` in `plugins_dir/datasets/` — see `adding_custom_datasets.md`.
 
 ---
 
