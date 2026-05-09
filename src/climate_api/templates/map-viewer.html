@@ -311,8 +311,9 @@
       const map = new maplibregl.Map({
         container: "map",
         style: "https://tiles.openfreemap.org/styles/positron",
-        center: [20, 5],
-        zoom: 2,
+        center: [20, 20],
+        zoom: 1.5,
+        projection: { type: "globe" },
         fitBoundsOptions: { padding: 40 },
         attributionControl: { compact: true },
       });
@@ -501,6 +502,13 @@
       });
 
       map.on("load", () => {
+        map.setFog({
+          "range": [0.5, 10],
+          "color": "#f8f8f8",
+          "horizon-blend": 0.08,
+          "space-color": "#d0e4f7",
+          "star-intensity": 0.0,
+        });
         loadCatalog();
       });
     </script>
