@@ -1,0 +1,287 @@
+{% extends "main.html" %}
+
+{% block tabs %}{{ super() }}
+
+<section class="home-hero">
+  <div class="home-hero__inner">
+    <p class="home-hero__eyebrow">Part of the DHIS2 Climate ecosystem</p>
+    <h1 class="home-hero__headline">
+      Climate &amp; Earth Observation<br>
+      data infrastructure for DHIS2
+    </h1>
+    <p class="home-hero__sub">
+      Download, process, and publish climate data through open standards.
+      Built for country deployments. Works with DHIS2, CHAP, QGIS,
+      and any OGC-compatible tool.
+    </p>
+    <div class="home-hero__ctas">
+      <a href="setup_guide/" class="home-btn home-btn--primary">Get started</a>
+      <a href="https://github.com/dhis2/climate-api" class="home-btn home-btn--outline">
+        GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="home-pipeline">
+  <div class="home-section__inner">
+    <h2 class="home-section__title">How it works</h2>
+    <p class="home-section__sub">
+      One platform connects upstream data sources to the tools your teams already use.
+    </p>
+
+    <div class="pipeline-diagram" role="img" aria-label="Climate API data pipeline: sources feed into Climate API which publishes to storage and consumers">
+      <!-- Sources -->
+      <div class="pipeline-col">
+        <p class="pipeline-col__label">Data sources</p>
+        <div class="pipeline-box pipeline-box--source">
+          <span class="pipeline-box__title">CHIRPS3</span>
+          <span class="pipeline-box__sub">Precipitation</span>
+        </div>
+        <div class="pipeline-box pipeline-box--source">
+          <span class="pipeline-box__title">ERA5-Land</span>
+          <span class="pipeline-box__sub">Temperature · Precipitation</span>
+        </div>
+        <div class="pipeline-box pipeline-box--source">
+          <span class="pipeline-box__title">WorldPop</span>
+          <span class="pipeline-box__sub">Population</span>
+        </div>
+        <div class="pipeline-box pipeline-box--source pipeline-box--dashed">
+          <span class="pipeline-box__title">Custom sources</span>
+          <span class="pipeline-box__sub">Any provider</span>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="pipeline-arrow" aria-hidden="true">
+        <svg viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+          <line x1="2" y1="10" x2="32" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="24,4 32,10 24,16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Climate API -->
+      <div class="pipeline-col pipeline-col--center">
+        <p class="pipeline-col__label">Climate API</p>
+        <div class="pipeline-box pipeline-box--api">
+          <span class="pipeline-box__title">Ingest</span>
+          <span class="pipeline-box__sub">Download for your extent and time range</span>
+        </div>
+        <div class="pipeline-box pipeline-box--api">
+          <span class="pipeline-box__title">Sync</span>
+          <span class="pipeline-box__sub">Keep datasets up to date automatically</span>
+        </div>
+        <div class="pipeline-box pipeline-box--api">
+          <span class="pipeline-box__title">Transform</span>
+          <span class="pipeline-box__sub">Resample, convert units, derive variables</span>
+        </div>
+        <div class="pipeline-box pipeline-box--api">
+          <span class="pipeline-box__title">Publish</span>
+          <span class="pipeline-box__sub">Expose via STAC, OGC API, and GeoZarr</span>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="pipeline-arrow" aria-hidden="true">
+        <svg viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+          <line x1="2" y1="10" x2="32" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="24,4 32,10 24,16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Storage & access -->
+      <div class="pipeline-col">
+        <p class="pipeline-col__label">Storage &amp; access</p>
+        <div class="pipeline-box pipeline-box--storage">
+          <span class="pipeline-box__title">GeoZarr</span>
+          <span class="pipeline-box__sub">Cloud-native chunked storage</span>
+        </div>
+        <div class="pipeline-box pipeline-box--storage">
+          <span class="pipeline-box__title">STAC catalogue</span>
+          <span class="pipeline-box__sub">Dataset discovery and metadata</span>
+        </div>
+        <div class="pipeline-box pipeline-box--storage">
+          <span class="pipeline-box__title">OGC API</span>
+          <span class="pipeline-box__sub">Standards-based data access</span>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="pipeline-arrow" aria-hidden="true">
+        <svg viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+          <line x1="2" y1="10" x2="32" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="24,4 32,10 24,16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Consumers -->
+      <div class="pipeline-col">
+        <p class="pipeline-col__label">Consumers</p>
+        <div class="pipeline-box pipeline-box--consumer">
+          <span class="pipeline-box__title">DHIS2 Apps</span>
+          <span class="pipeline-box__sub">Maps, Climate, Analytics</span>
+        </div>
+        <div class="pipeline-box pipeline-box--consumer">
+          <span class="pipeline-box__title">CHAP</span>
+          <span class="pipeline-box__sub">Modelling platform</span>
+        </div>
+        <div class="pipeline-box pipeline-box--consumer">
+          <span class="pipeline-box__title">QGIS · xarray</span>
+          <span class="pipeline-box__sub">Any OGC-compatible tool</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-features">
+  <div class="home-section__inner">
+    <h2 class="home-section__title">Key capabilities</h2>
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--blue">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <h3>Ingest &amp; sync</h3>
+        <p>Download datasets for any country extent and keep them current. Temporal sync appends only the missing periods, minimising re-download cost.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--green">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <h3>GeoZarr storage</h3>
+        <p>Datasets are stored as GeoZarr — cloud-native, chunked, and EPSG:4326. Served via HTTP range requests so any client can access individual chunks without downloading the full store.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--teal">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <h3>OGC API standards</h3>
+        <p>Datasets are published via pygeoapi as OGC API — Coverages, EDR, Features, and Collections. Any OGC-compatible client — QGIS, GDAL, web browsers — can access the data without custom integration.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--indigo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <h3>DHIS2 integration</h3>
+        <p>Aggregates raster data to org unit polygons and pushes data values directly to DHIS2. Works with the DHIS2 Maps App, Climate App, and CHAP Modelling Platform out of the box.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--orange">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </div>
+        <h3>Data sovereignty</h3>
+        <p>Deploy on any infrastructure — local, national cloud, or self-hosted. Storage backend is environment-variable configurable. No dependency on proprietary services. Countries retain full control of their data.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--purple">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+        </div>
+        <h3>Extensible</h3>
+        <p>Add custom dataset sources by writing a download function and a YAML template. Build derived datasets by resampling to any period type. Integrate as a Python library or via the REST API.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="home-personas">
+  <div class="home-section__inner">
+    <h2 class="home-section__title">Where do you want to start?</h2>
+    <div class="personas-grid">
+
+      <a href="setup_guide/" class="persona-card">
+        <div class="persona-card__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </div>
+        <div class="persona-card__body">
+          <h3>Deploying for my country</h3>
+          <p>Set up a Climate API instance, configure your spatial extent, and ingest your first dataset. Supports Docker and pip install.</p>
+          <span class="persona-card__link">Setup guide &rarr;</span>
+        </div>
+      </a>
+
+      <a href="user_guide/" class="persona-card">
+        <div class="persona-card__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="persona-card__body">
+          <h3>Accessing data from a running instance</h3>
+          <p>Discover datasets via STAC, open GeoZarr stores with xarray, query via OGC API, or visualise in QGIS — no setup required.</p>
+          <span class="persona-card__link">User guide &rarr;</span>
+        </div>
+      </a>
+
+      <a href="adding_custom_datasets/" class="persona-card">
+        <div class="persona-card__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+          </svg>
+        </div>
+        <div class="persona-card__body">
+          <h3>Building on the platform</h3>
+          <p>Add custom data sources, write processing transforms, or use Climate API as a dependency in your own application.</p>
+          <span class="persona-card__link">Custom datasets &rarr;</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<section class="home-ecosystem">
+  <div class="home-section__inner">
+    <p class="home-ecosystem__label">Part of the DHIS2 Climate ecosystem</p>
+    <div class="ecosystem-links">
+      <a href="https://climate-tools.dhis2.org/" class="ecosystem-link">
+        <span class="ecosystem-link__name">Climate Tools</span>
+        <span class="ecosystem-link__desc">Python tools for climate data access and processing</span>
+      </a>
+      <a href="https://chap.dhis2.org/" class="ecosystem-link">
+        <span class="ecosystem-link__name">CHAP</span>
+        <span class="ecosystem-link__desc">Climate-informed health analytics and modelling</span>
+      </a>
+      <a href="https://dhis2.org/climate/" class="ecosystem-link">
+        <span class="ecosystem-link__name">DHIS2 Climate</span>
+        <span class="ecosystem-link__desc">Climate and health data integration for DHIS2</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block content %}{% endblock %}
+{% block footer %}{{ super() }}{% endblock %}
