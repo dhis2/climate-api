@@ -32,6 +32,8 @@ extent:
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
   country_code: RWA
+
+data_dir: ./data
 ```
 
 Field reference:
@@ -42,6 +44,8 @@ Field reference:
 | `name`         | No  | Human-readable name shown in API responses |
 | `bbox`         | Yes | Bounding box as `[xmin, ymin, xmax, ymax]` in WGS84 decimal degrees |
 | `country_code` | No  | ISO 3166-1 alpha-3 code — required for WorldPop downloads |
+
+`data_dir` sets the directory where downloaded NetCDF files and Zarr stores are kept. It is required when a config file is present and is resolved relative to the config file. Each instance must have its own `data_dir` to avoid mixing data between deployments.
 
 To find the bounding box for a country, [bboxfinder.com](http://bboxfinder.com) is a useful tool.
 

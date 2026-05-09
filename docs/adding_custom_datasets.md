@@ -124,6 +124,22 @@ sync_availability:
 
 `latest_available_function` must accept a `dataset` dict and return a `datetime`. Omit `sync_availability` entirely for `static` datasets or when you always want to sync up to the requested end date.
 
+**Spatial and temporal extents** — declares what the source dataset covers. Used to validate ingest requests before hitting the provider:
+
+```yaml
+extents:
+  spatial:
+    bbox: [-180, -50, 180, 50]   # [xmin, ymin, xmax, ymax] in WGS84
+    crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
+  temporal:
+    begin: "1981-01-01"
+    end: "2030-12-31"            # omit if ongoing
+    trs: http://www.opengis.net/def/uom/ISO-8601/0/Gregorian
+    resolution: P1D              # ISO 8601 duration: PT1H, P1D, P1M, P1Y
+```
+
+If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, the API returns HTTP 400 immediately. Partial overlap is allowed — the provider will return data for the intersecting area.
+
 **Units**
 
 | Field           | Required | Description |
@@ -151,6 +167,7 @@ extent:
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
 
+data_dir: ./data
 datasets_dir: ./datasets/
 ```
 
