@@ -153,7 +153,7 @@ Published Zarr-backed managed datasets appear there as one STAC Collection per d
 
 Current STAC details:
 
-- multiscale datasets can expose `/zarr/{dataset_id}/0` as the canonical asset href when declared in template metadata
+- pyramid Zarr stores (detected by the presence of a `0/` level on disk) expose `/zarr/{dataset_id}/0` as the canonical asset href
 - temporal extents are normalized to RFC 3339 in both STAC and Datacube temporal extent fields
 - STAC collection `license` currently defaults to `various`
 - spatial `step` values are rounded for readability while preserving axis direction

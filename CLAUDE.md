@@ -47,12 +47,9 @@ Each YAML in `data/datasets/` defines a dataset template. The `ingestion` block 
 ingestion:
   function: dhis2eo.data.worldpop.pop_total.yearly.download
   default_params: {} # passed to the download function
-  multiscales: # optional — triggers pyramid build
-    levels: 4
-    method: mean
 ```
 
-If `multiscales` is present, `build_dataset_zarr` builds a multiscale Zarr pyramid. Otherwise it writes a flat chunked zarr with auto-computed chunk sizes tuned to the dataset's `period_type`.
+`build_dataset_zarr` automatically builds a multiscale Zarr pyramid when the spatial dimensions exceed 2048×2048 pixels. Otherwise it writes a flat chunked zarr with auto-computed chunk sizes tuned to the dataset's `period_type`.
 
 ## pygeoapi
 

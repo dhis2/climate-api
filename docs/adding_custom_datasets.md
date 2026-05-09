@@ -129,7 +129,6 @@ Omit `sync.availability` entirely for `static` datasets or when you always want 
 | ----- | -------- | ----------- |
 | `ingestion.function` | Yes | Dotted path to the download function |
 | `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
-| `ingestion.multiscales` | No | Build a multi-resolution Zarr pyramid (see below) |
 
 **Transforms** — applied after download, before writing to Zarr:
 
@@ -167,15 +166,7 @@ If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, 
 | `display.range` | No | `[min, max]` display range for the colormap |
 | `display.nodata` | No | No-data / fill value |
 
-**Multiscale pyramid** — for high-resolution raster datasets rendered in map viewers:
-
-```yaml
-ingestion:
-  function: mypackage.sources.enacts.download
-  multiscales:
-    levels: 4    # number of pyramid levels (default: 4)
-    method: mean # aggregation method (default: mean)
-```
+**Multiscale pyramid** — pyramid Zarr stores are built automatically when the ingested dataset's spatial dimensions exceed 2048×2048 pixels. No YAML configuration is required; the pyramid level count is derived from the data shape and coarsening always uses mean aggregation.
 
 ## Step 3: Point the instance at your plugins directory
 
