@@ -10,9 +10,8 @@ from climate_api.processing.resample import materialize_resampled_artifact
 def run_resample_process(
     *,
     source_dataset_id: str,
-    period_type: str,
+    frequency: str,
     method: str,
-    week_start: str,
     start: str,
     end: str | None,
     extent_id: str | None,
@@ -22,9 +21,8 @@ def run_resample_process(
     """Materialize one derived resampled dataset and return its artifact id plus dataset summary."""
     artifact = materialize_resampled_artifact(
         source_dataset_id=source_dataset_id,
-        period_type=period_type,
+        frequency=frequency,
         method=method,
-        week_start=week_start,
         start=start,
         end=end,
         extent_id=extent_id,

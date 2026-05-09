@@ -100,7 +100,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-02",
@@ -110,7 +110,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         publish=False,
     )
 
-    assert artifact.dataset_id == "era5land_temperature_hourly_daily_mean"
+    assert artifact.dataset_id == "era5land_temperature_hourly_1d_mean"
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-01-02"
     result = xr.open_zarr(artifact.path, consolidated=True)
@@ -121,25 +121,25 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         result.close()
 
 
-def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
+def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source_path = tmp_path / "source_daily_invalid_hierarchy.zarr"
-    time = np.array("2026-01-01", dtype="datetime64[D]") + np.arange(2)
+    source_path = tmp_path / "source_daily_dekadal.zarr"
+    time = np.array("2026-01-01", dtype="datetime64[D]") + np.arange(10)
     ds = xr.Dataset(
-        {"value": (("time", "lat", "lon"), np.ones((2, 1, 1), dtype=float))},
+        {"value": (("time", "lat", "lon"), np.ones((10, 1, 1), dtype=float))},
         coords={"time": time, "lat": [2.0], "lon": [1.0]},
     )
     ds.to_zarr(source_path, mode="w", consolidated=True)
 
     source_artifact = _artifact(
-        artifact_id="source-daily-invalid",
+        artifact_id="source-daily-dekadal",
         dataset_id="chirps3_precipitation_daily",
         managed_dataset_id="chirps3_precipitation_daily_sle",
         path=source_path,
         start="2026-01-01",
-        end="2026-01-02",
+        end="2026-01-10",
     )
 
     monkeypatch.setattr(
@@ -155,28 +155,35 @@ def test_materialize_resampled_artifact_rejects_invalid_period_hierarchy(
         lambda _: source_artifact,
     )
 
-    with pytest.raises(resample.HTTPException, match="Resampling requires a coarser target period than source"):
-        resample.materialize_resampled_artifact(
-            source_dataset_id="chirps3_precipitation_daily",
-            period_type="hourly",
-            method="sum",
-            start="2026-01-01T00",
-            end="2026-01-01T23",
-            extent_id="sle",
-            bbox=None,
-            overwrite=False,
-            publish=False,
-        )
+    artifact = resample.materialize_resampled_artifact(
+        source_dataset_id="chirps3_precipitation_daily",
+        frequency="10D",
+        method="sum",
+        start="2026-01-01",
+        end="2026-01-01",
+        extent_id="sle",
+        bbox=None,
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.dataset_id == "chirps3_precipitation_daily_10d_sum"
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [10.0]
+    finally:
+        result.close()
 
 
 def test_materialize_resampled_artifact_returns_404_when_source_dataset_template_is_missing() -> None:
     with pytest.raises(resample.HTTPException, match="Source dataset template 'missing_daily' not found"):
         resample.materialize_resampled_artifact(
             source_dataset_id="missing_daily",
-            period_type="weekly",
+            frequency="W-MON",
             method="sum",
-            start="2026-W02",
-            end="2026-W03",
+            start="2026-01-05",
+            end="2026-01-12",
             extent_id="sle",
             bbox=None,
             overwrite=False,
@@ -220,18 +227,19 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        period_type="weekly",
+        frequency="W-MON",
         method="sum",
-        start="2026-W02",
-        end="2026-W03",
+        start="2026-01-05",
+        end="2026-01-12",
         extent_id="sle",
         bbox=None,
         overwrite=False,
         publish=False,
     )
 
-    assert artifact.coverage.temporal.start == "2026-W02"
-    assert artifact.coverage.temporal.end == "2026-W02"
+    # W03 (Jan 12-18) is incomplete — only W02 (Jan 5-11) is covered fully
+    assert artifact.coverage.temporal.start == "2026-01-05"
+    assert artifact.coverage.temporal.end == "2026-01-05"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
@@ -275,18 +283,19 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        period_type="weekly",
+        frequency="W-MON",
         method="sum",
-        start="2026-W02",
-        end="2026-W03",
+        start="2026-01-05",
+        end="2026-01-12",
         extent_id="sle",
         bbox=None,
         overwrite=False,
         publish=False,
     )
 
-    assert artifact.coverage.temporal.start == "2026-W03"
-    assert artifact.coverage.temporal.end == "2026-W03"
+    # W02 (Jan 5-11) starts Wednesday Jan 7 — incomplete leading week dropped
+    assert artifact.coverage.temporal.start == "2026-01-12"
+    assert artifact.coverage.temporal.end == "2026-01-12"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
@@ -334,10 +343,10 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
     ):
         resample.materialize_resampled_artifact(
             source_dataset_id="chirps3_precipitation_daily",
-            period_type="weekly",
+            frequency="W-MON",
             method="sum",
-            start="2026-W10",
-            end="2026-W10",
+            start="2026-03-02",  # 2026-W10 — well beyond source data
+            end="2026-03-02",
             extent_id="sle",
             bbox=None,
             overwrite=False,
@@ -381,18 +390,19 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        period_type="monthly",
+        frequency="MS",
         method="sum",
-        start="2026-01",
-        end="2026-01",
+        start="2026-01-01",
+        end="2026-01-01",
         extent_id="sle",
         bbox=None,
         overwrite=False,
         publish=False,
     )
 
-    assert artifact.coverage.temporal.start == "2026-01"
-    assert artifact.coverage.temporal.end == "2026-01"
+    # Monthly resampled timestamp is the first of the month
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-01-01"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [31.0]
@@ -436,7 +446,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -453,7 +463,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
     )
     second = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -502,10 +512,10 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        period_type="weekly",
+        frequency="W-MON",
         method="sum",
-        start="2026-W02",
-        end="2026-W03",
+        start="2026-01-05",
+        end="2026-01-12",
         extent_id="sle",
         bbox=None,
         overwrite=False,
@@ -513,10 +523,10 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
     )
     second = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        period_type="weekly",
+        frequency="W-MON",
         method="sum",
-        start="2026-W02",
-        end="2026-W03",
+        start="2026-01-05",
+        end="2026-01-12",
         extent_id="sle",
         bbox=None,
         overwrite=False,
@@ -562,7 +572,7 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
 
     existing = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -587,7 +597,7 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
 
     reused = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -637,7 +647,7 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -655,7 +665,7 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
 
     second = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        period_type="daily",
+        frequency="1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
