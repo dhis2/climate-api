@@ -2,7 +2,7 @@
 
 This guide explains how to add a new dataset source to your Climate API instance — for example a national meteorological service, a regional satellite product, or a custom model output.
 
-The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `datasets_dir` in your `climate-api.yaml` at a directory containing your own YAML template files.
+The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `templates_dir` in your `climate-api.yaml` at a directory containing your own YAML template files.
 
 ## Overview
 
@@ -159,7 +159,7 @@ ingestion:
 
 ## Step 3: Point the instance at your templates directory
 
-Add `datasets_dir` to your `climate-api.yaml`:
+Add `templates_dir` to your `climate-api.yaml`:
 
 ```yaml
 extent:
@@ -168,10 +168,10 @@ extent:
   bbox: [28.8, -2.9, 30.9, -1.0]
 
 data_dir: ./data
-datasets_dir: ./datasets/
+templates_dir: ./datasets/
 ```
 
-All `*.yaml` and `*.yml` files in `datasets_dir` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
+All `*.yaml` and `*.yml` files in `templates_dir` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
 
 ## Step 4: Ingest and publish
 

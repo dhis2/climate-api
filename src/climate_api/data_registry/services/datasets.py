@@ -23,7 +23,7 @@ def list_datasets() -> list[dict[str, Any]]:
     """Load all dataset templates and return a flat list.
 
     Built-in templates from climate_api/data/datasets/ are always loaded. When
-    datasets_dir is set in CLIMATE_API_CONFIG, templates from that directory are
+    templates_dir is set in CLIMATE_API_CONFIG, templates from that directory are
     merged on top — a custom template with the same id overrides the built-in one.
 
     CONFIGS_DIR (test override via monkeypatch) bypasses this and loads only
@@ -34,14 +34,14 @@ def list_datasets() -> list[dict[str, Any]]:
 
     merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_builtin_datasets()}
 
-    config_datasets_dir = api_config.get_config().get("datasets_dir")
-    if config_datasets_dir:
-        if not isinstance(config_datasets_dir, (str, Path)):
+    config_templates_dir = api_config.get_config().get("templates_dir")
+    if config_templates_dir:
+        if not isinstance(config_templates_dir, (str, Path)):
             raise ValueError(
-                f"datasets_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_datasets_dir).__name__}"
+                f"templates_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_templates_dir).__name__}"
             )
         config_path = api_config.get_config_path()
-        resolved = (config_path.parent / config_datasets_dir).resolve() if config_path else Path(config_datasets_dir)
+        resolved = (config_path.parent / config_templates_dir).resolve() if config_path else Path(config_templates_dir)
         for dataset in _load_from_dir(resolved):
             merged[dataset["id"]] = dataset
 

@@ -10,4 +10,4 @@ extent:
 
 data_dir: ./data   # required — directory for downloaded NetCDF files and Zarr stores
 
-# datasets_dir: ./datasets/   # optional — custom templates merged with built-ins
+# templates_dir: ./templates/   # optional — custom dataset/processing templates merged with built-ins
