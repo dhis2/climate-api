@@ -40,7 +40,7 @@ Operational note:
 
 ## 1. Discover the configured extent
 
-The configured extent is setup-time Climate API configuration. It is read-only at runtime and is identified by `extent_id`.
+The configured extent is setup-time Climate API configuration. It is read-only at runtime.
 
 Example:
 
@@ -52,7 +52,6 @@ Example response:
 
 ```json
 {
-  "extent_id": "sle",
   "name": "Sierra Leone",
   "description": null,
   "bbox": [-13.5, 6.9, -10.1, 10.0]
@@ -61,23 +60,21 @@ Example response:
 
 What this means:
 
-- `extent_id` is the public Climate API handle for a configured spatial extent
 - `bbox` is the resolved spatial extent exposed publicly
 - provider-specific hints may exist internally in extent config, but they are not part of the public extent response
 
 ## 2. Ingest a dataset
 
-The public ingestion contract now takes:
+The public ingestion contract takes:
 
 - `dataset_id`
 - `start`
 - optional `end`
-- optional `extent_id`
 - `overwrite`
 - `prefer_zarr`
 - `publish`
 
-Raw `bbox` and `country_code` are no longer part of the public ingestion payload.
+Raw `bbox` and `country_code` are not part of the public ingestion payload — the API resolves them from the configured extent.
 
 ### Example: CHIRPS3
 
@@ -88,7 +85,6 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "chirps3_precipitation_daily",
     "start": "2024-01-01",
     "end": "2024-01-31",
-    "extent_id": "sle",
     "overwrite": false,
     "prefer_zarr": true,
     "publish": true
@@ -104,7 +100,6 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "worldpop_population_yearly",
     "start": "2020",
     "end": "2020",
-    "extent_id": "sle",
     "overwrite": false,
     "prefer_zarr": true,
     "publish": true
@@ -118,7 +113,7 @@ Example response:
   "ingestion_id": "a7e06c93-ba78-4c74-b772-160927fdb463",
   "status": "completed",
   "dataset": {
-    "dataset_id": "chirps3_precipitation_daily_sle",
+    "dataset_id": "chirps3_precipitation_daily",
     "source_dataset_id": "chirps3_precipitation_daily",
     "dataset_name": "Total precipitation (CHIRPS3)",
     "short_name": "Total precipitation",
@@ -143,22 +138,22 @@ Example response:
     "last_updated": "2026-04-01T09:03:28.691120Z",
     "links": [
       {
-        "href": "/datasets/chirps3_precipitation_daily_sle",
+        "href": "/datasets/chirps3_precipitation_daily",
         "rel": "self",
         "title": "Dataset detail"
       },
       {
-        "href": "/zarr/chirps3_precipitation_daily_sle",
+        "href": "/zarr/chirps3_precipitation_daily",
         "rel": "zarr",
         "title": "Zarr store"
       },
       {
-        "href": "/stac/collections/chirps3_precipitation_daily_sle",
+        "href": "/stac/collections/chirps3_precipitation_daily",
         "rel": "stac",
         "title": "STAC collection"
       },
       {
-        "href": "/ogcapi/collections/chirps3_precipitation_daily_sle",
+        "href": "/ogcapi/collections/chirps3_precipitation_daily",
         "rel": "ogc-collection",
         "title": "OGC collection"
       }
@@ -235,7 +230,7 @@ Example response:
   "kind": "DatasetList",
   "items": [
     {
-      "dataset_id": "chirps3_precipitation_daily_sle",
+      "dataset_id": "chirps3_precipitation_daily",
       "source_dataset_id": "chirps3_precipitation_daily",
       "dataset_name": "Total precipitation (CHIRPS3)",
       "short_name": "Total precipitation",
@@ -260,17 +255,17 @@ Example response:
       "last_updated": "2026-04-01T09:03:28.691120Z",
       "links": [
         {
-          "href": "/datasets/chirps3_precipitation_daily_sle",
+          "href": "/datasets/chirps3_precipitation_daily",
           "rel": "self",
           "title": "Dataset detail"
         },
         {
-          "href": "/zarr/chirps3_precipitation_daily_sle",
+          "href": "/zarr/chirps3_precipitation_daily",
           "rel": "zarr",
           "title": "Zarr store"
         },
         {
-          "href": "/ogcapi/collections/chirps3_precipitation_daily_sle",
+          "href": "/ogcapi/collections/chirps3_precipitation_daily",
           "rel": "ogc-collection",
           "title": "OGC collection"
         }
@@ -298,7 +293,7 @@ What this means:
 Example:
 
 ```bash
-curl -s http://127.0.0.1:8000/datasets/chirps3_precipitation_daily_sle | jq
+curl -s http://127.0.0.1:8000/datasets/chirps3_precipitation_daily | jq
 ```
 
 What this adds beyond the list response:
@@ -316,8 +311,8 @@ If the latest managed dataset version is Zarr-backed, the canonical native raw-d
 Examples:
 
 ```bash
-curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle | jq
-curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle/zarr.json | jq
+curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily | jq
+curl -s http://127.0.0.1:8000/zarr/chirps3_precipitation_daily/zarr.json | jq
 ```
 
 The listing response exposes:
@@ -343,15 +338,15 @@ STAC examples:
 
 ```bash
 curl -s "http://127.0.0.1:8000/stac/catalog.json" | jq
-curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle" | jq
+curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily" | jq
 ```
 
 Examples:
 
 ```bash
 curl -s "http://127.0.0.1:8000/ogcapi/collections?f=json" | jq
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle?f=json" | jq
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle/coverage?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily/coverage?f=json" | jq
 ```
 
 What this means:
@@ -396,13 +391,13 @@ Configured availability policies:
 Example dry-run plan:
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily/plan?end=2024-02-10" | jq
 ```
 
 Example execution:
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily" \
   -H "Content-Type: application/json" \
   -d '{"end":"2024-02-10","prefer_zarr":true,"publish":true}' | jq
 ```
@@ -418,9 +413,6 @@ These commands assume the API is running on `http://127.0.0.1:8000` and that
 curl -s "http://127.0.0.1:8000/extent" | jq
 ```
 
-Use an extent that has enough spatial metadata for the selected dataset. The
-examples below use `sle`.
-
 ### 2. Create an initial CHIRPS3 managed dataset
 
 ```bash
@@ -428,7 +420,6 @@ curl -s -X POST "http://127.0.0.1:8000/ingestions" \
   -H "Content-Type: application/json" \
   -d '{
     "dataset_id": "chirps3_precipitation_daily",
-    "extent_id": "sle",
     "start": "2024-01-01",
     "end": "2024-01-31",
     "prefer_zarr": true,
@@ -439,23 +430,23 @@ curl -s -X POST "http://127.0.0.1:8000/ingestions" \
 Expected:
 
 - `status` is `completed`
-- `dataset.dataset_id` is `chirps3_precipitation_daily_sle`
+- `dataset.dataset_id` is `chirps3_precipitation_daily`
 - `dataset.extent.temporal.end` is `2024-01-31`
 
 ### 3. Inspect the managed dataset and publication
 
 ```bash
-curl -s "http://127.0.0.1:8000/datasets/chirps3_precipitation_daily_sle" | jq
-curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily_sle" | jq
-curl -s "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_sle" | jq
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle?f=json" | jq
-curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily_sle/coverage?f=json" | jq
+curl -s "http://127.0.0.1:8000/datasets/chirps3_precipitation_daily" | jq
+curl -s "http://127.0.0.1:8000/stac/collections/chirps3_precipitation_daily" | jq
+curl -s "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily?f=json" | jq
+curl -s "http://127.0.0.1:8000/ogcapi/collections/chirps3_precipitation_daily/coverage?f=json" | jq
 ```
 
 ### 4. Dry-run a CHIRPS3 append sync
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-10" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily/plan?end=2024-02-10" | jq
 ```
 
 Expected planning response:
@@ -483,7 +474,7 @@ Where these timestamps come from:
 - `delta_end` is the resolved target period after any availability clamping
 
 If `end` is omitted, the planner defaults to the current date. For example, calling
-`/sync/chirps3_precipitation_daily_sle/plan` on `2026-04-20` after ingesting
+`/sync/chirps3_precipitation_daily/plan` on `2026-04-20` after ingesting
 through `2024-01-31` first resolves the target from today's date, then applies
 CHIRPS3 availability. Because CHIRPS3 daily sync is configured to use complete
 released source months, the target may be clamped below today's date and
@@ -499,7 +490,7 @@ If CHIRPS3 currently has complete released data through `2026-03-31` and you ask
 for:
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2026-04-21" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily/plan?end=2026-04-21" | jq
 ```
 
 Expected:
@@ -511,7 +502,7 @@ Expected:
 ### 5. Execute the CHIRPS3 sync
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily" \
   -H "Content-Type: application/json" \
   -d '{
     "end": "2024-02-10",
@@ -528,14 +519,14 @@ Expected:
 - `sync_detail.delta_start` is `2024-02-01`
 - `sync_detail.delta_end` is `2024-02-10`
 - `sync_detail.target_end` is `2024-02-10`
-- the returned `dataset.dataset_id` is still `chirps3_precipitation_daily_sle`
+- the returned `dataset.dataset_id` is still `chirps3_precipitation_daily`
 - the returned dataset has a newer version in `versions`
 - the returned dataset coverage ends at `2024-02-10`, even if the upstream downloader cached the full February source month
 
 You can then extend the same managed dataset again:
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle" \
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily" \
   -H "Content-Type: application/json" \
   -d '{
     "end": "2024-02-20",
@@ -557,7 +548,7 @@ Expected:
 Run the same plan again with the current end:
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_sle/plan?end=2024-02-20" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily/plan?end=2024-02-20" | jq
 ```
 
 Expected:
@@ -575,7 +566,6 @@ curl -s -X POST "http://127.0.0.1:8000/ingestions" \
   -H "Content-Type: application/json" \
   -d '{
     "dataset_id": "worldpop_population_yearly",
-    "extent_id": "sle",
     "start": "2020",
     "end": "2020",
     "prefer_zarr": true,
@@ -586,7 +576,7 @@ curl -s -X POST "http://127.0.0.1:8000/ingestions" \
 Plan a later release:
 
 ```bash
-curl -s "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle/plan?end=2021" | jq
+curl -s "http://127.0.0.1:8000/sync/worldpop_population_yearly/plan?end=2021" | jq
 ```
 
 Expected:
@@ -599,7 +589,7 @@ Expected:
 Execute the release sync:
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/sync/worldpop_population_yearly_sle" \
+curl -s -X POST "http://127.0.0.1:8000/sync/worldpop_population_yearly" \
   -H "Content-Type: application/json" \
   -d '{
     "end": "2021",
@@ -612,7 +602,7 @@ Expected:
 
 - `status` is `completed`
 - `sync_detail.action` is `rematerialize`
-- the managed dataset id remains `worldpop_population_yearly_sle`
+- `dataset.dataset_id` is `worldpop_population_yearly`
 
 ## Summary
 

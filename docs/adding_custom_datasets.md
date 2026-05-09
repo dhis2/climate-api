@@ -88,7 +88,7 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 | Field        | Required | Description |
 | ------------ | -------- | ----------- |
-| `id`         | Yes | Unique template identifier. Dataset IDs in the API are `{id}_{extent_id}`, e.g. `enacts_rainfall_daily_rwa` |
+| `id`         | Yes | Unique template identifier. This becomes the dataset ID in the API, e.g. `enacts_rainfall_daily` |
 | `name`       | Yes | Full human-readable name shown in API responses and STAC metadata |
 | `short_name` | No  | Short label used in compact displays |
 | `variable`   | Yes | Name of the data variable in the Zarr store (e.g. `precip`, `t2m`, `rainfall`) |
@@ -200,7 +200,6 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "enacts_rainfall_daily",
     "start": "2024-01-01",
     "end": "2024-01-31",
-    "extent_id": "rwa",
     "prefer_zarr": true,
     "publish": true
   }' | jq
