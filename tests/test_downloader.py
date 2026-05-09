@@ -409,7 +409,7 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
 
 
 def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Source coordinates (lat/lon, valid_time, x/y) are renamed to longitude/latitude/time."""
+    """Source coordinates (lat/lon, valid_time) are renamed to x/y/time."""
     # Simulate ERA5-Land source with valid_time and lon/lat
     ds_era5 = xr.Dataset(
         {"t2m": (["valid_time", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
@@ -436,8 +436,8 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
     result = open_zarr_dataset(str(tmp_path / "era5land_temperature_hourly.zarr"))
     try:
         assert "time" in result.coords
-        assert "longitude" in result.coords
-        assert "latitude" in result.coords
+        assert "x" in result.coords
+        assert "y" in result.coords
         assert "valid_time" not in result.coords
         assert "lat" not in result.coords
         assert "lon" not in result.coords
@@ -446,7 +446,7 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
 
 
 def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Source coordinates using x/y spatial names are renamed to longitude/latitude."""
+    """Source coordinates already named x/y are preserved as x/y."""
     ds_xy = xr.Dataset(
         {"precip": (["time", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
         coords={
@@ -472,10 +472,8 @@ def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monke
     result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
     try:
         assert "time" in result.coords
-        assert "longitude" in result.coords
-        assert "latitude" in result.coords
-        assert "x" not in result.coords
-        assert "y" not in result.coords
+        assert "x" in result.coords
+        assert "y" in result.coords
     finally:
         result.close()
 
@@ -514,7 +512,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
 def _make_fake_pyramid(ds: xr.Dataset, zarr_path: Path) -> Pyramid:
     """Return a Pyramid whose .dt.to_zarr writes a minimal two-level DataTree store."""
     level0 = ds
-    level1 = ds.coarsen(latitude=2, longitude=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
+    level1 = ds.coarsen(y=2, x=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
     dt = DataTree.from_dict({"0": level0, "1": level1})
     return Pyramid(datatree=dt, encoding={})
 
@@ -561,7 +559,7 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
 def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Pyramid zarr store uses canonical longitude/latitude/time coordinate names."""
+    """Pyramid zarr store uses canonical x/y/time coordinate names."""
     # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
@@ -580,8 +578,8 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     # The dataset handed to create_pyramid must already carry canonical names.
     assert len(received) == 1
     ds_in = received[0]
-    assert "longitude" in ds_in.coords
-    assert "latitude" in ds_in.coords
+    assert "x" in ds_in.coords
+    assert "y" in ds_in.coords
     assert "time" in ds_in.coords
     assert "lon" not in ds_in.coords
     assert "lat" not in ds_in.coords
@@ -589,8 +587,8 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     # The written store must also expose canonical names when opened.
     result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
     try:
-        assert "longitude" in result.coords
-        assert "latitude" in result.coords
+        assert "x" in result.coords
+        assert "y" in result.coords
         assert "time" in result.coords
     finally:
         result.close()
