@@ -35,17 +35,26 @@ def list_datasets() -> list[dict[str, Any]]:
 
     merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_builtin_datasets()}
 
-    config_plugins_dir = api_config.get_config().get("plugins_dir")
+    config = api_config.get_config()
+    if config.get("templates_dir"):
+        raise ValueError(
+            "CLIMATE_API_CONFIG uses the removed 'templates_dir' key. "
+            "Rename it to 'plugins_dir' and rename the directory from 'templates/' to 'plugins/'."
+        )
+    config_plugins_dir = config.get("plugins_dir")
     if config_plugins_dir:
         if not isinstance(config_plugins_dir, (str, Path)):
             raise ValueError(
                 f"plugins_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_plugins_dir).__name__}"
             )
         config_path = api_config.get_config_path()
-        root = (config_path.parent / config_plugins_dir).resolve() if config_path else Path(config_plugins_dir)
+        base = config_path.parent if config_path else Path()
+        root = (base / config_plugins_dir).resolve()
+        if not root.is_dir():
+            raise ValueError(f"plugins_dir '{root}' does not exist or is not a directory")
         root_str = str(root)
         if root_str not in sys.path:
-            sys.path.insert(0, root_str)
+            sys.path.append(root_str)
         datasets_subdir = root / "datasets"
         if datasets_subdir.is_dir():
             for dataset in _load_from_dir(datasets_subdir):
