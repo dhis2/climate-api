@@ -264,16 +264,67 @@
         {% endif %}
       </div>
 
+      <!-- Available templates -->
+      <div class="card">
+        <h2>Available dataset templates <span class="badge">{{ templates | length }}</span></h2>
+        {% if templates %}
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Variable</th>
+              <th>Period</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in templates %}
+            <tr>
+              <td>{{ t.name }}</td>
+              <td>{{ t.variable }}</td>
+              <td>{{ t.period_type }}</td>
+              <td>
+                {% if t.source_url %}
+                <a href="{{ t.source_url }}">{{ t.source or t.id }}</a>
+                {% else %}
+                {{ t.source or '—' }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="note">No dataset templates found.</p>
+        {% endif %}
+      </div>
+
       <!-- Links -->
       <div class="card">
         <h2>Explore</h2>
         <ul class="links-list">
           <li>
             <span class="link-label"
+              ><a href="{{ base }}/manage">Manage</a></span
+            >
+            <span class="link-desc"
+              >Ingest and sync datasets without using the API directly</span
+            >
+          </li>
+          <li>
+            <span class="link-label"
               ><a href="{{ base }}/docs">API documentation</a></span
             >
             <span class="link-desc"
               >Interactive Swagger UI for all endpoints</span
+            >
+          </li>
+          <li>
+            <span class="link-label"
+              ><a href="{{ base }}/map">Map viewer</a></span
+            >
+            <span class="link-desc"
+              >Browse published datasets on an interactive map</span
             >
           </li>
           <li>

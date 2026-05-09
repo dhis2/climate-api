@@ -16,30 +16,32 @@ from climate_api.data_manager.services import downloader
 from climate_api.ingestions import services as ingestion_services
 
 
-def test_resolve_download_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    with tempfile.TemporaryDirectory() as override:
-        monkeypatch.setenv("CACHE_OVERRIDE", override)
-        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-        assert downloader._resolve_download_dir() == Path(override)
+def test_resolve_download_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nextent:\n  id: test\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert downloader._resolve_download_dir() == tmp_path / "data" / "downloads"
 
 
-def test_resolve_download_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_download_dir_uses_xdg_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
     with tempfile.TemporaryDirectory() as xdg:
-        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", xdg)
         assert downloader._resolve_download_dir() == Path(xdg) / "climate-api" / "downloads"
 
 
-def test_resolve_artifacts_dir_uses_cache_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    with tempfile.TemporaryDirectory() as override:
-        monkeypatch.setenv("CACHE_OVERRIDE", override)
-        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-        assert ingestion_services._resolve_artifacts_dir() == Path(override) / "artifacts"
+def test_resolve_artifacts_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nextent:\n  id: test\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert ingestion_services._resolve_artifacts_dir() == tmp_path / "data" / "artifacts"
 
 
-def test_resolve_artifacts_dir_uses_xdg_data_home(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_artifacts_dir_uses_xdg_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
     with tempfile.TemporaryDirectory() as xdg:
-        monkeypatch.delenv("CACHE_OVERRIDE", raising=False)
+        monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
         monkeypatch.setenv("XDG_DATA_HOME", xdg)
         assert ingestion_services._resolve_artifacts_dir() == Path(xdg) / "climate-api" / "artifacts"
 
@@ -145,6 +147,123 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
     assert exc_info.value.status_code == 502
     assert "Upstream dataset download failed: provider timeout" == str(exc_info.value.detail)
+
+
+# ---------------------------------------------------------------------------
+# _get_cache_prefix
+# ---------------------------------------------------------------------------
+
+
+def test_get_cache_prefix_uses_dataset_id() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}}
+    assert downloader._get_cache_prefix(dataset) == "chirps3_precipitation_daily"
+
+
+# ---------------------------------------------------------------------------
+# _validate_spatial_coverage
+# ---------------------------------------------------------------------------
+
+
+_CHIRPS3_EXTENTS: dict[str, Any] = {
+    "spatial": {"bbox": [-180, -50, 180, 50], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
+}
+_LIMITED_LON_EXTENTS: dict[str, Any] = {
+    "spatial": {"bbox": [-180, -90, 60, 90], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
+}
+
+
+def test_validate_spatial_coverage_passes_when_no_extents_declared() -> None:
+    dataset: dict[str, Any] = {"id": "worldpop_population_yearly", "ingestion": {}}
+    downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
+
+
+def test_validate_spatial_coverage_passes_when_no_bbox() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "extents": _CHIRPS3_EXTENTS}
+    downloader._validate_spatial_coverage(dataset, bbox=None)
+
+
+def test_validate_spatial_coverage_passes_when_template_bbox_malformed() -> None:
+    extents: dict[str, Any] = {"spatial": {"bbox": "not-a-list"}}
+    dataset: dict[str, Any] = {"id": "bad_template", "ingestion": {}, "extents": extents}
+    downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
+
+
+def test_validate_spatial_coverage_passes_when_bbox_inside_extents() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "extents": _CHIRPS3_EXTENTS}
+    downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
+
+
+def test_validate_spatial_coverage_raises_when_bbox_outside_lat_extents() -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {},
+        "extents": _CHIRPS3_EXTENTS,
+    }
+    with pytest.raises(HTTPException) as exc_info:
+        downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
+    assert "Latitude" in str(exc_info.value.detail)
+
+
+def test_validate_spatial_coverage_raises_when_bbox_outside_lon_extents() -> None:
+    dataset: dict[str, Any] = {
+        "id": "some_dataset",
+        "ingestion": {},
+        "extents": _LIMITED_LON_EXTENTS,
+    }
+    with pytest.raises(HTTPException) as exc_info:
+        downloader._validate_spatial_coverage(dataset, bbox=[70.0, -10.0, 90.0, 10.0])
+    assert exc_info.value.status_code == 400
+    assert "Longitude" in str(exc_info.value.detail)
+
+
+def test_download_dataset_validates_env_bbox_against_extents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Coverage validation uses the env fallback bbox when no bbox is passed in the request."""
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"function": "ignored.path"},
+        "extents": _CHIRPS3_EXTENTS,
+    }
+    monkeypatch.setenv("DOWNLOAD_BBOX", "4.5,57.9,31.1,71.2")
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=None,
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
+
+
+def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"function": "ignored.path"},
+        "extents": _CHIRPS3_EXTENTS,
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=[4.5, 57.9, 31.1, 71.2],
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
 
 
 # ---------------------------------------------------------------------------

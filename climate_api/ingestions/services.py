@@ -49,10 +49,11 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_artifacts_dir() -> Path:
-    # CACHE_OVERRIDE keeps existing Docker/dev deployments working unchanged.
-    override = os.getenv("CACHE_OVERRIDE")
-    if override:
-        return Path(override) / "artifacts"
+    from climate_api import config as api_config
+
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "artifacts"
     xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return xdg_data / "climate-api" / "artifacts"
 

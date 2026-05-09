@@ -2,7 +2,7 @@
 
 This guide explains how to add a new dataset source to your Climate API instance — for example a national meteorological service, a regional satellite product, or a custom model output.
 
-The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `datasets_dir` in your `climate-api.yaml` at a directory containing your own YAML template files.
+The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `templates_dir` in your `climate-api.yaml` at a directory containing your own YAML template files.
 
 ## Overview
 
@@ -124,6 +124,22 @@ sync_availability:
 
 `latest_available_function` must accept a `dataset` dict and return a `datetime`. Omit `sync_availability` entirely for `static` datasets or when you always want to sync up to the requested end date.
 
+**Spatial and temporal extents** — declares what the source dataset covers. Used to validate ingest requests before hitting the provider:
+
+```yaml
+extents:
+  spatial:
+    bbox: [-180, -50, 180, 50]   # [xmin, ymin, xmax, ymax] in WGS84
+    crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
+  temporal:
+    begin: "1981-01-01"
+    end: "2030-12-31"            # omit if ongoing
+    trs: http://www.opengis.net/def/uom/ISO-8601/0/Gregorian
+    resolution: P1D              # ISO 8601 duration: PT1H, P1D, P1M, P1Y
+```
+
+If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, the API returns HTTP 400 immediately. Partial overlap is allowed — the provider will return data for the intersecting area.
+
 **Units**
 
 | Field           | Required | Description |
@@ -143,7 +159,13 @@ ingestion:
 
 ## Step 3: Point the instance at your templates directory
 
-Add `datasets_dir` to your `climate-api.yaml`:
+Add `templates_dir` to your `climate-api.yaml` and place your YAML file in the `datasets/` subfolder:
+
+```
+templates/
+└── datasets/
+    └── enacts_rainfall.yaml
+```
 
 ```yaml
 extent:
@@ -151,10 +173,11 @@ extent:
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
 
-datasets_dir: ./datasets/
+data_dir: ./data
+templates_dir: ./templates/
 ```
 
-All `*.yaml` and `*.yml` files in `datasets_dir` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
+All `*.yaml` and `*.yml` files in `templates_dir/datasets/` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
 
 ## Step 4: Ingest and publish
 
