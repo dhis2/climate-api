@@ -41,9 +41,11 @@ def list_datasets() -> list[dict[str, Any]]:
                 f"templates_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_templates_dir).__name__}"
             )
         config_path = api_config.get_config_path()
-        resolved = (config_path.parent / config_templates_dir).resolve() if config_path else Path(config_templates_dir)
-        for dataset in _load_from_dir(resolved):
-            merged[dataset["id"]] = dataset
+        root = (config_path.parent / config_templates_dir).resolve() if config_path else Path(config_templates_dir)
+        datasets_subdir = root / "datasets"
+        if datasets_subdir.is_dir():
+            for dataset in _load_from_dir(datasets_subdir):
+                merged[dataset["id"]] = dataset
 
     return list(merged.values())
 
