@@ -22,6 +22,7 @@
       variables: ['t2m']
   transforms:
     - climate_api.transforms.convert_units
+    - climate_api.transforms.reproject_to_instance_crs
   units: kelvin
   convert_units: degC
   resolution: 9 km x 9 km
@@ -56,6 +57,7 @@
   transforms:
     - climate_api.transforms.deaccumulate_era5
     - climate_api.transforms.convert_units
+    - climate_api.transforms.reproject_to_instance_crs
   units: m
   convert_units: mm
   resolution: 9 km x 9 km
