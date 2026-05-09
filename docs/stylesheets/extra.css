@@ -50,13 +50,6 @@
   border: none;
 }
 
-.home-hero__tagline {
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.75);
-  margin: 0 0 1.2rem;
-}
-
 .home-hero__sub {
   font-size: 1.05rem;
   line-height: 1.7;
