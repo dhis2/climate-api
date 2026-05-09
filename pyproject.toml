@@ -2,20 +2,32 @@
 requires = ["uv_build>=0.9.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-root = ""
+
 [project]
 name = "climate-api"
-version = "0.1.0"
+version = "0.1.0a1"
 requires-python = ">=3.13"
-description = "Climate and Earth Observation data API for DHIS2"
+description = "Climate and Earth Observation data API"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "University of Oslo", email = "climate@dhis2.org" }]
+readme = "README.md"
+keywords = ["dhis2", "climate", "zarr", "stac", "geospatial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+]
 dependencies = [
     "fastapi>=0.100.0",
+    "jinja2>=3.1",
     "starlette>=0.27.0",
     "uvicorn>=0.41.0",
     "python-dotenv>=1.0.1",
     "pygeoapi>=0.22.0",
     "pystac>=1.10,<2",
-    "dhis2eo @ git+https://github.com/dhis2/dhis2eo.git@v1.2.0",
-    "dhis2-client @ git+https://github.com/dhis2/dhis2-python-client.git@V0.3.0",
     "geojson-pydantic>=2.1.0",
     "httpx>=0.28.1",
     "earthkit-transforms==0.5.*",
@@ -25,6 +37,10 @@ dependencies = [
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*",
 ]
+
+[project.urls]
+Repository = "https://github.com/dhis2/climate-api"
+Documentation = "https://github.com/dhis2/climate-api/tree/main/docs"
 
 [project.scripts]
 climate-api = "climate_api.cli:main"
@@ -44,7 +60,7 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
 "**/__init__.py" = ["D104"]
-"src/**/*.py" = ["D102", "D105", "D107"]
+"climate_api/**/*.py" = ["D102", "D105", "D107"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -63,18 +79,18 @@ check_untyped_defs = true
 no_implicit_optional = true
 warn_unused_ignores = true
 strict_equality = true
-mypy_path = ["src"]
+mypy_path = ["."]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["dhis2eo.*", "dhis2_client.*", "pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
+module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
 ignore_missing_imports = true
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["climate_api", "tests"]
 exclude = ["**/.venv"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
@@ -97,7 +113,7 @@ dev = [
     "mypy>=1.19.1",
     "pandas-stubs>=2.3,<3",
     "pyright>=1.1.408",
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "ruff>=0.15.2",
     "types-shapely>=2.1,<3",
 ]

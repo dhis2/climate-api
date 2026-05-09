@@ -1,0 +1,76 @@
+site_name: Open Climate Service
+site_description: Climate data tailored for your country, ready for climate-smart decisions
+site_url: https://dhis2.github.io/climate-api/
+repo_url: https://github.com/dhis2/climate-api
+repo_name: dhis2/climate-api
+docs_dir: docs
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+validation:
+  links:
+    not_found: warn
+
+nav:
+  - Home: index.md
+  - Get started: setup_guide.md
+  - Concepts:
+      - Project overview: project_description.md
+      - Implementation status: implementation-status.md
+      - OGC API: ogcapi.md
+  - Guides:
+      - Accessing data: user_guide.md
+      - Adding custom datasets: adding_custom_datasets.md
+      - API reference: managed_data_api_guide.md
+  - Roadmap: roadmap.md

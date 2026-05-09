@@ -410,7 +410,6 @@ Notes:
 - `org_unit_level` alone runs across the full level by default.
 - `category_option_combo` and `attribute_option_combo` are optional. If omitted, they are not sent in `dataValues`, allowing DHIS2 defaults where supported.
 - `temporal_resolution` supports `daily`, `weekly`, and `monthly`.
-- DHIS2 timeout/retry behavior is configured globally via adapter env vars (`DHIS2_HTTP_TIMEOUT_SECONDS`, `DHIS2_HTTP_RETRIES`).
 
 ## Async execution and job management
 

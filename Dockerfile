@@ -12,17 +12,15 @@ RUN groupadd --system eo && useradd --system --gid eo --create-home eo
 WORKDIR /app
 
 COPY pyproject.toml uv.lock .python-version ./
-COPY src/ src/
-COPY config/ config/
-COPY data/datasets/ data/datasets/
-COPY data/extents.yaml data/extents.yaml
+COPY climate_api/ climate_api/
 
 RUN uv sync --frozen --no-dev
 
-RUN mkdir -p /tmp/data /app/data/pygeoapi /app/data/artifacts && \
+RUN mkdir -p /app/data/pygeoapi /app/data/artifacts && \
     printf '[]\n' > /app/data/artifacts/records.json && \
-    chown -R eo:eo /tmp/data /app/data
+    chown -R eo:eo /app/data
 
+ENV CACHE_OVERRIDE=/app/data
 ENV PYGEOAPI_CONFIG=/app/data/pygeoapi/pygeoapi-config.yml
 ENV PYGEOAPI_OPENAPI=/app/data/pygeoapi/pygeoapi-openapi.yml
 ENV PORT=8000
