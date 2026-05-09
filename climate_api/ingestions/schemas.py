@@ -61,6 +61,10 @@ class ArtifactCoverage(BaseModel):
     """Artifact coverage metadata."""
 
     spatial: CoverageSpatial = Field(description="Covered spatial extent of the managed dataset.")
+    spatial_wgs84: CoverageSpatial | None = Field(
+        default=None,
+        description="Spatial extent in WGS84. None for WGS84 instances or legacy records.",
+    )
     temporal: CoverageTemporal = Field(description="Covered temporal extent of the managed dataset.")
 
 

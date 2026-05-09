@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
 from climate_api.data_manager.services import downloader
 from climate_api.ingestions import services as ingestion_services
 
@@ -595,3 +595,50 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
         assert "time" in result.coords
     finally:
         result.close()
+
+
+# ---------------------------------------------------------------------------
+# _coverage_from_dataset — WGS84 reprojection
+# ---------------------------------------------------------------------------
+
+
+def test_coverage_from_dataset_populates_spatial_wgs84_for_projected_crs() -> None:
+    # Small UTM33N (EPSG:25833) bounding box covering south-central Norway.
+    x = np.array([100_000.0, 200_000.0])  # easting metres
+    y = np.array([6_500_000.0, 6_600_000.0])  # northing metres
+    times = pd.date_range("2020-01-01", periods=1, freq="D")
+    data = np.ones((1, len(y), len(x)))
+    ds = xr.Dataset(
+        {"temperature": (["time", "y", "x"], data)},
+        coords={"time": times, "y": y, "x": x},
+    )
+
+    result = _coverage_from_dataset(ds=ds, period_type="daily", native_crs="EPSG:25833")
+
+    wgs84 = result["coverage"]["spatial_wgs84"]
+    assert wgs84 is not None
+    # Reprojected bounds must be in WGS84 degree range.
+    assert -180 <= wgs84["xmin"] <= 180
+    assert -180 <= wgs84["xmax"] <= 180
+    assert -90 <= wgs84["ymin"] <= 90
+    assert -90 <= wgs84["ymax"] <= 90
+    # Rough sanity check: UTM33N easting ~100–200 km, northing ~6500–6600 km.
+    assert 7.0 < wgs84["xmin"] < 10.0
+    assert 8.0 < wgs84["xmax"] < 12.0
+    assert 58.0 < wgs84["ymin"] < 62.0
+    assert 58.0 < wgs84["ymax"] < 62.0
+
+
+def test_coverage_from_dataset_leaves_spatial_wgs84_none_for_wgs84() -> None:
+    x = np.array([-10.0, -9.0])
+    y = np.array([7.0, 8.0])
+    times = pd.date_range("2020-01-01", periods=1, freq="D")
+    data = np.ones((1, len(y), len(x)))
+    ds = xr.Dataset(
+        {"temperature": (["time", "y", "x"], data)},
+        coords={"time": times, "y": y, "x": x},
+    )
+
+    result = _coverage_from_dataset(ds=ds, period_type="daily", native_crs="EPSG:4326")
+
+    assert result["coverage"]["spatial_wgs84"] is None
