@@ -58,7 +58,7 @@ dataset_id = list_datasets()[0]["id"]
 ds = open_dataset(dataset_id)
 ```
 
-Each dataset has a `time` dimension, `longitude` and `latitude` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
+Each dataset has a `time` dimension, `x` and `y` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
 
 Select the first time step:
 
@@ -71,16 +71,16 @@ Select a spatial point by sampling the centre of the domain:
 
 ```python
 variable = list(ds.data_vars)[0]  # precip, t2m, tp, or pop_total depending on the dataset
-centre_lat = ds.latitude.mean().item()
-centre_lon = ds.longitude.mean().item()
-point = ds.sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
+centre_y = ds.y.mean().item()
+centre_x = ds.x.mean().item()
+point = ds.sel(y=centre_y, x=centre_x, method="nearest")
 print(point[variable].values)
 ```
 
 Compute the spatial mean over the first 10 time steps (slicing first avoids reading the full dataset over HTTP):
 
 ```python
-spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["latitude", "longitude"])
+spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["y", "x"])
 print(spatial_mean.to_dataframe())
 ```
 

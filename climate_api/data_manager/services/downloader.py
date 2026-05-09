@@ -130,8 +130,6 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     ds = ds.drop_vars(drop_coords)
 
     # Normalise to canonical names so all stored Zarr files are consistent.
-    # For WGS84 instances: rename spatial dims to longitude/latitude (degree values).
-    # For other CRS (e.g. UTM): rename to x/y to reflect projected metre coordinates.
     crs = api_config.get_crs()
     time_dim = get_time_dim(ds)
     rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "x"), (lat_dim, "y")] if k != v}
