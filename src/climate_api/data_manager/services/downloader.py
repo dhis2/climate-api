@@ -47,7 +47,6 @@ def download_dataset(
     country_code: str | None,
     overwrite: bool,
     background_tasks: BackgroundTasks | None,
-    extent_id: str | None = None,
 ) -> list[Path]:
     """Download dataset files and return the NetCDF paths created or modified by this run.
 
@@ -60,7 +59,7 @@ def download_dataset(
     ingestion = dataset["ingestion"]
     eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
-    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset, extent_id=extent_id)}
+    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
     params = dict(ingestion.get("default_params", {}))
     params.update(
@@ -68,7 +67,7 @@ def download_dataset(
             "start": start,
             "end": end or datetime.date.today().isoformat(),
             "dirname": DOWNLOAD_DIR,
-            "prefix": _get_cache_prefix(dataset, extent_id=extent_id),
+            "prefix": _get_cache_prefix(dataset),
             "overwrite": overwrite,
         }
     )
@@ -108,21 +107,19 @@ def download_dataset(
         message = str(exc).strip() or "Unexpected error from upstream data provider"
         raise HTTPException(status_code=502, detail=f"Upstream dataset download failed: {message}") from exc
 
-    after_files = [path.resolve() for path in get_cache_files(dataset, extent_id=extent_id)]
+    after_files = [path.resolve() for path in get_cache_files(dataset)]
     changed_files = [
         path for path in after_files if path not in before_files or path.stat().st_mtime_ns != before_files[path]
     ]
     return changed_files
 
 
-def build_dataset_zarr(
-    dataset: dict[str, Any], *, start: str | None = None, end: str | None = None, extent_id: str | None = None
-) -> None:
+def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end: str | None = None) -> None:
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
     ingestion = dataset["ingestion"]
-    files = get_cache_files(dataset, extent_id=extent_id)
+    files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
 
@@ -166,7 +163,7 @@ def build_dataset_zarr(
 
     # save as zarr
     logger.info("Saving to optimized zarr file")
-    zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset, extent_id=extent_id)}.zarr"
+    zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
 
     multiscales = dict(ingestion.get("multiscales", {}))
 
@@ -274,21 +271,20 @@ def _compute_time_space_chunks(
     return chunks
 
 
-def _get_cache_prefix(dataset: dict[str, Any], extent_id: str | None = None) -> str:
-    base = str(dataset["id"])
-    return f"{base}_{extent_id}" if extent_id else base
+def _get_cache_prefix(dataset: dict[str, Any]) -> str:
+    return str(dataset["id"])
 
 
-def get_cache_files(dataset: dict[str, Any], extent_id: str | None = None) -> list[Path]:
+def get_cache_files(dataset: dict[str, Any]) -> list[Path]:
     """Return all NetCDF cache files matching this dataset's prefix."""
     # TODO: not bulletproof -- e.g. 2m_temperature matches 2m_temperature_modified
-    prefix = _get_cache_prefix(dataset, extent_id=extent_id)
+    prefix = _get_cache_prefix(dataset)
     return list(DOWNLOAD_DIR.glob(f"{prefix}*.nc"))
 
 
-def get_zarr_path(dataset: dict[str, Any], extent_id: str | None = None) -> Path | None:
+def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     """Return the optimised zarr archive path if it exists."""
-    prefix = _get_cache_prefix(dataset, extent_id=extent_id)
+    prefix = _get_cache_prefix(dataset)
     optimized = DOWNLOAD_DIR / f"{prefix}.zarr"
     if optimized.exists():
         return optimized

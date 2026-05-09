@@ -279,7 +279,7 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     created_file.write_text("dummy", encoding="utf-8")
 
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
 
     captured: dict[str, object] = {}
@@ -350,7 +350,7 @@ def test_create_artifact_normalizes_request_scope_to_dataset_period(
         return [created_file]
 
     monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,
@@ -419,7 +419,7 @@ def test_create_artifact_defaults_omitted_end_to_dataset_native_period_for_downl
 
     monkeypatch.setattr(services, "utc_now", lambda: FixedDateTime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
     monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,
@@ -466,7 +466,7 @@ def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
     created_file.write_text("dummy", encoding="utf-8")
 
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,
@@ -527,7 +527,7 @@ def test_create_artifact_can_download_delta_while_recording_full_request_scope(
     monkeypatch.setattr(services.downloader, "download_dataset", fake_download_dataset)
     monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
     zarr_path_chirps = tmp_path / "chirps3_precipitation_daily.zarr"
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: zarr_path_chirps)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path_chirps)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,
@@ -655,8 +655,8 @@ def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zar
     monkeypatch.setattr(services, "_find_existing_artifact", fake_find_existing_artifact)
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
     monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: zarr_path)
-    monkeypatch.setattr(services.downloader, "get_cache_files", lambda dataset, extent_id=None: [created_file])
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
     monkeypatch.setattr(
         services,
         "get_data_coverage_for_paths",
@@ -703,17 +703,15 @@ def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false
 
     captured_build: dict[str, object] = {}
 
-    def fake_build_dataset_zarr(
-        dataset_arg: dict[str, object], *, start: str | None, end: str | None, extent_id: str | None = None
-    ) -> None:
+    def fake_build_dataset_zarr(dataset_arg: dict[str, object], *, start: str | None, end: str | None) -> None:
         captured_build["dataset_id"] = dataset_arg["id"]
         captured_build["start"] = start
         captured_build["end"] = end
 
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
     monkeypatch.setattr(services.downloader, "build_dataset_zarr", fake_build_dataset_zarr)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: zarr_path)
-    monkeypatch.setattr(services.downloader, "get_cache_files", lambda dataset, extent_id=None: [created_file])
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,
@@ -767,7 +765,7 @@ def test_create_artifact_delta_fails_when_canonical_zarr_build_fails(
 
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
     monkeypatch.setattr(services.downloader, "build_dataset_zarr", fail_build_dataset_zarr)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: None)
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: None)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
 
     with pytest.raises(services.HTTPException) as exc_info:
@@ -805,8 +803,8 @@ def test_create_artifact_delta_rejects_short_rebuilt_coverage(
 
     monkeypatch.setattr(services.downloader, "download_dataset", lambda *_, **__: [created_file])
     monkeypatch.setattr(services.downloader, "build_dataset_zarr", lambda *_, **__: None)
-    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda dataset, extent_id=None: zarr_path)
-    monkeypatch.setattr(services.downloader, "get_cache_files", lambda dataset, extent_id=None: [created_file])
+    monkeypatch.setattr(services.downloader, "get_zarr_path", lambda _: zarr_path)
+    monkeypatch.setattr(services.downloader, "get_cache_files", lambda _: [created_file])
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(
         services,

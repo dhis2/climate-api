@@ -219,14 +219,13 @@ def create_artifact(
         country_code=country_code,
         overwrite=overwrite,
         background_tasks=None,
-        extent_id=extent_id,
     )
     logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
     if prefer_zarr or requires_canonical_zarr:
         try:
             logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
-            downloader.build_dataset_zarr(dataset, start=start, end=end, extent_id=extent_id)
+            downloader.build_dataset_zarr(dataset, start=start, end=end)
             logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
         except Exception as exc:
             if requires_canonical_zarr:
@@ -246,16 +245,16 @@ def create_artifact(
                 exc_info=True,
             )
 
-    zarr_path = downloader.get_zarr_path(dataset, extent_id=extent_id)
+    zarr_path = downloader.get_zarr_path(dataset)
     if requires_canonical_zarr and zarr_path is None:
         raise HTTPException(
             status_code=500,
             detail="Append sync requires a canonical Zarr artifact, but no Zarr store was produced.",
         )
     cache_files = (
-        downloader.get_cache_files(dataset, extent_id=extent_id)
+        downloader.get_cache_files(dataset)
         if requires_canonical_zarr
-        else downloaded_files or downloader.get_cache_files(dataset, extent_id=extent_id)
+        else downloaded_files or downloader.get_cache_files(dataset)
     )
     primary_path: str | None
 
