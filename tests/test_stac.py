@@ -428,7 +428,7 @@ def test_build_collection_with_xstac_normalizes_pystac_collection(
     )
     template.add_asset("zarr", pystac.Asset(href="http://example.test/zarr"))
     monkeypatch.setattr(stac_services, "open_zarr_dataset", lambda _: DummyDataset())
-    monkeypatch.setattr(stac_services, "get_lon_lat_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
     monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
     monkeypatch.setattr(stac_services, "xarray_to_stac", lambda *args, **kwargs: template)
 
@@ -470,7 +470,7 @@ def test_collection_reuses_cached_xstac_payload(
     )
     monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
     monkeypatch.setattr(stac_services, "open_zarr_dataset", fake_open)
-    monkeypatch.setattr(stac_services, "get_lon_lat_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
     monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
     monkeypatch.setattr(stac_services, "xarray_to_stac", fake_xarray_to_stac)
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
@@ -519,7 +519,7 @@ def test_collection_preserves_template_links_when_xstac_mutates_template(
     )
     monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
     monkeypatch.setattr(stac_services, "open_zarr_dataset", lambda _: DummyDataset())
-    monkeypatch.setattr(stac_services, "get_lon_lat_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
     monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
 
     def fake_xarray_to_stac(*args: object, **kwargs: object) -> pystac.Collection:
