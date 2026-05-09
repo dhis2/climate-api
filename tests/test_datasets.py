@@ -122,9 +122,7 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
 def test_dataset_links_include_stac_for_published_zarr() -> None:
     links = services._dataset_links("chirps3_precipitation_daily", _artifact(artifact_id="a1"))
 
-    assert any(
-        link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links
-    )
+    assert any(link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links)
 
 
 def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
