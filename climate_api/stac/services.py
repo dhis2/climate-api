@@ -14,7 +14,7 @@ from fastapi import HTTPException, Request
 from xstac import xarray_to_stac
 
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
-from climate_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
@@ -200,7 +200,7 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
             detail=f"Published Zarr store for artifact '{artifact.artifact_id}' is temporarily unavailable",
         ) from exc
     try:
-        x_dimension, y_dimension = get_lon_lat_dims(ds)
+        x_dimension, y_dimension = get_x_y_dims(ds)
         time_dimension = get_time_dim(ds)
         result = xarray_to_stac(
             ds,

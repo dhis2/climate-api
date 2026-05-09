@@ -374,7 +374,7 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
     artifact_path = latest_artifact.path
-    if artifact_path and (Path(artifact_path) / "0").exists():
+    if artifact_path and "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
         logger.warning(
             "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
             source_dataset.get("id", "<unknown>"),

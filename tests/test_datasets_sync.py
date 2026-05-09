@@ -214,7 +214,7 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
     tmp_path: Path,
 ) -> None:
     # Simulate a pyramid zarr on disk by creating a "0/" subdirectory.
-    zarr_path = tmp_path / "worldpop_population_yearly.zarr"  # type: ignore[operator]
+    zarr_path = tmp_path / "worldpop_population_yearly.zarr"
     (zarr_path / "0").mkdir(parents=True)
 
     dataset_id = "worldpop_population_yearly_sle"
