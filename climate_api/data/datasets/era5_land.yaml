@@ -56,7 +56,6 @@
     default_params:
       variables: ['tp']
   transforms:
-    - climate_api.transforms.deaccumulate_era5
     - climate_api.transforms.convert_units
   units: m
   convert_units: mm
