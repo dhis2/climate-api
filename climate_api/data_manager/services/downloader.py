@@ -114,7 +114,6 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
-    ingestion = dataset["ingestion"]
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
@@ -166,7 +165,6 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     if _needs_pyramid(ds, lon_dim, lat_dim):
         levels = _pyramid_levels(ds, lon_dim, lat_dim)
-        method = ingestion.get("pyramid_method", "mean")
         logger.info("Building %d-level pyramid (max dim %d pixels)", levels, max(ds.sizes[lon_dim], ds.sizes[lat_dim]))
 
         # Add multiscales convention metadata to the zarr attributes
@@ -183,7 +181,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
         ds = ds.proj.assign_crs(spatial_ref=crs)
 
         # https://github.com/carbonplan/topozarr/issues/13
-        pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method=method)
+        pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method="mean")
 
         pyramid.dt.attrs.update(geozarr_attrs)
         pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
