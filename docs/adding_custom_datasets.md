@@ -1,8 +1,8 @@
-# Custom Dataset Guide
+# Adding custom datasets
 
 This guide explains how to add a new dataset source to your Climate API instance — for example a national meteorological service, a regional satellite product, or a custom model output.
 
-The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `plugins_dir` in your `climate-api.yaml` at a plugins directory. That directory serves two purposes: YAML dataset templates go in its `datasets/` subfolder, and Python download modules placed directly under it are importable by their dotted path (e.g. `mypackage.sources.download`) without installing them as a package.
+The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `plugins_dir` in your `climate-api.yaml` at a plugins directory. That directory serves two purposes: YAML dataset templates go in its `datasets/` subfolder, and Python modules placed directly under it are importable by their dotted path (e.g. `mypackage.sources.download`) without installing them as a package.
 
 ## Overview
 
@@ -50,7 +50,7 @@ def download(
 | `bbox`         | `list[float]`   | Bounding box as `[xmin, ymin, xmax, ymax]` — include this if your source requires a spatial filter |
 | `country_code` | `str`           | ISO 3166-1 alpha-3 code — include this if your source (e.g. WorldPop) requires a country code |
 
-Any extra keyword arguments from `default_params` in the YAML template are forwarded as additional kwargs.
+Any extra keyword arguments from `ingestion.default_params` in the YAML template are forwarded as additional kwargs.
 
 The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`latitude` → `y`, `lon`/`longitude` → `x`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
 
@@ -71,8 +71,9 @@ Create a directory for your custom templates and add a YAML file. Each file cont
   short_name: Rainfall
   variable: rainfall
   period_type: daily
-  sync_kind: temporal
-  sync_execution: append
+  sync:
+    kind: temporal
+    execution: append
   ingestion:
     function: mypackage.sources.enacts.download
   units: mm
@@ -96,33 +97,49 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 **Period and sync**
 
-| Field            | Required | Values | Description |
-| ---------------- | -------- | ------ | ----------- |
-| `period_type`    | Yes | `hourly`, `daily`, `monthly`, `yearly` | Temporal resolution; controls Zarr chunk sizes |
-| `sync_kind`      | Yes | `temporal` | Data grows over time — sync appends new time steps |
-|                  |     | `release`  | Data is published as versioned releases — sync checks for a newer release |
-|                  |     | `static`   | Data does not change — never synced automatically |
-| `sync_execution` | No  | `append` | New time steps are appended to the existing Zarr store |
-|                  |     | `rematerialize` | The full store is rebuilt on each sync |
-
-**Download function**
-
-| Field                          | Required | Description |
-| ------------------------------ | -------- | ----------- |
-| `ingestion.function`       | Yes | Dotted import path to the download function |
-| `ingestion.default_params`    | No  | Extra keyword arguments forwarded to the download function |
-| `ingestion.multiscales`       | No  | Build a multi-resolution Zarr pyramid (see below) |
+| Field | Required | Description |
+| ----- | -------- | ----------- |
+| `period_type` | Yes | Temporal resolution: `hourly`, `daily`, `monthly`, `yearly` |
+| `sync.kind` | Yes | `temporal` — data grows over time; `release` — versioned releases; `static` — never synced |
+| `sync.execution` | No | `append` — new time steps appended to existing store; `rematerialize` — full rebuild on each sync |
+| `sync.availability` | No | Provider availability policy — see below |
 
 **Sync availability** — how the API determines the latest available data:
 
 ```yaml
-sync_availability:
-  latest_available_function: mypackage.sources.enacts.latest_available
-  lag_hours: 48          # optional: data is delayed by this many hours
-  allow_future: false    # optional: allow requesting future dates (e.g. forecasts)
+sync:
+  kind: temporal
+  execution: append
+  availability:
+    latest_available_function: climate_api.providers.availability.lagged_latest_available
+    lag_hours: 48
 ```
 
-`latest_available_function` must accept a `dataset` dict and return a `datetime`. Omit `sync_availability` entirely for `static` datasets or when you always want to sync up to the requested end date.
+| Field | Description |
+| ----- | ----------- |
+| `latest_available_function` | Dotted path to a built-in availability function in `climate_api.providers.availability` |
+| `lag_hours` / `lag_days` | Data is delayed by this many hours or days |
+| `allow_future` | Allow requesting future dates (e.g. forecasts or projections). Default: `false` |
+
+Omit `sync.availability` entirely for `static` datasets or when you always want to sync up to the requested end date.
+
+**Ingestion**
+
+| Field | Required | Description |
+| ----- | -------- | ----------- |
+| `ingestion.function` | Yes | Dotted path to the download function |
+| `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
+| `ingestion.multiscales` | No | Build a multi-resolution Zarr pyramid (see below) |
+
+**Transforms** — applied after download, before writing to Zarr:
+
+```yaml
+transforms:
+  - climate_api.transforms.kelvin_to_celsius
+  - mypackage.transforms.my_custom_transform
+```
+
+See [Extensibility — Transform functions](extensibility.md#transform-functions) for the full transform contract and built-in options.
 
 **Spatial and temporal extents** — declares what the source dataset covers. Used to validate ingest requests before hitting the provider:
 
@@ -140,12 +157,15 @@ extents:
 
 If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, the API returns HTTP 400 immediately. Partial overlap is allowed — the provider will return data for the intersecting area.
 
-**Units**
+**Units and display**
 
-| Field           | Required | Description |
-| --------------- | -------- | ----------- |
-| `units`         | No  | Physical units of the raw download (e.g. `mm`, `kelvin`, `m`) |
-| `convert_units` | No  | Target unit; the API converts automatically using Pint (e.g. `degC`, `mm`) |
+| Field | Required | Description |
+| ----- | -------- | ----------- |
+| `units` | No | Physical units of the stored data (e.g. `mm`, `degC`, `m`) |
+| `resolution` | No | Human-readable spatial resolution (e.g. `5 km x 5 km`) |
+| `display.colormap` | No | Colormap name for map rendering (e.g. `blues`, `rdbu_r`) |
+| `display.range` | No | `[min, max]` display range for the colormap |
+| `display.nodata` | No | No-data / fill value |
 
 **Multiscale pyramid** — for high-resolution raster datasets rendered in map viewers:
 
@@ -177,7 +197,7 @@ data_dir: ./data
 plugins_dir: ./plugins/
 ```
 
-All `*.yaml` and `*.yml` files in `plugins_dir/datasets/` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
+All `*.yaml` files in `plugins_dir/datasets/` are loaded and merged with the built-in templates (CHIRPS3, ERA5-Land, WorldPop). Custom templates are additive — the built-ins remain available unless you deliberately override one by using the same `id`.
 
 ## Step 4: Ingest and publish
 
@@ -211,7 +231,8 @@ The smallest valid template for a static dataset with no sync:
   name: My static dataset
   variable: value
   period_type: daily
-  sync_kind: static
+  sync:
+    kind: static
   ingestion:
     function: mypackage.sources.my_source.download
 ```
