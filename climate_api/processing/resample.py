@@ -39,6 +39,20 @@ def _derived_data_dir() -> Path:
 DERIVED_DATA_DIR: Path = _derived_data_dir()
 
 
+def _frequency_to_period_type(frequency: str) -> str:
+    """Map a pandas frequency alias to a Climate API period_type string."""
+    name = type(pd.tseries.frequencies.to_offset(frequency)).__name__
+    if any(x in name for x in ("Hour", "Minute", "Second")):
+        return "hourly"
+    if "Week" in name:
+        return "weekly"
+    if any(x in name for x in ("Month", "Quarter")):
+        return "monthly"
+    if any(x in name for x in ("Year", "Annual")):
+        return "yearly"
+    return "daily"
+
+
 def derived_dataset_id(*, source_dataset_id: str, frequency: str, method: str) -> str:
     """Return the stable derived dataset id auto-generated from source + parameters."""
     freq_slug = re.sub(r"[^a-z0-9]", "_", frequency.lower()).strip("_")
@@ -121,12 +135,11 @@ def materialize_resampled_artifact(
     finally:
         source_ds.close()
 
-    # period_type="daily" formats all derived timestamps as ISO date strings (YYYY-MM-DD)
     target_dataset: dict[str, object] = {
         "id": target_dataset_id,
         "name": target_dataset_id,
         "variable": source_dataset.get("variable", "value"),
-        "period_type": "daily",
+        "period_type": _frequency_to_period_type(frequency),
     }
     return ingestion_services.store_materialized_zarr_artifact(
         dataset=target_dataset,

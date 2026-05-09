@@ -245,11 +245,24 @@ def _select_time_range(
 
 
 def _run_transforms(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+    dataset_id = dataset.get("id", "?")
     for entry in dataset.get("transforms", []):
-        func_path = entry if isinstance(entry, str) else entry["function"]
-        params = {} if isinstance(entry, str) else entry.get("params", {})
+        if isinstance(entry, str):
+            func_path, params = entry, {}
+        elif isinstance(entry, dict):
+            if "function" not in entry:
+                raise ValueError(
+                    f"Transform entry in dataset '{dataset_id}' is missing required key 'function': {entry!r}"
+                )
+            func_path = entry["function"]
+            params = entry.get("params", {})
+        else:
+            raise ValueError(
+                f"Transform entry in dataset '{dataset_id}' must be a string or dict,"
+                f" got {type(entry).__name__!r}: {entry!r}"
+            )
         func = _get_dynamic_function(func_path)
-        logger.info("Applying transform %s to dataset %s", func_path, dataset.get("id", "?"))
+        logger.info("Applying transform %s to dataset %s", func_path, dataset_id)
         ds = func(ds, dataset, **params)
     return ds
 

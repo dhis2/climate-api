@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import numpy as np
+import pandas as pd
 
 _WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
 
@@ -129,10 +130,7 @@ def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type
         lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
         return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
-    arr = np.asarray(datetimes, dtype="datetime64[s]")
-    to_period_string = np.vectorize(
-        lambda value: datetime_to_period_string(_coerce_numpy_datetime(value), period_type),
-        otypes=[str],
-    )
-    result = to_period_string(arr)
-    return cast(np.ndarray[Any, Any], result.astype("U8"))
+    dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))
+    iso = dt_index.isocalendar()
+    strings = iso["year"].astype(str).str.zfill(4) + "-W" + iso["week"].astype(str).str.zfill(2)
+    return cast(np.ndarray[Any, Any], strings.to_numpy().astype("U8"))

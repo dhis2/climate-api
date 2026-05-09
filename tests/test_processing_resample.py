@@ -238,8 +238,8 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
     )
 
     # W03 (Jan 12-18) is incomplete — only W02 (Jan 5-11) is covered fully
-    assert artifact.coverage.temporal.start == "2026-01-05"
-    assert artifact.coverage.temporal.end == "2026-01-05"
+    assert artifact.coverage.temporal.start == "2026-W02"
+    assert artifact.coverage.temporal.end == "2026-W02"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
@@ -294,8 +294,8 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
     )
 
     # W02 (Jan 5-11) starts Wednesday Jan 7 — incomplete leading week dropped
-    assert artifact.coverage.temporal.start == "2026-01-12"
-    assert artifact.coverage.temporal.end == "2026-01-12"
+    assert artifact.coverage.temporal.start == "2026-W03"
+    assert artifact.coverage.temporal.end == "2026-W03"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
@@ -400,9 +400,9 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
         publish=False,
     )
 
-    # Monthly resampled timestamp is the first of the month
-    assert artifact.coverage.temporal.start == "2026-01-01"
-    assert artifact.coverage.temporal.end == "2026-01-01"
+    # Monthly resampled timestamp is the start of the month
+    assert artifact.coverage.temporal.start == "2026-01"
+    assert artifact.coverage.temporal.end == "2026-01"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [31.0]
