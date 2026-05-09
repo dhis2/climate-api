@@ -8,6 +8,6 @@ Functions can be referenced by their dotted module path in the dataset YAML
 """
 
 from .reproject import reproject_to_instance_crs
-from .unit_conversion import convert_units
+from .unit_conversion import kelvin_to_celsius, metres_to_mm
 
-__all__ = ["convert_units", "reproject_to_instance_crs"]
+__all__ = ["kelvin_to_celsius", "metres_to_mm", "reproject_to_instance_crs"]

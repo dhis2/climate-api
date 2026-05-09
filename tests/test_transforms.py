@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 
-from climate_api.transforms import convert_units
+from climate_api.transforms import kelvin_to_celsius, metres_to_mm
 
 
 def _ds(varname: str, values: list[float], time_steps: int = 1) -> xr.Dataset:
@@ -11,33 +11,33 @@ def _ds(varname: str, values: list[float], time_steps: int = 1) -> xr.Dataset:
     return xr.Dataset({varname: xr.DataArray(np.array(values, dtype=float))})
 
 
-class TestConvertUnits:
-    def test_kelvin_to_celsius(self):
+class TestKelvinToCelsius:
+    def test_converts_values(self):
         ds = _ds("t2m", [273.15, 293.15, 313.15])
-        result = convert_units(ds, {"variable": "t2m", "units": "kelvin", "convert_units": "degC"})
+        result = kelvin_to_celsius(ds, {"variable": "t2m"})
         np.testing.assert_allclose(result["t2m"].values, [0.0, 20.0, 40.0])
-        assert result["t2m"].attrs["units"] == "degC"
 
-    def test_metres_to_mm(self):
-        ds = _ds("tp", [0.001, 0.005])
-        result = convert_units(ds, {"variable": "tp", "units": "m", "convert_units": "mm"})
-        np.testing.assert_allclose(result["tp"].values, [1.0, 5.0])
-        assert result["tp"].attrs["units"] == "mm"
-
-    def test_no_convert_units_field_is_noop(self):
+    def test_sets_units_attr(self):
         ds = _ds("t2m", [300.0])
-        result = convert_units(ds, {"variable": "t2m", "units": "kelvin"})
-        np.testing.assert_array_equal(result["t2m"].values, ds["t2m"].values)
-
-    def test_unknown_conversion_is_noop(self):
-        ds = _ds("x", [1.0])
-        result = convert_units(ds, {"variable": "x", "units": "foo", "convert_units": "bar"})
-        np.testing.assert_array_equal(result["x"].values, ds["x"].values)
+        result = kelvin_to_celsius(ds, {"variable": "t2m"})
+        assert result["t2m"].attrs["units"] == "degC"
 
     def test_preserves_existing_attrs(self):
         ds = xr.Dataset({"t2m": xr.DataArray([300.0], attrs={"long_name": "temperature", "units": "K"})})
-        result = convert_units(ds, {"variable": "t2m", "units": "kelvin", "convert_units": "degC"})
+        result = kelvin_to_celsius(ds, {"variable": "t2m"})
         assert result["t2m"].attrs["long_name"] == "temperature"
+
+
+class TestMetresToMm:
+    def test_converts_values(self):
+        ds = _ds("tp", [0.001, 0.005])
+        result = metres_to_mm(ds, {"variable": "tp"})
+        np.testing.assert_allclose(result["tp"].values, [1.0, 5.0])
+
+    def test_sets_units_attr(self):
+        ds = _ds("tp", [0.001])
+        result = metres_to_mm(ds, {"variable": "tp"})
+        assert result["tp"].attrs["units"] == "mm"
 
 
 class TestRunTransformsPipeline:
@@ -45,9 +45,7 @@ class TestRunTransformsPipeline:
         ds = _ds("t2m", [273.15])
         dataset = {
             "variable": "t2m",
-            "units": "kelvin",
-            "convert_units": "degC",
-            "transforms": ["climate_api.transforms.convert_units"],
+            "transforms": ["climate_api.transforms.kelvin_to_celsius"],
         }
         from climate_api.data_manager.services.downloader import _run_transforms
 
@@ -72,9 +70,7 @@ class TestRunTransformsPipeline:
         ds = _ds("t2m", [273.15])
         dataset = {
             "variable": "t2m",
-            "units": "kelvin",
-            "convert_units": "degC",
-            "transforms": [{"function": "climate_api.transforms.convert_units"}],
+            "transforms": [{"function": "climate_api.transforms.kelvin_to_celsius"}],
         }
         from climate_api.data_manager.services.downloader import _run_transforms
 
