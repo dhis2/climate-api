@@ -167,26 +167,34 @@ def test_get_cache_prefix_with_extent_id() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_validate_spatial_coverage_passes_when_no_coverage_declared() -> None:
+_CHIRPS3_EXTENTS: dict[str, Any] = {
+    "spatial": {"bbox": [-180, -50, 180, 50], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
+}
+_LIMITED_LON_EXTENTS: dict[str, Any] = {
+    "spatial": {"bbox": [-180, -90, 60, 90], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
+}
+
+
+def test_validate_spatial_coverage_passes_when_no_extents_declared() -> None:
     dataset: dict[str, Any] = {"id": "worldpop_population_yearly", "ingestion": {}}
     downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
 
 
 def test_validate_spatial_coverage_passes_when_no_bbox() -> None:
-    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "coverage": {"lat": [-50, 50]}}
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "extents": _CHIRPS3_EXTENTS}
     downloader._validate_spatial_coverage(dataset, bbox=None)
 
 
-def test_validate_spatial_coverage_passes_when_bbox_inside_coverage() -> None:
-    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "coverage": {"lat": [-50, 50]}}
+def test_validate_spatial_coverage_passes_when_bbox_inside_extents() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "extents": _CHIRPS3_EXTENTS}
     downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
 
 
-def test_validate_spatial_coverage_raises_when_bbox_outside_lat_coverage() -> None:
+def test_validate_spatial_coverage_raises_when_bbox_outside_lat_extents() -> None:
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
         "ingestion": {},
-        "coverage": {"lat": [-50, 50]},
+        "extents": _CHIRPS3_EXTENTS,
     }
     with pytest.raises(HTTPException) as exc_info:
         downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
@@ -195,11 +203,11 @@ def test_validate_spatial_coverage_raises_when_bbox_outside_lat_coverage() -> No
     assert "Latitude" in str(exc_info.value.detail)
 
 
-def test_validate_spatial_coverage_raises_when_bbox_outside_lon_coverage() -> None:
+def test_validate_spatial_coverage_raises_when_bbox_outside_lon_extents() -> None:
     dataset: dict[str, Any] = {
         "id": "some_dataset",
         "ingestion": {},
-        "coverage": {"lon": [-180, 60]},
+        "extents": _LIMITED_LON_EXTENTS,
     }
     with pytest.raises(HTTPException) as exc_info:
         downloader._validate_spatial_coverage(dataset, bbox=[70.0, -10.0, 90.0, 10.0])
@@ -207,13 +215,13 @@ def test_validate_spatial_coverage_raises_when_bbox_outside_lon_coverage() -> No
     assert "Longitude" in str(exc_info.value.detail)
 
 
-def test_download_dataset_returns_400_when_bbox_outside_dataset_coverage(
+def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
         "ingestion": {"function": "ignored.path"},
-        "coverage": {"lat": [-50, 50]},
+        "extents": _CHIRPS3_EXTENTS,
     }
 
     with pytest.raises(HTTPException) as exc_info:

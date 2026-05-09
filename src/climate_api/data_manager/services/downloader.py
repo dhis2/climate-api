@@ -295,35 +295,36 @@ def get_zarr_path(dataset: dict[str, Any], extent_id: str | None = None) -> Path
 
 
 def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:
-    """Raise HTTP 400 if the request bbox falls outside the dataset's declared coverage."""
-    coverage = dataset.get("coverage")
-    if not coverage or bbox is None:
+    """Raise HTTP 400 if the request bbox falls outside the dataset's declared extents."""
+    extents = dataset.get("extents")
+    if not extents or bbox is None:
         return
+    spatial = extents.get("spatial")
+    if not spatial:
+        return
+    cov_bbox = spatial.get("bbox")
+    if not cov_bbox:
+        return
+    cov_xmin, cov_ymin, cov_xmax, cov_ymax = cov_bbox
     xmin, ymin, xmax, ymax = bbox
-    lat_bounds = coverage.get("lat")
-    if lat_bounds is not None:
-        cov_lat_min, cov_lat_max = lat_bounds
-        if ymin > cov_lat_max or ymax < cov_lat_min:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Dataset '{dataset['id']}' does not cover this extent. "
-                    f"Latitude coverage: {cov_lat_min}°–{cov_lat_max}°, "
-                    f"requested: {ymin}°–{ymax}°."
-                ),
-            )
-    lon_bounds = coverage.get("lon")
-    if lon_bounds is not None:
-        cov_lon_min, cov_lon_max = lon_bounds
-        if xmin > cov_lon_max or xmax < cov_lon_min:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Dataset '{dataset['id']}' does not cover this extent. "
-                    f"Longitude coverage: {cov_lon_min}°–{cov_lon_max}°, "
-                    f"requested: {xmin}°–{xmax}°."
-                ),
-            )
+    if ymin > cov_ymax or ymax < cov_ymin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset['id']}' does not cover this extent. "
+                f"Latitude coverage: {cov_ymin}°–{cov_ymax}°, "
+                f"requested: {ymin}°–{ymax}°."
+            ),
+        )
+    if xmin > cov_xmax or xmax < cov_xmin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset['id']}' does not cover this extent. "
+                f"Longitude coverage: {cov_xmin}°–{cov_xmax}°, "
+                f"requested: {xmin}°–{xmax}°."
+            ),
+        )
 
 
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
