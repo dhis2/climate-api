@@ -15,7 +15,7 @@ curl -s http://127.0.0.1:8000/stac/catalog.json | jq
 Each entry in `links` with `"rel": "child"` points to one dataset collection. Use the `href` from the catalog to fetch it:
 
 ```bash
-# Replace {dataset_id} with any id from the catalog above, e.g. chirps3_precipitation_daily_sle
+# Replace {dataset_id} with any id from the catalog above, e.g. chirps3_precipitation_daily
 curl -s http://127.0.0.1:8000/stac/collections/{dataset_id} | jq
 ```
 
@@ -25,7 +25,7 @@ The `assets.zarr` field contains everything needed to open the dataset:
 {
   "assets": {
     "zarr": {
-      "href": "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily_rwa",
+      "href": "http://127.0.0.1:8000/zarr/chirps3_precipitation_daily",
       "xarray:open_kwargs": { "consolidated": true }
     }
   }
@@ -86,11 +86,9 @@ print(spatial_mean.to_dataframe())
 
 ## Dataset IDs
 
-Dataset IDs follow the pattern `{source_dataset_id}_{extent_id}`, for example `chirps3_precipitation_daily_sle` for CHIRPS3 daily precipitation over Sierra Leone (`sle`).
+Dataset IDs match the template `id` field from the dataset YAML. Available datasets in the built-in catalogue:
 
-Available datasets in the built-in catalogue:
-
-| Dataset ID prefix               | Variable    | Period | Source    |
+| Dataset ID                      | Variable    | Period | Source    |
 | ------------------------------- | ----------- | ------ | --------- |
 | `chirps3_precipitation_daily`   | `precip`    | Daily  | CHIRPS v3 |
 | `era5land_temperature_hourly`   | `t2m`       | Hourly | ERA5-Land |

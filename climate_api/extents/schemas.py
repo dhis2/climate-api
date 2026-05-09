@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class ExtentRecord(BaseModel):
     """Configured spatial extent for this Climate API instance."""
 
-    extent_id: str = Field(description="Stable identifier for the configured extent.")
     name: str | None = Field(default=None, description="Human-readable name of the extent.")
     description: str | None = Field(default=None, description="Optional descriptive text for the extent.")
     bbox: tuple[float, float, float, float] = Field(

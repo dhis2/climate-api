@@ -28,7 +28,6 @@ cp climate-api.yaml.example climate-api.yaml
 
 ```yaml
 extent:
-  id: rwa
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
   country_code: RWA
@@ -40,7 +39,6 @@ Field reference:
 
 | Field          | Required | Description |
 | -------------- | -------- | ----------- |
-| `id`           | Yes | Short identifier used in dataset IDs and API paths (e.g. `chirps3_precipitation_daily_rwa`) |
 | `name`         | No  | Human-readable name shown in API responses |
 | `bbox`         | Yes | Bounding box as `[xmin, ymin, xmax, ymax]` in WGS84 decimal degrees |
 | `country_code` | No  | ISO 3166-1 alpha-3 code — required for WorldPop downloads |
@@ -53,7 +51,6 @@ Values can reference environment variables using `${VAR:-default}` syntax:
 
 ```yaml
 extent:
-  id: ${EXTENT_ID:-rwa}
   name: ${EXTENT_NAME:-Rwanda}
   bbox: [28.8, -2.9, 30.9, -1.0]
 ```
@@ -100,7 +97,6 @@ Expected response:
 
 ```json
 {
-  "extent_id": "rwa",
   "name": "Rwanda",
   "description": null,
   "bbox": [28.8, -2.9, 30.9, -1.0]
@@ -111,8 +107,6 @@ Expected response:
 
 CHIRPS3 (daily precipitation) requires no API key and is a good first dataset to verify the setup.
 
-Replace `rwa` with the `id` you set in Step 2.
-
 ```bash
 curl -s -X POST http://127.0.0.1:8000/ingestions \
   -H "Content-Type: application/json" \
@@ -120,13 +114,12 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "chirps3_precipitation_daily",
     "start": "2024-01-01",
     "end": "2024-01-31",
-    "extent_id": "rwa",
     "prefer_zarr": true,
     "publish": true
   }' | jq
 ```
 
-A successful response returns `"status": "completed"` and a `dataset` object with `dataset_id` matching `chirps3_precipitation_daily_{extent_id}` (e.g. `chirps3_precipitation_daily_rwa`).
+A successful response returns `"status": "completed"` and a `dataset` object with `dataset_id` of `chirps3_precipitation_daily`.
 
 ## Step 7: Access the data
 
@@ -194,7 +187,6 @@ curl -s -X POST http://127.0.0.1:8000/ingestions \
     "dataset_id": "era5land_temperature_hourly",
     "start": "2024-01-01T00",
     "end": "2024-01-31T23",
-    "extent_id": "rwa",
     "prefer_zarr": true,
     "publish": true
   }' | jq
@@ -206,14 +198,14 @@ ERA5-Land data has a configured lag of 120 hours (5 days) — the sync planner w
 
 ## Keeping datasets up to date
 
-Use the sync endpoint to advance an existing dataset to the latest available data. Replace `rwa` with your extent `id` from Step 2:
+Use the sync endpoint to advance an existing dataset to the latest available data:
 
 ```bash
 # Check what would be downloaded without executing
-curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_rwa/plan" | jq
+curl -s "http://127.0.0.1:8000/sync/chirps3_precipitation_daily/plan" | jq
 
 # Execute the sync
-curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily_rwa" \
+curl -s -X POST "http://127.0.0.1:8000/sync/chirps3_precipitation_daily" \
   -H "Content-Type: application/json" \
   -d '{"prefer_zarr": true, "publish": true}' | jq
 ```

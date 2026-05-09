@@ -15,7 +15,6 @@ def test_root_returns_html_by_default(client: TestClient) -> None:
 def test_root_html_shows_extent(client: TestClient) -> None:
     response = client.get("/")
     assert "Sierra Leone" in response.text
-    assert "sle" in response.text
 
 
 def test_root_html_links_to_key_endpoints(client: TestClient) -> None:

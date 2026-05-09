@@ -66,7 +66,6 @@ def plan_sync(
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
-            extent_id=latest_artifact.request_scope.extent_id,
             sync_kind=sync_kind,
             action=SyncAction.NOT_SYNCABLE,
             reason="static_dataset",
@@ -96,7 +95,6 @@ def plan_sync(
         if next_period_start > latest_available_end:
             return SyncDetail(
                 source_dataset_id=latest_artifact.dataset_id,
-                extent_id=latest_artifact.request_scope.extent_id,
                 sync_kind=sync_kind,
                 action=SyncAction.NO_OP,
                 reason="no_new_period",
@@ -113,7 +111,6 @@ def plan_sync(
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
-            extent_id=latest_artifact.request_scope.extent_id,
             sync_kind=sync_kind,
             action=action,
             reason=reason,
@@ -135,7 +132,6 @@ def plan_sync(
     if current_end >= latest_available_end:
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
-            extent_id=latest_artifact.request_scope.extent_id,
             sync_kind=sync_kind,
             action=SyncAction.NO_OP,
             reason="no_new_release",
@@ -151,7 +147,6 @@ def plan_sync(
 
     return SyncDetail(
         source_dataset_id=latest_artifact.dataset_id,
-        extent_id=latest_artifact.request_scope.extent_id,
         sync_kind=sync_kind,
         action=SyncAction.REMATERIALIZE,
         reason="new_release_available",
@@ -246,7 +241,6 @@ def run_sync(
         end=sync_detail.target_end,
         download_start=download_start,
         download_end=sync_detail.delta_end if download_start is not None else None,
-        extent_id=latest_artifact.request_scope.extent_id,
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         country_code=country_code,
         overwrite=False,

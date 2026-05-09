@@ -47,7 +47,7 @@ async def manage_ingest(request: Request) -> RedirectResponse:
     from fastapi import HTTPException
 
     from climate_api.data_registry.services.datasets import get_dataset
-    from climate_api.extents.services import get_extent
+    from climate_api.extents.services import get_extent_or_404
     from climate_api.ingestions.services import create_artifact
 
     base = str(request.base_url).rstrip("/")
@@ -64,16 +64,14 @@ async def manage_ingest(request: Request) -> RedirectResponse:
             msg = urllib.parse.quote(f"Dataset template '{dataset_id}' not found")
             return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
 
-        extent = get_extent()
-        resolved_bbox = list(extent["bbox"]) if extent else None
-        extent_id = extent["id"] if extent else None
-        country_code = extent.get("country_code") if extent else None
+        extent = get_extent_or_404()
+        resolved_bbox = list(extent["bbox"])
+        country_code = extent.get("country_code")
 
         create_artifact(
             dataset=template,
             start=start,
             end=end,
-            extent_id=extent_id,
             bbox=resolved_bbox,
             country_code=country_code,
             overwrite=overwrite,

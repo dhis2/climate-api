@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
-from zlib import adler32
 
 import xarray as xr
 import yaml
@@ -172,36 +171,19 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
         ds.close()
 
 
-def managed_dataset_id_for_scope(
-    dataset_id: str,
-    *,
-    extent_id: str | None,
-    bbox: tuple[float, float, float, float] | list[float] | None,
-) -> str:
-    """Build a stable managed dataset identifier from dataset scope inputs."""
-    if extent_id:
-        scope_key = extent_id
-    elif bbox:
-        bbox_str = ",".join(f"{value:.6f}" for value in bbox)
-        scope_hash = f"{adler32(bbox_str.encode('utf-8')):08x}"
-        scope_key = f"bbox_{scope_hash}"
-    else:
-        scope_key = "global"
-    return f"{dataset_id}_{scope_key}"
+def managed_dataset_id_for_scope(dataset_id: str) -> str:
+    """Return a stable managed dataset identifier for the single configured extent."""
+    return dataset_id
 
 
 def _collection_id_for(record: ArtifactRecord) -> str:
     """Build a stable collection identifier for a logical dataset scope."""
-    return managed_dataset_id_for_scope(
-        record.dataset_id,
-        extent_id=record.request_scope.extent_id,
-        bbox=record.request_scope.bbox,
-    )
+    return managed_dataset_id_for_scope(record.dataset_id)
 
 
 def managed_dataset_id_for(record: ArtifactRecord) -> str:
     """Return the stable managed dataset id for a stored record."""
-    return record.publication.collection_id or _collection_id_for(record)
+    return _collection_id_for(record)
 
 
 def _native_dataset_href(dataset_id: str) -> str:

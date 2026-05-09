@@ -23,7 +23,7 @@ def test_get_data_dir_raises_when_config_present_but_no_data_dir(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     config_file = tmp_path / "climate-api.yaml"
-    config_file.write_text("extent:\n  id: nor\n", encoding="utf-8")
+    config_file.write_text("extent:\n  name: Norway\n", encoding="utf-8")
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
     with pytest.raises(ValueError, match="data_dir is required"):
         get_data_dir()
@@ -52,7 +52,6 @@ def test_get_config_loads_extent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     config_file.write_text(
         """
 extent:
-  id: rwa
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
   country_code: RWA
@@ -62,7 +61,7 @@ extent:
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
 
     config = get_config()
-    assert config["extent"]["id"] == "rwa"
+    assert config["extent"]["name"] == "Rwanda"
     assert config["extent"]["bbox"] == [28.8, -2.9, 30.9, -1.0]
 
 
@@ -71,17 +70,14 @@ def test_get_config_substitutes_env_vars(monkeypatch: pytest.MonkeyPatch, tmp_pa
     config_file.write_text(
         """
 extent:
-  id: ${EXTENT_ID:-sle}
   name: ${EXTENT_NAME:-Sierra Leone}
 """,
         encoding="utf-8",
     )
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
-    monkeypatch.setenv("EXTENT_ID", "rwa")
     monkeypatch.delenv("EXTENT_NAME", raising=False)
 
     config = get_config()
-    assert config["extent"]["id"] == "rwa"
     assert config["extent"]["name"] == "Sierra Leone"
 
 
@@ -90,7 +86,6 @@ def test_extents_service_reads_from_config(monkeypatch: pytest.MonkeyPatch, tmp_
     config_file.write_text(
         """
 extent:
-  id: rwa
   name: Rwanda
   bbox: [28.8, -2.9, 30.9, -1.0]
 """,
@@ -100,7 +95,7 @@ extent:
 
     extent = extent_services.get_extent()
     assert extent is not None
-    assert extent["id"] == "rwa"
+    assert extent["name"] == "Rwanda"
 
 
 def test_extent_service_returns_none_when_config_unset(monkeypatch: pytest.MonkeyPatch) -> None:
