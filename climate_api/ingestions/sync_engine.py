@@ -15,7 +15,7 @@ import importlib
 import inspect
 import logging
 from collections.abc import Callable
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
@@ -25,7 +25,6 @@ from climate_api.shared.time import (
     datetime_to_period_string,
     normalize_period_string,
     parse_hourly_period_string,
-    parse_period_string_to_datetime,
     utc_now,
     utc_today,
 )
@@ -71,19 +70,6 @@ def plan_sync(
             action=SyncAction.NOT_SYNCABLE,
             reason="static_dataset",
             message="This dataset is static and is not syncable.",
-            current_start=current_start,
-            current_end=current_end,
-            target_end=current_end,
-            target_end_source="current_coverage",
-        )
-    if sync_kind == SyncKind.DERIVED:
-        return SyncDetail(
-            source_dataset_id=latest_artifact.dataset_id,
-            extent_id=latest_artifact.request_scope.extent_id,
-            sync_kind=sync_kind,
-            action=SyncAction.NOT_SYNCABLE,
-            reason="derived_sync_not_implemented",
-            message="This derived dataset does not support sync execution yet.",
             current_start=current_start,
             current_end=current_end,
             target_end=current_end,
@@ -318,10 +304,6 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     if period_type == "daily":
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
-    if period_type == "weekly":
-        current = parse_period_string_to_datetime(latest_period_end).date()
-        next_week = datetime.combine(current + timedelta(days=7), time(0))
-        return datetime_to_period_string(next_week, period_type)
     if period_type == "monthly":
         current = date.fromisoformat(f"{latest_period_end}-01")
         month = current.month + 1
@@ -340,8 +322,6 @@ def _default_target_end(*, period_type: str) -> str:
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "daily":
         return today.isoformat()
-    if period_type == "weekly":
-        return datetime_to_period_string(utc_now(), period_type)
     if period_type == "monthly":
         return f"{today.year:04d}-{today.month:02d}"
     if period_type == "yearly":

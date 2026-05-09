@@ -11,7 +11,6 @@ import climate_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from climate_api.data_registry import routes as dataset_template_routes
 from climate_api.extents import routes as extent_routes
 from climate_api.ingestions import routes as ingestion_routes
-from climate_api.processing import routes as processing_routes
 from climate_api.pygeoapi_app import mount_pygeoapi
 from climate_api.stac import routes as stac_routes
 from climate_api.system import routes as system_routes
@@ -91,7 +90,6 @@ def create_app() -> FastAPI:
     _app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
     _app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
     _app.include_router(ingestion_routes.sync_router, prefix="/sync", tags=["Sync"])
-    _app.include_router(processing_routes.router, prefix="/processes", tags=["Processes"])
 
     mount_pygeoapi(_app)
 

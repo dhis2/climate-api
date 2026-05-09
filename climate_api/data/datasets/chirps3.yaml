@@ -7,39 +7,8 @@
   sync_execution: append
   sync_availability:
     latest_available_function: climate_api.providers.availability.chirps3_daily_latest_available
-  ingestion:
+  ingestion: 
     function: dhis2eo.data.chc.chirps3.daily.download
-  units: mm
-  resolution: 5 km x 5 km
-  source: CHIRPS v3
-  source_url: https://www.chc.ucsb.edu/data/chirps3
-
-- id: chirps3_precipitation_weekly
-  name: Total precipitation weekly (CHIRPS3)
-  short_name: Total precipitation weekly
-  variable: precip
-  period_type: weekly
-  sync_kind: derived
-  processing:
-    process_id: resample
-    source_dataset_id: chirps3_precipitation_daily
-    method: sum
-    week_start: monday
-  units: mm
-  resolution: 5 km x 5 km
-  source: CHIRPS v3
-  source_url: https://www.chc.ucsb.edu/data/chirps3
-
-- id: chirps3_precipitation_monthly
-  name: Total precipitation monthly (CHIRPS3)
-  short_name: Total precipitation monthly
-  variable: precip
-  period_type: monthly
-  sync_kind: derived
-  processing:
-    process_id: resample
-    source_dataset_id: chirps3_precipitation_daily
-    method: sum
   units: mm
   resolution: 5 km x 5 km
   source: CHIRPS v3

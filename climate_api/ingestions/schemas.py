@@ -26,7 +26,6 @@ class SyncKind(StrEnum):
     TEMPORAL = "temporal"
     RELEASE = "release"
     STATIC = "static"
-    DERIVED = "derived"
 
 
 class SyncAction(StrEnum):

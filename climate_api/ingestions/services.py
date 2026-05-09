@@ -330,56 +330,6 @@ def publish_artifact_record(artifact_id: str) -> ArtifactRecord:
     return _mutate_records(mutate)
 
 
-def store_materialized_zarr_artifact(
-    *,
-    dataset: dict[str, object],
-    start: str,
-    end: str | None,
-    extent_id: str | None,
-    bbox: list[float] | None,
-    zarr_path: Path,
-    overwrite: bool,
-    publish: bool,
-) -> ArtifactRecord:
-    """Store metadata for a locally materialized Zarr artifact."""
-    period_type = str(dataset["period_type"])
-    normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
-    request_scope = ArtifactRequestScope(
-        start=normalized_start,
-        end=normalized_end,
-        extent_id=extent_id,
-        bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
-    )
-    coverage_data = get_data_coverage_for_paths(dataset, zarr_path=str(zarr_path.resolve()))
-    if not coverage_data.get("has_data", True):
-        raise HTTPException(status_code=409, detail="Materialized artifact contains no data for the requested scope")
-    coverage = ArtifactCoverage(
-        temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
-        spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
-    )
-    request_scope = request_scope.model_copy(update={"end": coverage.temporal.end})
-
-    record = ArtifactRecord(
-        artifact_id=str(uuid4()),
-        dataset_id=str(dataset["id"]),
-        dataset_name=str(dataset["name"]),
-        variable=str(dataset["variable"]),
-        format=ArtifactFormat.ZARR,
-        path=str(zarr_path.resolve()),
-        asset_paths=[str(zarr_path.resolve())],
-        variables=[str(dataset["variable"])],
-        request_scope=request_scope,
-        coverage=coverage,
-        created_at=datetime.now(UTC),
-        publication=ArtifactPublication(),
-    )
-    stored_record = _upsert_artifact_record(record, prefer_zarr=True, publish=publish, overwrite=overwrite)
-    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
-        return publish_artifact_record(stored_record.artifact_id)
-    return stored_record
-
-
 def sync_dataset(
     *,
     dataset_id: str,
@@ -514,44 +464,6 @@ def _store_artifact_record(
     return _mutate_records(mutate)
 
 
-def _upsert_artifact_record(
-    record: ArtifactRecord,
-    *,
-    prefer_zarr: bool,
-    publish: bool,
-    overwrite: bool,
-) -> ArtifactRecord:
-    """Persist a new or replacement artifact record for the same logical request scope."""
-    if not overwrite:
-        return _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
-
-    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
-        existing = _find_existing_artifact_in_records(
-            records=records,
-            dataset_id=record.dataset_id,
-            request_scope=record.request_scope,
-            prefer_zarr=prefer_zarr,
-        )
-        if existing is None:
-            records.append(record)
-            return record
-
-        replacement = record.model_copy(
-            update={
-                "artifact_id": existing.artifact_id,
-                "publication": existing.publication,
-            }
-        )
-        for index, current in enumerate(records):
-            if current.artifact_id != existing.artifact_id:
-                continue
-            records[index] = replacement
-            return replacement
-        raise HTTPException(status_code=404, detail=f"Artifact '{existing.artifact_id}' not found")
-
-    return _mutate_records(mutate)
-
-
 def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) -> ArtifactRecord:
     """Apply a read-modify-write mutation under an exclusive file lock."""
     ensure_store()
@@ -655,8 +567,6 @@ def _default_request_end(period_type: str) -> str:
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "daily":
         return utc_today().isoformat()
-    if period_type == "weekly":
-        return datetime_to_period_string(utc_now(), period_type)
     if period_type == "monthly":
         today = utc_today()
         return f"{today.year:04d}-{today.month:02d}"

@@ -352,34 +352,14 @@ def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_default_target_end_rejects_unsupported_period_type() -> None:
-    with pytest.raises(ValueError, match="Unsupported period_type 'fortnightly' for sync"):
-        sync_engine._default_target_end(period_type="fortnightly")
+    with pytest.raises(ValueError, match="Unsupported period_type 'weekly' for sync"):
+        sync_engine._default_target_end(period_type="weekly")
 
 
 def test_next_period_start_preserves_hourly_period_format() -> None:
     result = sync_engine._next_period_start("2026-04-21T13", period_type="hourly")
 
     assert result == "2026-04-21T14"
-
-
-def test_default_weekly_target_end_uses_iso_week_format(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sync_engine, "utc_now", lambda: datetime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
-
-    result = sync_engine._default_target_end(period_type="weekly")
-
-    assert result == "2026-W17"
-
-
-def test_next_period_start_preserves_weekly_period_format() -> None:
-    result = sync_engine._next_period_start("2026-W17", period_type="weekly")
-
-    assert result == "2026-W18"
-
-
-def test_next_period_start_rolls_weekly_period_across_iso_year_boundary() -> None:
-    result = sync_engine._next_period_start("2020-W53", period_type="weekly")
-
-    assert result == "2021-W01"
 
 
 def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmetic(
@@ -438,25 +418,6 @@ def test_plan_sync_static_policy_ignores_period_normalization() -> None:
     assert result.sync_kind == SyncKind.STATIC
     assert result.action == SyncAction.NOT_SYNCABLE
     assert result.reason == "static_dataset"
-
-
-def test_plan_sync_derived_policy_returns_not_syncable_without_download_path() -> None:
-    latest = _artifact(
-        artifact_id="a1",
-        source_dataset_id="chirps3_precipitation_weekly",
-        managed_dataset_id="chirps3_precipitation_weekly_sle",
-        end="2026-W17",
-    )
-
-    result = sync_engine.plan_sync(
-        source_dataset={"id": "chirps3_precipitation_weekly", "period_type": "weekly", "sync_kind": "derived"},
-        latest_artifact=latest,
-        requested_end=None,
-    )
-
-    assert result.sync_kind == SyncKind.DERIVED
-    assert result.action == SyncAction.NOT_SYNCABLE
-    assert result.reason == "derived_sync_not_implemented"
 
 
 def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
