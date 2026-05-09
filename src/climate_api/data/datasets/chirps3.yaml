@@ -7,6 +7,8 @@
   sync_execution: append
   sync_availability:
     latest_available_function: climate_api.providers.availability.chirps3_daily_latest_available
+  coverage:
+    lat: [-50, 50]
   ingestion:
     function: dhis2eo.data.chc.chirps3.daily.download
   units: mm

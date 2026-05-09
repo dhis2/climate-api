@@ -148,6 +148,89 @@ def test_download_dataset_returns_502_for_upstream_provider_failure(monkeypatch:
 
 
 # ---------------------------------------------------------------------------
+# _get_cache_prefix — extent_id isolation
+# ---------------------------------------------------------------------------
+
+
+def test_get_cache_prefix_without_extent_id() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}}
+    assert downloader._get_cache_prefix(dataset) == "chirps3_precipitation_daily"
+
+
+def test_get_cache_prefix_with_extent_id() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}}
+    assert downloader._get_cache_prefix(dataset, extent_id="nor") == "chirps3_precipitation_daily_nor"
+
+
+# ---------------------------------------------------------------------------
+# _validate_spatial_coverage
+# ---------------------------------------------------------------------------
+
+
+def test_validate_spatial_coverage_passes_when_no_coverage_declared() -> None:
+    dataset: dict[str, Any] = {"id": "worldpop_population_yearly", "ingestion": {}}
+    downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
+
+
+def test_validate_spatial_coverage_passes_when_no_bbox() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "coverage": {"lat": [-50, 50]}}
+    downloader._validate_spatial_coverage(dataset, bbox=None)
+
+
+def test_validate_spatial_coverage_passes_when_bbox_inside_coverage() -> None:
+    dataset: dict[str, Any] = {"id": "chirps3_precipitation_daily", "ingestion": {}, "coverage": {"lat": [-50, 50]}}
+    downloader._validate_spatial_coverage(dataset, bbox=[-10.0, -10.0, 10.0, 10.0])
+
+
+def test_validate_spatial_coverage_raises_when_bbox_outside_lat_coverage() -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {},
+        "coverage": {"lat": [-50, 50]},
+    }
+    with pytest.raises(HTTPException) as exc_info:
+        downloader._validate_spatial_coverage(dataset, bbox=[4.5, 57.9, 31.1, 71.2])
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
+    assert "Latitude" in str(exc_info.value.detail)
+
+
+def test_validate_spatial_coverage_raises_when_bbox_outside_lon_coverage() -> None:
+    dataset: dict[str, Any] = {
+        "id": "some_dataset",
+        "ingestion": {},
+        "coverage": {"lon": [-180, 60]},
+    }
+    with pytest.raises(HTTPException) as exc_info:
+        downloader._validate_spatial_coverage(dataset, bbox=[70.0, -10.0, 90.0, 10.0])
+    assert exc_info.value.status_code == 400
+    assert "Longitude" in str(exc_info.value.detail)
+
+
+def test_download_dataset_returns_400_when_bbox_outside_dataset_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"function": "ignored.path"},
+        "coverage": {"lat": [-50, 50]},
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=[4.5, 57.9, 31.1, 71.2],
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+    assert exc_info.value.status_code == 400
+    assert "does not cover this extent" in str(exc_info.value.detail)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -273,7 +356,7 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
     """Flat zarr is written with the correct variable and no pyramid level dirs."""
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: nc_files)
 
     downloader.build_dataset_zarr(_FLAT_DATASET)
 
@@ -310,7 +393,7 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: [path])
 
     downloader.build_dataset_zarr(dataset)
 
@@ -346,7 +429,7 @@ def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monke
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: [path])
 
     downloader.build_dataset_zarr(dataset)
 
@@ -374,7 +457,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: nc_files)
 
     downloader.build_dataset_zarr(dataset, start="2024-02-01", end="2024-02-10")
 
@@ -404,7 +487,7 @@ def test_build_dataset_zarr_pyramid_copies_time_to_root(tmp_path: Path, monkeypa
     """Pyramid zarr build copies the time coordinate to the store root for zarr-layer."""
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: nc_files)
 
     def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
         return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
@@ -422,7 +505,7 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
     """open_zarr_dataset returns the dataset from level 0 of the pyramid store."""
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: nc_files)
 
     def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
         return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
@@ -446,7 +529,7 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
     nc_files = _write_nc_files(tmp_path)
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
+    monkeypatch.setattr(downloader, "get_cache_files", lambda dataset, extent_id=None: nc_files)
 
     received: list[xr.Dataset] = []
 

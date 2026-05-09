@@ -46,6 +46,7 @@ def download_dataset(
     country_code: str | None,
     overwrite: bool,
     background_tasks: BackgroundTasks | None,
+    extent_id: str | None = None,
 ) -> list[Path]:
     """Download dataset files and return the NetCDF paths created or modified by this run.
 
@@ -54,10 +55,11 @@ def download_dataset(
     When running in the background-task path, the download is deferred and this function
     returns an empty list because no files have been created yet.
     """
+    _validate_spatial_coverage(dataset, bbox)
     ingestion = dataset["ingestion"]
     eo_download_func_path = ingestion["function"]
     eo_download_func = _get_dynamic_function(eo_download_func_path)
-    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
+    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset, extent_id=extent_id)}
 
     params = dict(ingestion.get("default_params", {}))
     params.update(
@@ -65,7 +67,7 @@ def download_dataset(
             "start": start,
             "end": end or datetime.date.today().isoformat(),
             "dirname": DOWNLOAD_DIR,
-            "prefix": _get_cache_prefix(dataset),
+            "prefix": _get_cache_prefix(dataset, extent_id=extent_id),
             "overwrite": overwrite,
         }
     )
@@ -105,19 +107,21 @@ def download_dataset(
         message = str(exc).strip() or "Unexpected error from upstream data provider"
         raise HTTPException(status_code=502, detail=f"Upstream dataset download failed: {message}") from exc
 
-    after_files = [path.resolve() for path in get_cache_files(dataset)]
+    after_files = [path.resolve() for path in get_cache_files(dataset, extent_id=extent_id)]
     changed_files = [
         path for path in after_files if path not in before_files or path.stat().st_mtime_ns != before_files[path]
     ]
     return changed_files
 
 
-def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end: str | None = None) -> None:
+def build_dataset_zarr(
+    dataset: dict[str, Any], *, start: str | None = None, end: str | None = None, extent_id: str | None = None
+) -> None:
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
 
     ingestion = dataset["ingestion"]
-    files = get_cache_files(dataset)
+    files = get_cache_files(dataset, extent_id=extent_id)
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
 
@@ -161,7 +165,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     # save as zarr
     logger.info("Saving to optimized zarr file")
-    zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset)}.zarr"
+    zarr_path = DOWNLOAD_DIR / f"{_get_cache_prefix(dataset, extent_id=extent_id)}.zarr"
 
     multiscales = dict(ingestion.get("multiscales", {}))
 
@@ -269,24 +273,57 @@ def _compute_time_space_chunks(
     return chunks
 
 
-def _get_cache_prefix(dataset: dict[str, Any]) -> str:
-    return str(dataset["id"])
+def _get_cache_prefix(dataset: dict[str, Any], extent_id: str | None = None) -> str:
+    base = str(dataset["id"])
+    return f"{base}_{extent_id}" if extent_id else base
 
 
-def get_cache_files(dataset: dict[str, Any]) -> list[Path]:
+def get_cache_files(dataset: dict[str, Any], extent_id: str | None = None) -> list[Path]:
     """Return all NetCDF cache files matching this dataset's prefix."""
     # TODO: not bulletproof -- e.g. 2m_temperature matches 2m_temperature_modified
-    prefix = _get_cache_prefix(dataset)
+    prefix = _get_cache_prefix(dataset, extent_id=extent_id)
     return list(DOWNLOAD_DIR.glob(f"{prefix}*.nc"))
 
 
-def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
+def get_zarr_path(dataset: dict[str, Any], extent_id: str | None = None) -> Path | None:
     """Return the optimised zarr archive path if it exists."""
-    prefix = _get_cache_prefix(dataset)
+    prefix = _get_cache_prefix(dataset, extent_id=extent_id)
     optimized = DOWNLOAD_DIR / f"{prefix}.zarr"
     if optimized.exists():
         return optimized
     return None
+
+
+def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:
+    """Raise HTTP 400 if the request bbox falls outside the dataset's declared coverage."""
+    coverage = dataset.get("coverage")
+    if not coverage or bbox is None:
+        return
+    xmin, ymin, xmax, ymax = bbox
+    lat_bounds = coverage.get("lat")
+    if lat_bounds is not None:
+        cov_lat_min, cov_lat_max = lat_bounds
+        if ymin > cov_lat_max or ymax < cov_lat_min:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Dataset '{dataset['id']}' does not cover this extent. "
+                    f"Latitude coverage: {cov_lat_min}°–{cov_lat_max}°, "
+                    f"requested: {ymin}°–{ymax}°."
+                ),
+            )
+    lon_bounds = coverage.get("lon")
+    if lon_bounds is not None:
+        cov_lon_min, cov_lon_max = lon_bounds
+        if xmin > cov_lon_max or xmax < cov_lon_min:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Dataset '{dataset['id']}' does not cover this extent. "
+                    f"Longitude coverage: {cov_lon_min}°–{cov_lon_max}°, "
+                    f"requested: {xmin}°–{xmax}°."
+                ),
+            )
 
 
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
