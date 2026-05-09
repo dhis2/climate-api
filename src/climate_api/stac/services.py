@@ -25,6 +25,7 @@ CATALOG_TITLE = "DHIS2 Climate API"
 CATALOG_DESCRIPTION = "Published Climate API GeoZarr datasets"
 STAC_VERSION = "1.1.0"
 DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.3.0/schema.json"
+RENDER_EXTENSION = "https://stac-extensions.github.io/render/v2.0.0/schema.json"
 ZARR_EXTENSION = "https://stac-extensions.github.io/zarr/v1.1.0/schema.json"
 DEFAULT_STAC_LICENSE = "various"
 SPATIAL_STEP_DECIMALS = 8
@@ -89,11 +90,16 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     collection_payload["stac_version"] = STAC_VERSION
     collection_payload["description"] = template.description
     collection_payload["title"] = template.title
+    renders = _build_renders(artifact, source_dataset)
+    extensions = {DATACUBE_EXTENSION, ZARR_EXTENSION}
+    if renders is not None:
+        collection_payload["renders"] = renders
+        extensions.add(RENDER_EXTENSION)
     existing_extensions = collection_payload.get("stac_extensions", [])
     if isinstance(existing_extensions, list):
-        collection_payload["stac_extensions"] = sorted({*existing_extensions, DATACUBE_EXTENSION, ZARR_EXTENSION})
+        collection_payload["stac_extensions"] = sorted({*existing_extensions, *extensions})
     else:
-        collection_payload["stac_extensions"] = sorted([DATACUBE_EXTENSION, ZARR_EXTENSION])
+        collection_payload["stac_extensions"] = sorted(extensions)
     collection_payload["links"] = template_links
     assets = collection_payload.setdefault("assets", {})
     zarr_from_xstac = assets.get("zarr", {}) if isinstance(assets, dict) else {}
@@ -425,6 +431,30 @@ def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
 
 def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, bool | None]:
     return {"consolidated": _zarr_consolidated_flag(_artifact_store_path(artifact))}
+
+
+def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> dict[str, Any] | None:
+    display = source_dataset.get("display")
+    if not isinstance(display, dict):
+        return None
+    colormap_name = display.get("colormap")
+    value_range = display.get("range")
+    if not isinstance(colormap_name, str) or not isinstance(value_range, list) or len(value_range) != 2:
+        return None
+    render: dict[str, Any] = {
+        "title": artifact.dataset_name,
+        "assets": ["zarr"],
+        "rescale": [[float(value_range[0]), float(value_range[1])]],
+        "colormap_name": colormap_name,
+        "climate_api:variable": artifact.variable,
+    }
+    nodata = display.get("nodata")
+    if nodata is not None:
+        render["nodata"] = float(nodata)
+    units = source_dataset.get("convert_units") or source_dataset.get("units")
+    if isinstance(units, str):
+        render["climate_api:units"] = units
+    return {"default": render}
 
 
 def _zarr_consolidated_flag(artifact_path: str) -> bool | None:
