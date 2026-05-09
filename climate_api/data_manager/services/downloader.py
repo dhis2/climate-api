@@ -143,7 +143,6 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     dims = [lon_dim, lat_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
-    ds = _run_transforms(ds, dataset)
 
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
@@ -242,16 +241,6 @@ def _select_time_range(
         selected.sizes[time_dim],
     )
     return selected
-
-
-def _run_transforms(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
-    for entry in dataset.get("transforms", []):
-        func_path = entry if isinstance(entry, str) else entry["function"]
-        params = {} if isinstance(entry, str) else entry.get("params", {})
-        func = _get_dynamic_function(func_path)
-        logger.info("Applying transform %s to dataset %s", func_path, dataset.get("id", "?"))
-        ds = func(ds, dataset, **params)
-    return ds
 
 
 def _compute_time_space_chunks(
