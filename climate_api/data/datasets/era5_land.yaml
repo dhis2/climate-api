@@ -3,11 +3,12 @@
   short_name: 2m temperature
   variable: t2m
   period_type: hourly
-  sync_kind: temporal
-  sync_execution: append
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.lagged_latest_available
-    lag_hours: 120
+  sync:
+    kind: temporal
+    execution: append
+    availability:
+      latest_available_function: climate_api.providers.availability.lagged_latest_available
+      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -20,25 +21,27 @@
     function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['t2m']
-  units: kelvin
-  convert_units: degC
+  transforms:
+    - climate_api.transforms.kelvin_to_celsius
+  units: degC
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
   source_url: https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land
   display:
     colormap: rdbu_r
-    range: [233.0, 313.0]
+    range: [15.0, 40.0]
 
 - id: era5land_precipitation_hourly
   name: Total precipitation (ERA5-Land)
   short_name: Total precipitation
   variable: tp
   period_type: hourly
-  sync_kind: temporal
-  sync_execution: append
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.lagged_latest_available
-    lag_hours: 120
+  sync:
+    kind: temporal
+    execution: append
+    availability:
+      latest_available_function: climate_api.providers.availability.lagged_latest_available
+      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -51,9 +54,9 @@
     function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['tp']
-  pre_process: ['deaccumulate_era5']
-  units: m
-  convert_units: mm
+  transforms:
+    - climate_api.transforms.metres_to_mm
+  units: mm
   resolution: 9 km x 9 km
   source: ERA5-Land Reanalysis
   source_url: https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land

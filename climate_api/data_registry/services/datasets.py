@@ -127,24 +127,25 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
     dataset_id = dataset.get("id")
     if not isinstance(dataset_id, str) or not dataset_id:
         raise ValueError(f"{source} contains a dataset template with a missing or invalid id")
-    sync_kind = dataset.get("sync_kind")
+    sync_block = dataset.get("sync", {})
+    sync_kind = sync_block.get("kind") if isinstance(sync_block, dict) else None
     if not isinstance(sync_kind, str) or not sync_kind:
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define sync_kind")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define sync.kind")
     if sync_kind not in SUPPORTED_SYNC_KINDS:
         supported = ", ".join(sorted(SUPPORTED_SYNC_KINDS))
         raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has unsupported sync_kind "
+            f"Dataset template '{dataset_id}' in {source} has unsupported sync.kind "
             f"'{sync_kind}'. Supported values: {supported}"
         )
 
-    sync_execution = dataset.get("sync_execution")
+    sync_execution = sync_block.get("execution") if isinstance(sync_block, dict) else None
     if sync_execution is not None:
         if not isinstance(sync_execution, str) or not sync_execution:
-            raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync_execution")
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync.execution")
         if sync_execution not in SUPPORTED_SYNC_EXECUTIONS:
             supported = ", ".join(sorted(SUPPORTED_SYNC_EXECUTIONS))
             raise ValueError(
-                f"Dataset template '{dataset_id}' in {source} has unsupported sync_execution "
+                f"Dataset template '{dataset_id}' in {source} has unsupported sync.execution "
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
@@ -155,7 +156,7 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
     if not isinstance(function, str) or not function:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.function")
 
-    sync_availability = dataset.get("sync_availability")
+    sync_availability = sync_block.get("availability") if isinstance(sync_block, dict) else None
     if sync_availability is not None:
         _validate_sync_availability(sync_availability, dataset_id=dataset_id, source=source)
 
@@ -163,12 +164,12 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:
     """Validate optional source availability policy metadata."""
     if not isinstance(sync_availability, dict):
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync_availability")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid sync.availability")
 
     latest_available_function = sync_availability.get("latest_available_function")
     if latest_available_function is not None and (
         not isinstance(latest_available_function, str) or not latest_available_function
     ):
         raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has invalid sync_availability.latest_available_function"
+            f"Dataset template '{dataset_id}' in {source} has invalid sync.availability.latest_available_function"
         )

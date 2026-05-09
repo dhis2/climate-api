@@ -18,42 +18,7 @@ def test_dataset_registry_requires_sync_kind(monkeypatch: pytest.MonkeyPatch, tm
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="must define sync_kind"):
-        datasets.list_datasets()
-
-
-def test_dataset_registry_requires_ingestion_block(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    registry_file = tmp_path / "missing_ingestion.yaml"
-    registry_file.write_text(
-        """
-- id: missing_ingestion
-  variable: value
-  period_type: daily
-  sync_kind: temporal
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
-
-    with pytest.raises(ValueError, match="must define an 'ingestion' block"):
-        datasets.list_datasets()
-
-
-def test_dataset_registry_requires_ingestion_function(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    registry_file = tmp_path / "missing_function.yaml"
-    registry_file.write_text(
-        """
-- id: missing_function
-  variable: value
-  period_type: daily
-  sync_kind: temporal
-  ingestion: {}
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
-
-    with pytest.raises(ValueError, match="must define ingestion.function"):
+    with pytest.raises(ValueError, match="must define sync.kind"):
         datasets.list_datasets()
 
 
@@ -68,13 +33,14 @@ def test_dataset_registry_rejects_unsupported_sync_kind(
   name: Invalid sync kind
   variable: value
   period_type: daily
-  sync_kind: sometimes
+  sync:
+    kind: sometimes
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="unsupported sync_kind 'sometimes'"):
+    with pytest.raises(ValueError, match="unsupported sync.kind 'sometimes'"):
         datasets.list_datasets()
 
 
@@ -89,9 +55,10 @@ def test_dataset_registry_accepts_supported_sync_kind(
   name: Valid temporal
   variable: value
   period_type: daily
-  sync_kind: temporal
+  sync:
+    kind: temporal
   ingestion:
-    function: mypackage.sources.download
+    function: some.download.function
 """,
         encoding="utf-8",
     )
@@ -111,16 +78,15 @@ def test_dataset_registry_rejects_unsupported_sync_execution(
   name: Invalid sync execution
   variable: value
   period_type: daily
-  sync_kind: temporal
-  ingestion:
-    function: mypackage.sources.download
-  sync_execution: sometimes
+  sync:
+    kind: temporal
+    execution: sometimes
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="unsupported sync_execution 'sometimes'"):
+    with pytest.raises(ValueError, match="unsupported sync.execution 'sometimes'"):
         datasets.list_datasets()
 
 
@@ -135,17 +101,16 @@ def test_dataset_registry_rejects_non_string_sync_execution(
   name: Invalid sync execution type
   variable: value
   period_type: daily
-  sync_kind: temporal
-  ingestion:
-    function: mypackage.sources.download
-  sync_execution:
-    - append
+  sync:
+    kind: temporal
+    execution:
+      - append
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="invalid sync_execution"):
+    with pytest.raises(ValueError, match="invalid sync.execution"):
         datasets.list_datasets()
 
 
@@ -160,16 +125,17 @@ def test_dataset_registry_accepts_supported_sync_execution(
   name: Valid append
   variable: value
   period_type: daily
-  sync_kind: temporal
+  sync:
+    kind: temporal
+    execution: append
   ingestion:
-    function: mypackage.sources.download
-  sync_execution: append
+    function: some.download.function
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    assert datasets.list_datasets()[0]["sync_execution"] == "append"
+    assert datasets.list_datasets()[0]["sync"]["execution"] == "append"
 
 
 def test_dataset_registry_rejects_invalid_sync_availability_function(
@@ -183,17 +149,18 @@ def test_dataset_registry_rejects_invalid_sync_availability_function(
   name: Invalid sync availability
   variable: value
   period_type: daily
-  sync_kind: temporal
+  sync:
+    kind: temporal
+    availability:
+      latest_available_function: 42
   ingestion:
-    function: mypackage.sources.download
-  sync_availability:
-    latest_available_function: 42
+    function: some.download.function
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="invalid sync_availability.latest_available_function"):
+    with pytest.raises(ValueError, match="invalid sync.availability.latest_available_function"):
         datasets.list_datasets()
 
 
@@ -208,16 +175,17 @@ def test_dataset_registry_accepts_sync_availability_function(
   name: Valid sync availability
   variable: value
   period_type: daily
-  sync_kind: temporal
+  sync:
+    kind: temporal
+    availability:
+      latest_available_function: climate_api.providers.availability.lagged_latest_available
   ingestion:
-    function: mypackage.sources.download
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.lagged_latest_available
+    function: some.download.function
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    assert datasets.list_datasets()[0]["sync_availability"]["latest_available_function"].endswith(
+    assert datasets.list_datasets()[0]["sync"]["availability"]["latest_available_function"].endswith(
         "lagged_latest_available"
     )

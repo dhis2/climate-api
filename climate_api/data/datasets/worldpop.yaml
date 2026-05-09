@@ -3,11 +3,12 @@
   short_name: Total population
   variable: pop_total
   period_type: yearly
-  sync_kind: release
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.worldpop_release_latest_available
-    # WorldPop projections are intentionally request-driven for future years.
-    allow_future: true
+  sync:
+    kind: release
+    availability:
+      latest_available_function: climate_api.providers.availability.worldpop_release_latest_available
+      # WorldPop projections are intentionally request-driven for future years.
+      allow_future: true
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]

@@ -72,5 +72,6 @@ nav:
   - Guides:
       - Accessing data: user_guide.md
       - Adding custom datasets: adding_custom_datasets.md
+      - Extensibility: extensibility.md
       - API reference: managed_data_api_guide.md
   - Roadmap: roadmap.md

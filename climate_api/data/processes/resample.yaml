@@ -1,0 +1,4 @@
+- id: resample
+  name: Temporal resampling
+  description: Aggregate a source dataset to a coarser temporal resolution using pandas frequency aliases (e.g. 1D, W-MON, MS).
+  execution_function: climate_api.processing.services.execute_resample

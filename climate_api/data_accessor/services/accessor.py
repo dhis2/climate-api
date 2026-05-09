@@ -5,6 +5,7 @@ import os
 import tempfile
 from typing import Any
 
+import numpy as np
 import xarray as xr
 
 from ...data_manager.services.downloader import get_cache_files, get_zarr_path
@@ -135,8 +136,8 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any
     time_dim = get_time_dim(ds)
     lon_dim, lat_dim = get_lon_lat_dims(ds)
 
-    start = numpy_datetime_to_period_string(ds[time_dim].min(), period_type)  # type: ignore[arg-type]
-    end = numpy_datetime_to_period_string(ds[time_dim].max(), period_type)  # type: ignore[arg-type]
+    start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]
+    end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), period_type))  # type: ignore[arg-type]
 
     xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
     ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()
@@ -148,6 +149,13 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any
             "spatial": {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax},
         },
     }
+
+
+def _period_string_scalar(value: Any) -> str:
+    """Normalize a numpy scalar or 0-d array period string to plain Python str."""
+    if isinstance(value, np.ndarray):
+        return str(value.item())
+    return str(value)
 
 
 def xarray_to_temporary_netcdf(ds: xr.Dataset) -> str:

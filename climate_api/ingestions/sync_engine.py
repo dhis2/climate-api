@@ -15,7 +15,7 @@ import importlib
 import inspect
 import logging
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
@@ -25,6 +25,7 @@ from climate_api.shared.time import (
     datetime_to_period_string,
     normalize_period_string,
     parse_hourly_period_string,
+    parse_period_string_to_datetime,
     utc_now,
     utc_today,
 )
@@ -55,9 +56,9 @@ def plan_sync(
 
     This planner deliberately does not download data or persist artifacts.
     """
-    sync_kind_value = source_dataset.get("sync_kind")
+    sync_kind_value = source_dataset.get("sync", {}).get("kind")
     if not isinstance(sync_kind_value, str) or not sync_kind_value:
-        raise ValueError("source_dataset must define sync_kind for sync planning")
+        raise ValueError("source_dataset must define sync.kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     current_start = latest_artifact.request_scope.start
     current_end = latest_artifact.coverage.temporal.end
@@ -75,7 +76,6 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
-
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
@@ -304,6 +304,10 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     if period_type == "daily":
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
+    if period_type == "weekly":
+        current = parse_period_string_to_datetime(latest_period_end).date()
+        next_week = datetime.combine(current + timedelta(days=7), time(0))
+        return datetime_to_period_string(next_week, period_type)
     if period_type == "monthly":
         current = date.fromisoformat(f"{latest_period_end}-01")
         month = current.month + 1
@@ -322,6 +326,8 @@ def _default_target_end(*, period_type: str) -> str:
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "daily":
         return today.isoformat()
+    if period_type == "weekly":
+        return datetime_to_period_string(utc_now(), period_type)
     if period_type == "monthly":
         return f"{today.year:04d}-{today.month:02d}"
     if period_type == "yearly":
@@ -336,7 +342,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     apply conservative template metadata so sync planning does not overshoot known
     provider lag or release cadence.
     """
-    availability = source_dataset.get("sync_availability")
+    availability = source_dataset.get("sync", {}).get("availability")
     if not isinstance(availability, dict):
         return requested_end
 
@@ -361,7 +367,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
 
 def _supports_append(source_dataset: dict[str, Any]) -> bool:
     """Return whether this template opts into V1 delta-download sync execution."""
-    if source_dataset.get("sync_execution") != SyncAction.APPEND.value:
+    if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
     ingestion = source_dataset.get("ingestion")
     if not isinstance(ingestion, dict):

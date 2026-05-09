@@ -17,6 +17,7 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
+from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_lon_lat_dims, get_time_dim
 
@@ -139,6 +140,10 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     dims = [lon_dim, lat_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
+    ds = _run_transforms(ds, dataset)
+
+    source_crs: str = dataset.get("source_crs", "EPSG:4326")
+    ds = reproject_to_instance_crs(ds, dataset, source_crs=source_crs)
 
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()
@@ -237,6 +242,29 @@ def _select_time_range(
         selected.sizes[time_dim],
     )
     return selected
+
+
+def _run_transforms(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+    dataset_id = dataset.get("id", "?")
+    for entry in dataset.get("transforms", []):
+        if isinstance(entry, str):
+            func_path, params = entry, {}
+        elif isinstance(entry, dict):
+            if "function" not in entry:
+                raise ValueError(
+                    f"Transform entry in dataset '{dataset_id}' is missing required key 'function': {entry!r}"
+                )
+            func_path = entry["function"]
+            params = entry.get("params", {})
+        else:
+            raise ValueError(
+                f"Transform entry in dataset '{dataset_id}' must be a string or dict,"
+                f" got {type(entry).__name__!r}: {entry!r}"
+            )
+        func = _get_dynamic_function(func_path)
+        logger.info("Applying transform %s to dataset %s", func_path, dataset_id)
+        ds = func(ds, dataset, **params)
+    return ds
 
 
 def _compute_time_space_chunks(
