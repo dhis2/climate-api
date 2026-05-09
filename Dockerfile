@@ -12,7 +12,7 @@ RUN groupadd --system eo && useradd --system --gid eo --create-home eo
 WORKDIR /app
 
 COPY pyproject.toml uv.lock .python-version ./
-COPY src/ src/
+COPY climate_api/ climate_api/
 
 RUN uv sync --frozen --no-dev
 
