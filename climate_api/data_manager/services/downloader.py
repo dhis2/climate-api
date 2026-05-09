@@ -133,13 +133,11 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     # For WGS84 instances: rename spatial dims to longitude/latitude (degree values).
     # For other CRS (e.g. UTM): rename to x/y to reflect projected metre coordinates.
     crs = api_config.get_crs()
-    target_lon = "longitude" if crs == api_config.DEFAULT_CRS else "x"
-    target_lat = "latitude" if crs == api_config.DEFAULT_CRS else "y"
     time_dim = get_time_dim(ds)
-    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, target_lon), (lat_dim, target_lat)] if k != v}
+    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "x"), (lat_dim, "y")] if k != v}
     if rename_map:
         ds = ds.rename(rename_map)
-    lon_dim, lat_dim = target_lon, target_lat
+    lon_dim, lat_dim = "x", "y"
     dims = [lon_dim, lat_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
