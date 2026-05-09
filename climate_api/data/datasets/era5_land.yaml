@@ -3,11 +3,12 @@
   short_name: 2m temperature
   variable: t2m
   period_type: hourly
-  sync_kind: temporal
-  sync_execution: append
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.lagged_latest_available
-    lag_hours: 120
+  sync:
+    kind: temporal
+    execution: append
+    availability:
+      latest_available_function: climate_api.providers.availability.lagged_latest_available
+      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -36,11 +37,12 @@
   short_name: Total precipitation
   variable: tp
   period_type: hourly
-  sync_kind: temporal
-  sync_execution: append
-  sync_availability:
-    latest_available_function: climate_api.providers.availability.lagged_latest_available
-    lag_hours: 120
+  sync:
+    kind: temporal
+    execution: append
+    availability:
+      latest_available_function: climate_api.providers.availability.lagged_latest_available
+      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]

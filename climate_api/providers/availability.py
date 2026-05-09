@@ -76,7 +76,7 @@ def worldpop_release_latest_available(*, dataset: dict[str, Any], requested_end:
 
 def _availability_metadata(dataset: dict[str, Any]) -> dict[str, Any]:
     """Return sync availability metadata from a dataset template."""
-    availability = dataset.get("sync_availability")
+    availability = dataset.get("sync", {}).get("availability")
     return availability if isinstance(availability, dict) else {}
 
 

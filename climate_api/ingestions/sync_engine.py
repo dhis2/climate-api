@@ -56,7 +56,7 @@ def plan_sync(
 
     This planner deliberately does not download data or persist artifacts.
     """
-    sync_kind_value = source_dataset.get("sync_kind")
+    sync_kind_value = source_dataset.get("sync", {}).get("kind")
     if not isinstance(sync_kind_value, str) or not sync_kind_value:
         raise ValueError("source_dataset must define sync_kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
@@ -342,7 +342,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     apply conservative template metadata so sync planning does not overshoot known
     provider lag or release cadence.
     """
-    availability = source_dataset.get("sync_availability")
+    availability = source_dataset.get("sync", {}).get("availability")
     if not isinstance(availability, dict):
         return requested_end
 
@@ -367,7 +367,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
 
 def _supports_append(source_dataset: dict[str, Any]) -> bool:
     """Return whether this template opts into V1 delta-download sync execution."""
-    if source_dataset.get("sync_execution") != SyncAction.APPEND.value:
+    if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
     ingestion = source_dataset.get("ingestion")
     if not isinstance(ingestion, dict):
