@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 
 from ...data_manager.services.downloader import get_cache_files, get_zarr_path
-from ...data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
 
 logger = logging.getLogger(__name__)
@@ -47,11 +47,11 @@ def get_data(
     if bbox is not None:
         logger.info(f"Subsetting xy to {bbox}")
         xmin, ymin, xmax, ymax = list(map(float, bbox))
-        lon_dim, lat_dim = get_lon_lat_dims(ds)
+        x_dim, y_dim = get_x_y_dims(ds)
         # TODO: this assumes y axis increases towards north and is not very stable
         # ...and also does not consider partial pixels at the edges
         # ...should probably switch to rioxarray.clip instead
-        ds = ds.sel(**{lon_dim: slice(xmin, xmax), lat_dim: slice(ymax, ymin)})  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+        ds = ds.sel(**{x_dim: slice(xmin, xmax), y_dim: slice(ymax, ymin)})  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
 
     return ds
 
@@ -134,13 +134,13 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str) -> dict[str, Any
         }
 
     time_dim = get_time_dim(ds)
-    lon_dim, lat_dim = get_lon_lat_dims(ds)
+    x_dim, y_dim = get_x_y_dims(ds)
 
     start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]
     end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), period_type))  # type: ignore[arg-type]
 
-    xmin, xmax = ds[lon_dim].min().item(), ds[lon_dim].max().item()
-    ymin, ymax = ds[lat_dim].min().item(), ds[lat_dim].max().item()
+    xmin, xmax = ds[x_dim].min().item(), ds[x_dim].max().item()
+    ymin, ymax = ds[y_dim].min().item(), ds[y_dim].max().item()
 
     return {
         "has_data": True,

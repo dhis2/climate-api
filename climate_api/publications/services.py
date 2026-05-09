@@ -14,7 +14,7 @@ import xarray as xr
 import yaml
 
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
-from climate_api.data_manager.services.utils import get_lon_lat_dims, get_time_dim
+from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
 
@@ -165,7 +165,7 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
         ds = xr.open_dataset(data_path)
 
     try:
-        x_field, y_field = get_lon_lat_dims(ds)
+        x_field, y_field = get_x_y_dims(ds)
         time_field = get_time_dim(ds)
         return x_field, y_field, time_field
     finally:

@@ -19,7 +19,7 @@ from topozarr.coarsen import create_pyramid
 from climate_api import config as api_config
 from climate_api.transforms.reproject import reproject_to_instance_crs
 
-from .utils import get_lon_lat_dims, get_time_dim
+from .utils import get_time_dim, get_x_y_dims
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +119,8 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     logger.info(f"Opening {len(files)} files from cache")
     ds = xr.open_mfdataset(files)
 
-    lon_dim, lat_dim = get_lon_lat_dims(ds)
-    dims = [lon_dim, lat_dim]
+    x_dim, y_dim = get_x_y_dims(ds)
+    dims = [x_dim, y_dim]
 
     # trim to only minimal vars and coords before loading into memory
     logger.info("Trimming unnecessary variables and coordinates")
@@ -133,11 +133,11 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     # Normalise to canonical names so all stored Zarr files are consistent.
     crs = api_config.get_crs()
     time_dim = get_time_dim(ds)
-    rename_map = {k: v for k, v in [(time_dim, "time"), (lon_dim, "x"), (lat_dim, "y")] if k != v}
+    rename_map = {k: v for k, v in [(time_dim, "time"), (x_dim, "x"), (y_dim, "y")] if k != v}
     if rename_map:
         ds = ds.rename(rename_map)
-    lon_dim, lat_dim = "x", "y"
-    dims = [lon_dim, lat_dim]
+    x_dim, y_dim = "x", "y"
+    dims = [x_dim, y_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
     ds = _run_transforms(ds, dataset)
@@ -145,12 +145,12 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     source_crs: str = dataset.get("source_crs", "EPSG:4326")
     ds = reproject_to_instance_crs(ds, dataset, source_crs=source_crs)
 
-    xmin = ds[lon_dim].min().item()
-    xmax = ds[lon_dim].max().item()
-    ymin = ds[lat_dim].min().item()
-    ymax = ds[lat_dim].max().item()
+    xmin = ds[x_dim].min().item()
+    xmax = ds[x_dim].max().item()
+    ymin = ds[y_dim].min().item()
+    ymax = ds[y_dim].max().item()
     bbox = [xmin, ymin, xmax, ymax]
-    shape = (ds.sizes[lon_dim], ds.sizes[lat_dim])
+    shape = (ds.sizes[x_dim], ds.sizes[y_dim])
 
     # https://github.com/zarr-developers/geozarr-toolkit/issues/15
     geozarr_attrs = create_geozarr_attrs(
@@ -184,7 +184,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
         ds = ds.proj.assign_crs(spatial_ref=crs)
 
         # https://github.com/carbonplan/topozarr/issues/13
-        pyramid = create_pyramid(ds, levels=levels, x_dim=lon_dim, y_dim=lat_dim, method=method)
+        pyramid = create_pyramid(ds, levels=levels, x_dim=x_dim, y_dim=y_dim, method=method)
 
         pyramid.dt.attrs.update(geozarr_attrs)
         pyramid.dt.to_zarr(zarr_path, mode="w", encoding=pyramid.encoding, zarr_format=3)
@@ -286,9 +286,9 @@ def _compute_time_space_chunks(
     elif period_type == "yearly":
         chunks[dim] = 1
 
-    lon_dim, lat_dim = get_lon_lat_dims(ds)
-    chunks[lon_dim] = min(ds.sizes[lon_dim], max_spatial_chunk)
-    chunks[lat_dim] = min(ds.sizes[lat_dim], max_spatial_chunk)
+    x_dim, y_dim = get_x_y_dims(ds)
+    chunks[x_dim] = min(ds.sizes[x_dim], max_spatial_chunk)
+    chunks[y_dim] = min(ds.sizes[y_dim], max_spatial_chunk)
 
     return chunks
 
