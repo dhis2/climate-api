@@ -2,6 +2,7 @@
 
 import importlib.resources
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ def list_datasets() -> list[dict[str, Any]]:
     """Load all dataset templates and return a flat list.
 
     Built-in templates from climate_api/data/datasets/ are always loaded. When
-    templates_dir is set in CLIMATE_API_CONFIG, templates from that directory are
+    plugins_dir is set in CLIMATE_API_CONFIG, templates from that directory are
     merged on top — a custom template with the same id overrides the built-in one.
 
     CONFIGS_DIR (test override via monkeypatch) bypasses this and loads only
@@ -34,14 +35,26 @@ def list_datasets() -> list[dict[str, Any]]:
 
     merged: dict[str, dict[str, Any]] = {d["id"]: d for d in _load_builtin_datasets()}
 
-    config_templates_dir = api_config.get_config().get("templates_dir")
-    if config_templates_dir:
-        if not isinstance(config_templates_dir, (str, Path)):
+    config = api_config.get_config()
+    if config.get("templates_dir"):
+        raise ValueError(
+            "CLIMATE_API_CONFIG uses the removed 'templates_dir' key. "
+            "Rename it to 'plugins_dir' and rename the directory from 'templates/' to 'plugins/'."
+        )
+    config_plugins_dir = config.get("plugins_dir")
+    if config_plugins_dir:
+        if not isinstance(config_plugins_dir, (str, Path)):
             raise ValueError(
-                f"templates_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_templates_dir).__name__}"
+                f"plugins_dir in CLIMATE_API_CONFIG must be a path string, got {type(config_plugins_dir).__name__}"
             )
         config_path = api_config.get_config_path()
-        root = (config_path.parent / config_templates_dir).resolve() if config_path else Path(config_templates_dir)
+        base = config_path.parent if config_path else Path()
+        root = (base / config_plugins_dir).resolve()
+        if not root.is_dir():
+            raise ValueError(f"plugins_dir '{root}' does not exist or is not a directory")
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.append(root_str)
         datasets_subdir = root / "datasets"
         if datasets_subdir.is_dir():
             for dataset in _load_from_dir(datasets_subdir):
