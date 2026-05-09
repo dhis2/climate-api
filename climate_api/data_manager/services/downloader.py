@@ -17,6 +17,7 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
+from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_lon_lat_dims, get_time_dim
 
@@ -140,6 +141,9 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
     ds = _run_transforms(ds, dataset)
+
+    source_crs: str = dataset.get("source_crs", "EPSG:4326")
+    ds = reproject_to_instance_crs(ds, dataset, source_crs=source_crs)
 
     xmin = ds[lon_dim].min().item()
     xmax = ds[lon_dim].max().item()

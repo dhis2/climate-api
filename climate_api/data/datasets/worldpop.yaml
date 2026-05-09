@@ -17,8 +17,6 @@
       end: "2030"
       trs: http://www.opengis.net/def/uom/ISO-8601/0/Gregorian
       resolution: P1Y
-  transforms:
-    - climate_api.transforms.reproject_to_instance_crs
   ingestion:
     function: dhis2eo.data.worldpop.pop_total.yearly.download
     multiscales:
