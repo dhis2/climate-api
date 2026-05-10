@@ -16,6 +16,7 @@ from xstac import xarray_to_stac
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 from climate_api.shared.time import parse_period_string_to_datetime
@@ -118,7 +119,11 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     collection_payload["license"] = template.license
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
-    _override_time_step(collection_payload, _period_step(source_dataset.get("period_type")))
+    try:
+        pt: str | None = get_period_type(source_dataset)
+    except (KeyError, ValueError):
+        pt = None
+    _override_time_step(collection_payload, _period_step(pt))
     _override_spatial_extent_from_artifact(collection_payload, artifact)
     _override_temporal_extent_from_artifact(collection_payload, artifact)
     _sanitize_variable_attrs(collection_payload)

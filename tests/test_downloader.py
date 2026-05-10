@@ -316,14 +316,14 @@ def _write_daily_nc_file(tmp_path: Path) -> list[Path]:
 _FLAT_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
-    "period_type": "yearly",
+    "extents": {"temporal": {"resolution": "P1Y"}},
     "ingestion": {},
 }
 
 _PYRAMID_DATASET: dict[str, Any] = {
     "id": "my_dataset",
     "variable": "pop_total",
-    "period_type": "yearly",
+    "extents": {"temporal": {"resolution": "P1Y"}},
     "ingestion": {},
 }
 
@@ -425,7 +425,7 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
     dataset: dict[str, Any] = {
         "id": "era5land_temperature_hourly",
         "variable": "t2m",
-        "period_type": "hourly",
+        "extents": {"temporal": {"resolution": "PT1H"}},
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
@@ -461,7 +461,7 @@ def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monke
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
@@ -487,7 +487,7 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
         "ingestion": {},
     }
     monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)

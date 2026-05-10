@@ -18,6 +18,7 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
 from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
@@ -75,7 +76,7 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
-    period_type = str(source_dataset["period_type"])
+    period_type = get_period_type(source_dataset)
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
     requested_target_end_source = "request" if normalized_requested_end is not None else "default_today"
@@ -402,11 +403,11 @@ def _provider_latest_available_end(
     if not isinstance(result, str):
         raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
     try:
-        return normalize_period_string(result, period_type=str(source_dataset["period_type"]))
+        return normalize_period_string(result, period_type=get_period_type(source_dataset))
     except (KeyError, TypeError, ValueError) as exc:
         raise SyncConfigurationError(
             f"Latest availability function '{function_path}' returned invalid period "
-            f"'{result}' for dataset period_type '{source_dataset.get('period_type')}'"
+            f"'{result}' for dataset '{source_dataset.get('id')}'"
         ) from exc
 
 

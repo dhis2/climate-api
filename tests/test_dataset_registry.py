@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from climate_api.data_registry.services import datasets
+from climate_api.data_registry.services.datasets import get_period_type
 
 
 def test_dataset_registry_requires_sync_kind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -58,11 +59,11 @@ def test_dataset_registry_accepts_supported_sync_kind(
 - id: valid_temporal
   name: Valid temporal
   variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: temporal
   ingestion:
     function: some.download.function
 """,
@@ -134,12 +135,12 @@ def test_dataset_registry_accepts_supported_sync_execution(
 - id: valid_append
   name: Valid append
   variable: value
-  extents:
-    temporal:
-      resolution: P1D
   sync:
     kind: temporal
     execution: append
+  extents:
+    temporal:
+      resolution: P1D
   ingestion:
     function: some.download.function
 """,
@@ -160,13 +161,13 @@ def test_dataset_registry_rejects_invalid_sync_availability_function(
 - id: invalid_sync_availability
   name: Invalid sync availability
   variable: value
-  extents:
-    temporal:
-      resolution: P1D
   sync:
     kind: temporal
     availability:
       latest_available_function: 42
+  extents:
+    temporal:
+      resolution: P1D
   ingestion:
     function: some.download.function
 """,
@@ -188,13 +189,13 @@ def test_dataset_registry_accepts_sync_availability_function(
 - id: valid_sync_availability
   name: Valid sync availability
   variable: value
-  extents:
-    temporal:
-      resolution: P1D
   sync:
     kind: temporal
     availability:
       latest_available_function: climate_api.providers.availability.lagged_latest_available
+  extents:
+    temporal:
+      resolution: P1D
   ingestion:
     function: some.download.function
 """,
@@ -211,93 +212,88 @@ def test_dataset_registry_derives_period_type_from_resolution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    registry_file = tmp_path / "datasets.yaml"
+    registry_file = tmp_path / "resolutions.yaml"
     registry_file.write_text(
         """
 - id: hourly_ds
   name: Hourly
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: PT1H
-  sync:
-    kind: temporal
   ingestion:
-    function: some.func
-
+    function: some.download.function
 - id: daily_ds
   name: Daily
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: temporal
   ingestion:
-    function: some.func
-
+    function: some.download.function
 - id: weekly_ds
   name: Weekly
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P1W
-  sync:
-    kind: temporal
   ingestion:
-    function: some.func
-
+    function: some.download.function
 - id: monthly_ds
   name: Monthly
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P1M
-  sync:
-    kind: temporal
   ingestion:
-    function: some.func
-
+    function: some.download.function
 - id: yearly_ds
   name: Yearly
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P1Y
-  sync:
-    kind: release
   ingestion:
-    function: some.func
+    function: some.download.function
 """,
         encoding="utf-8",
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     loaded = {d["id"]: d for d in datasets.list_datasets()}
-    assert loaded["hourly_ds"]["period_type"] == "hourly"
-    assert loaded["daily_ds"]["period_type"] == "daily"
-    assert loaded["weekly_ds"]["period_type"] == "weekly"
-    assert loaded["monthly_ds"]["period_type"] == "monthly"
-    assert loaded["yearly_ds"]["period_type"] == "yearly"
+    assert get_period_type(loaded["hourly_ds"]) == "hourly"
+    assert get_period_type(loaded["daily_ds"]) == "daily"
+    assert get_period_type(loaded["weekly_ds"]) == "weekly"
+    assert get_period_type(loaded["monthly_ds"]) == "monthly"
+    assert get_period_type(loaded["yearly_ds"]) == "yearly"
 
 
 def test_dataset_registry_rejects_missing_resolution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    registry_file = tmp_path / "no_resolution.yaml"
+    registry_file = tmp_path / "missing_resolution.yaml"
     registry_file.write_text(
         """
-- id: no_resolution
-  name: No resolution
-  variable: v
-  extents:
-    temporal:
-      begin: "2020-01-01"
+- id: missing_resolution
+  name: Missing resolution
+  variable: value
   sync:
     kind: temporal
+  extents:
+    temporal: {}
   ingestion:
-    function: some.func
+    function: some.download.function
 """,
         encoding="utf-8",
     )
@@ -311,16 +307,16 @@ def test_dataset_registry_rejects_missing_extents(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    registry_file = tmp_path / "no_extents.yaml"
+    registry_file = tmp_path / "missing_extents.yaml"
     registry_file.write_text(
         """
-- id: no_extents
-  name: No extents
-  variable: v
+- id: missing_extents
+  name: Missing extents
+  variable: value
   sync:
     kind: temporal
   ingestion:
-    function: some.func
+    function: some.download.function
 """,
         encoding="utf-8",
     )
@@ -339,14 +335,14 @@ def test_dataset_registry_rejects_unrecognised_resolution(
         """
 - id: bad_resolution
   name: Bad resolution
-  variable: v
+  variable: value
+  sync:
+    kind: temporal
   extents:
     temporal:
       resolution: P6H
-  sync:
-    kind: temporal
   ingestion:
-    function: some.func
+    function: some.download.function
 """,
         encoding="utf-8",
     )

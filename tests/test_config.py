@@ -167,11 +167,11 @@ def test_plugins_dir_adds_root_to_sys_path_and_makes_modules_importable(
 - id: plugin_dataset
   name: Plugin dataset
   variable: val
+  sync:
+    kind: static
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: static
   ingestion:
     function: myplugin.source.download
 """,
@@ -203,11 +203,11 @@ def test_plugins_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch, 
 - id: custom_dataset
   name: Custom dataset
   variable: val
+  sync:
+    kind: static
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: static
   ingestion:
     function: mypackage.sources.download
 """,
@@ -238,11 +238,11 @@ def test_plugins_dir_resolved_relative_to_config_file(monkeypatch: pytest.Monkey
         """
 - id: deployed_dataset
   variable: val
+  sync:
+    kind: static
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: static
   ingestion:
     function: mypackage.sources.download
 """,
@@ -266,11 +266,11 @@ def test_plugins_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.Monke
 - id: chirps3_precipitation_daily
   name: Custom CHIRPS override
   variable: precip
+  sync:
+    kind: static
   extents:
     temporal:
       resolution: P1D
-  sync:
-    kind: static
   ingestion:
     function: mypackage.sources.download
 """,

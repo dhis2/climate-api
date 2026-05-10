@@ -97,7 +97,7 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
         lambda _: {
             "id": "chirps3_precipitation_daily",
             "short_name": "CHIRPS3 precip",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "units": "mm",
             "resolution": "5 km x 5 km",
             "source": "CHIRPS v3",
@@ -150,7 +150,7 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
         lambda _: {
             "id": "chirps3_precipitation_daily",
             "short_name": "CHIRPS3 precip",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "units": "mm",
             "resolution": "5 km x 5 km",
             "source": "CHIRPS v3",
@@ -233,7 +233,7 @@ def test_list_datasets_ignores_stale_records(monkeypatch: pytest.MonkeyPatch) ->
         lambda _: {
             "id": "chirps3_precipitation_daily",
             "short_name": "CHIRPS3 precip",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "units": "mm",
             "resolution": "5 km x 5 km",
             "source": "CHIRPS v3",
@@ -267,7 +267,7 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
         "id": "worldpop_population_yearly",
         "name": "Total population (WorldPop Global12)",
         "variable": "pop_total",
-        "period_type": "yearly",
+        "extents": {"temporal": {"resolution": "P1Y"}},
     }
     created_file = tmp_path / "worldpop_population_yearly_2020.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -323,7 +323,7 @@ def test_create_artifact_normalizes_request_scope_to_dataset_period(
         "id": "era5land_temperature_hourly",
         "name": "2m temperature (ERA5-Land)",
         "variable": "t2m",
-        "period_type": "hourly",
+        "extents": {"temporal": {"resolution": "PT1H"}},
     }
     created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -385,7 +385,7 @@ def test_create_artifact_defaults_omitted_end_to_dataset_native_period_for_downl
         "id": "era5land_temperature_hourly",
         "name": "2m temperature (ERA5-Land)",
         "variable": "t2m",
-        "period_type": "hourly",
+        "extents": {"temporal": {"resolution": "PT1H"}},
     }
     created_file = tmp_path / "era5land_temperature_hourly_2026-04-21.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -451,7 +451,7 @@ def test_create_artifact_returns_409_when_downloaded_artifact_has_no_data(
         "id": "worldpop_population_yearly",
         "name": "Total population (WorldPop Global12)",
         "variable": "pop_total",
-        "period_type": "yearly",
+        "extents": {"temporal": {"resolution": "P1Y"}},
     }
     created_file = tmp_path / "worldpop_population_yearly_2020.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -495,7 +495,7 @@ def test_create_artifact_can_download_delta_while_recording_full_request_scope(
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
     created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -560,7 +560,7 @@ def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.Monk
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
 
     with pytest.raises(services.HTTPException) as exc_info:
@@ -588,7 +588,7 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
 
     with pytest.raises(services.HTTPException) as exc_info:
@@ -616,7 +616,7 @@ def test_create_artifact_delta_does_not_reuse_netcdf_artifact_when_canonical_zar
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
     created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -680,7 +680,7 @@ def test_create_artifact_delta_requires_canonical_zarr_when_prefer_zarr_is_false
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
     created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -739,7 +739,7 @@ def test_create_artifact_delta_fails_when_canonical_zarr_build_fails(
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
     created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
     created_file.write_text("dummy", encoding="utf-8")
@@ -778,7 +778,7 @@ def test_create_artifact_delta_rejects_short_rebuilt_coverage(
         "id": "chirps3_precipitation_daily",
         "name": "Total precipitation (CHIRPS3)",
         "variable": "precip",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
     }
     created_file = tmp_path / "chirps3_precipitation_daily_2026-02-01_2026-02-10.nc"
     created_file.write_text("dummy", encoding="utf-8")

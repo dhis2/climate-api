@@ -11,6 +11,7 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
 
 
@@ -37,7 +38,7 @@ def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: st
 def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
     """Return latest available period by applying YAML-declared lag metadata."""
     availability = _availability_metadata(dataset)
-    period_type = str(dataset.get("period_type", "daily"))
+    period_type = get_period_type(dataset)
 
     if period_type == "hourly":
         lag_hours = availability.get("lag_hours")

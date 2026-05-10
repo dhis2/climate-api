@@ -10,6 +10,7 @@ import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pyproj
@@ -21,6 +22,7 @@ from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
@@ -159,7 +161,7 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
-    period_type = str(dataset["period_type"])
+    period_type = get_period_type(dataset)
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
     download_start = _normalize_optional_request_period(
@@ -344,7 +346,7 @@ def store_materialized_zarr_artifact(
     publish: bool,
 ) -> ArtifactRecord:
     """Store metadata for a locally materialized Zarr artifact."""
-    period_type = str(dataset["period_type"])
+    period_type = get_period_type(dataset)
     normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
     normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
     request_scope = ArtifactRequestScope(
@@ -826,7 +828,7 @@ def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> D
         dataset_name=latest.dataset_name,
         short_name=_as_optional_str(source_dataset.get("short_name")),
         variable=latest.variable,
-        period_type=_as_optional_str(source_dataset.get("period_type")) or "unknown",
+        period_type=_period_type_for_artifact(source_dataset),
         units=_as_optional_str(source_dataset.get("units")),
         resolution=_as_optional_str(source_dataset.get("resolution")),
         source=_as_optional_str(source_dataset.get("source")),
@@ -883,6 +885,14 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
             DatasetAccessLink(href=latest.publication.pygeoapi_path, rel="ogc-collection", title="OGC collection")
         )
     return links
+
+
+def _period_type_for_artifact(dataset: dict[str, Any]) -> str:
+    """Return the period-class string for a dataset dict, falling back to 'unknown'."""
+    try:
+        return get_period_type(dataset)
+    except (KeyError, ValueError):
+        return "unknown"
 
 
 def _as_optional_str(value: object) -> str | None:

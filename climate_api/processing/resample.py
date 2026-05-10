@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
@@ -39,18 +40,18 @@ def _derived_data_dir() -> Path:
 DERIVED_DATA_DIR: Path = _derived_data_dir()
 
 
-def _frequency_to_period_type(frequency: str) -> str:
-    """Map a pandas frequency alias to a Climate API period_type string."""
+def _frequency_to_iso_resolution(frequency: str) -> str:
+    """Map a pandas frequency alias to a canonical ISO 8601 duration string."""
     name = type(pd.tseries.frequencies.to_offset(frequency)).__name__
     if any(x in name for x in ("Hour", "Minute", "Second")):
-        return "hourly"
+        return "PT1H"
     if "Week" in name:
-        return "weekly"
+        return "P1W"
     if any(x in name for x in ("Month", "Quarter")):
-        return "monthly"
+        return "P1M"
     if any(x in name for x in ("Year", "Annual")):
-        return "yearly"
-    return "daily"
+        return "P1Y"
+    return "P1D"
 
 
 def derived_dataset_id(*, source_dataset_id: str, frequency: str, method: str) -> str:
@@ -98,7 +99,7 @@ def materialize_resampled_artifact(
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
-            source_period_type=str(source_dataset["period_type"]),
+            source_period_type=get_period_type(source_dataset),
             frequency=frequency,
             method=method,
             start=start,
@@ -123,7 +124,11 @@ def materialize_resampled_artifact(
         "id": target_dataset_id,
         "name": target_dataset_id,
         "variable": source_dataset.get("variable", "value"),
-        "period_type": _frequency_to_period_type(frequency),
+        "extents": {
+            "temporal": {
+                "resolution": _frequency_to_iso_resolution(frequency),
+            }
+        },
     }
     return ingestion_services.store_materialized_zarr_artifact(
         dataset=target_dataset,

@@ -128,7 +128,7 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "units": "mm", "source": "CHIRPS v3"},
+        lambda _: {"extents": {"temporal": {"resolution": "P1D"}}, "units": "mm", "source": "CHIRPS v3"},
     )
     monkeypatch.setattr(
         stac_services,
@@ -207,7 +207,7 @@ def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: py
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "units": "mm"},
+        lambda _: {"extents": {"temporal": {"resolution": "P1D"}}, "units": "mm"},
     )
     monkeypatch.setattr(
         stac_services,
@@ -250,7 +250,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "hourly", "source": "ERA5-Land", "short_name": "2m temperature"},
+        lambda _: {"extents": {"temporal": {"resolution": "PT1H"}}, "source": "ERA5-Land", "short_name": "2m temperature"},
     )
     monkeypatch.setattr(
         stac_services,
@@ -290,7 +290,7 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {}},
+        lambda _: {"extents": {"temporal": {"resolution": "P1D"}}, "source": "CHIRPS v3", "ingestion": {}},
     )
     monkeypatch.setattr(
         stac_services,
@@ -326,7 +326,7 @@ def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {}},
+        lambda _: {"extents": {"temporal": {"resolution": "P1D"}}, "source": "CHIRPS v3", "ingestion": {}},
     )
     monkeypatch.setattr(
         stac_services,
@@ -470,7 +470,7 @@ def test_collection_reuses_cached_xstac_payload(
         "list_artifacts",
         lambda: SimpleNamespace(items=[_artifact(artifact_id="a1")]),
     )
-    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"extents": {"temporal": {"resolution": "P1D"}}})
     monkeypatch.setattr(stac_services, "open_zarr_dataset", fake_open)
     monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
     monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
@@ -519,7 +519,7 @@ def test_collection_preserves_template_links_when_xstac_mutates_template(
         "list_artifacts",
         lambda: SimpleNamespace(items=[_artifact(artifact_id="a1")]),
     )
-    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"extents": {"temporal": {"resolution": "P1D"}}})
     monkeypatch.setattr(stac_services, "open_zarr_dataset", lambda _: DummyDataset())
     monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
     monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
@@ -553,7 +553,7 @@ def test_collection_returns_500_for_missing_artifact_store_metadata(
 ) -> None:
     artifact = _artifact(artifact_id="a1", path=None, asset_paths=[])
     monkeypatch.setattr(ingestion_services, "list_artifacts", lambda: SimpleNamespace(items=[artifact]))
-    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"extents": {"temporal": {"resolution": "P1D"}}})
 
     response = client.get("/stac/collections/chirps3_precipitation_daily")
 
@@ -572,7 +572,7 @@ def test_collection_returns_503_when_zarr_store_cannot_be_opened(
         "list_artifacts",
         lambda: SimpleNamespace(items=[_artifact(artifact_id="a1")]),
     )
-    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"extents": {"temporal": {"resolution": "P1D"}}})
     monkeypatch.setattr(
         stac_services,
         "open_zarr_dataset",

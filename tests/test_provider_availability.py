@@ -51,7 +51,7 @@ def test_lagged_latest_available_formats_hourly_lag(monkeypatch: pytest.MonkeyPa
 
     result = availability.lagged_latest_available(
         dataset={
-            "period_type": "hourly",
+            "extents": {"temporal": {"resolution": "PT1H"}},
             "sync": {"availability": {"lag_hours": 5}},
         },
         requested_end="2026-04-21T12:00:00",
@@ -70,7 +70,7 @@ def test_lagged_latest_available_formats_daily_lag(monkeypatch: pytest.MonkeyPat
 
     result = availability.lagged_latest_available(
         dataset={
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"availability": {"lag_days": 2}},
         },
         requested_end="2026-04-21",
@@ -81,7 +81,7 @@ def test_lagged_latest_available_formats_daily_lag(monkeypatch: pytest.MonkeyPat
 
 def test_worldpop_release_latest_available_allows_configured_future_projection() -> None:
     result = availability.worldpop_release_latest_available(
-        dataset={"period_type": "yearly", "sync": {"availability": {"allow_future": True}}},
+        dataset={"extents": {"temporal": {"resolution": "P1Y"}}, "sync": {"availability": {"allow_future": True}}},
         requested_end="2030",
     )
 
@@ -98,7 +98,7 @@ def test_lagged_latest_available_formats_yearly_offset(monkeypatch: pytest.Monke
 
     result = availability.lagged_latest_available(
         dataset={
-            "period_type": "yearly",
+            "extents": {"temporal": {"resolution": "P1Y"}},
             "sync": {"availability": {"latest_year_offset": 1}},
         },
         requested_end="2028",

@@ -97,7 +97,7 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
         "get_dataset",
         lambda _: {
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"kind": "temporal"},
             "ingestion": {},
         },
@@ -126,7 +126,11 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
+            "sync": {"kind": "temporal"},
+        },
     )
 
     captured: dict[str, object] = {}
@@ -172,7 +176,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
         "get_dataset",
         lambda _: {
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"kind": "temporal", "execution": "append"},
             "ingestion": {},
         },
@@ -229,7 +233,7 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
         "get_dataset",
         lambda _: {
             "id": "worldpop_population_yearly",
-            "period_type": "yearly",
+            "extents": {"temporal": {"resolution": "P1Y"}},
             "sync": {"kind": "temporal", "execution": "append"},
             "ingestion": {},
         },
@@ -275,7 +279,11 @@ def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(mon
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "worldpop_population_yearly", "period_type": "yearly", "sync": {"kind": "release"}},
+        lambda _: {
+            "id": "worldpop_population_yearly",
+            "extents": {"temporal": {"resolution": "P1Y"}},
+            "sync": {"kind": "release"},
+        },
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
@@ -309,7 +317,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
         "get_dataset",
         lambda _: {
             "id": "release_dataset_yearly",
-            "period_type": "yearly",
+            "extents": {"temporal": {"resolution": "P1Y"}},
             "sync": {"kind": "release", "availability": {"latest_year_offset": 1}},
         },
     )
@@ -399,7 +407,7 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "static_dataset", "period_type": "unsupported-static-period", "sync": {"kind": "static"}},
+        lambda _: {"id": "static_dataset", "sync": {"kind": "static"}},
     )
     monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("static sync should not create artifacts"))
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
@@ -418,7 +426,7 @@ def test_plan_sync_requires_sync_kind() -> None:
 
     with pytest.raises(ValueError, match="must define sync.kind"):
         sync_engine.plan_sync(
-            source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily"},
+            source_dataset={"id": "chirps3_precipitation_daily", "extents": {"temporal": {"resolution": "P1D"}}},
             latest_artifact=latest,
             requested_end="2026-02-10",
         )
@@ -433,7 +441,7 @@ def test_plan_sync_static_policy_ignores_period_normalization() -> None:
     )
 
     result = sync_engine.plan_sync(
-        source_dataset={"id": "static_dataset", "period_type": "unsupported-static-period", "sync": {"kind": "static"}},
+        source_dataset={"id": "static_dataset", "sync": {"kind": "static"}},
         latest_artifact=latest,
         requested_end=None,
     )
@@ -450,7 +458,11 @@ def test_plan_sync_dataset_returns_plan_without_creating_artifact(monkeypatch: p
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
+            "sync": {"kind": "temporal"},
+        },
     )
     monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("sync plan should not create artifacts"))
 
@@ -477,7 +489,11 @@ def test_sync_plan_route_returns_plan_without_creating_artifact(
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
+            "sync": {"kind": "temporal"},
+        },
     )
     monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("sync plan should not create artifacts"))
 
@@ -509,7 +525,11 @@ def test_sync_plan_route_returns_400_for_invalid_end_period(
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
+            "sync": {"kind": "temporal"},
+        },
     )
 
     response = client.get(f"/sync/{dataset_id}/plan", params={"end": "not-a-period"})
@@ -528,7 +548,7 @@ def test_plan_sync_treats_blank_end_as_default_target(monkeypatch: pytest.Monkey
     result = sync_engine.plan_sync(
         source_dataset={
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"kind": "temporal", "execution": "append"},
             "ingestion": {},
         },
@@ -550,7 +570,11 @@ def test_sync_route_executes_rematerialize_and_returns_structured_detail(
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
+            "sync": {"kind": "temporal"},
+        },
     )
     monkeypatch.setattr(
         services,
@@ -585,7 +609,7 @@ def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch:
     result = sync_engine._latest_available_end(
         source_dataset={
             "id": "monthly_dataset",
-            "period_type": "monthly",
+            "extents": {"temporal": {"resolution": "P1M"}},
             "sync": {"availability": {"lag_days": 0}},
         },
         requested_end="2026-05",
@@ -605,7 +629,7 @@ def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPat
     result = sync_engine.plan_sync(
         source_dataset={
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"kind": "temporal", "execution": "append"},
             "ingestion": {},
         },
@@ -625,7 +649,7 @@ def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pyt
     result = sync_engine.plan_sync(
         source_dataset={
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {
                 "kind": "temporal",
                 "execution": "append",
@@ -656,7 +680,7 @@ def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: py
     result = sync_engine._latest_available_end(
         source_dataset={
             "id": "monthly_dataset",
-            "period_type": "monthly",
+            "extents": {"temporal": {"resolution": "P1M"}},
             "sync": {"availability": {"lag_days": 1}},
         },
         requested_end="2026-05",
@@ -676,7 +700,7 @@ def test_latest_available_end_uses_provider_availability_hook(monkeypatch: pytes
 
     source_dataset = {
         "id": "provider_dataset",
-        "period_type": "daily",
+        "extents": {"temporal": {"resolution": "P1D"}},
         "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
     }
     result = sync_engine._latest_available_end(source_dataset=source_dataset, requested_end="2026-02-10")
@@ -691,7 +715,7 @@ def test_latest_available_end_clamps_provider_availability_to_requested_end(monk
     result = sync_engine._latest_available_end(
         source_dataset={
             "id": "provider_dataset",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
         },
         requested_end="2026-02-10",
@@ -713,7 +737,7 @@ def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.M
         sync_engine._latest_available_end(
             source_dataset={
                 "id": "provider_dataset",
-                "period_type": "daily",
+                "extents": {"temporal": {"resolution": "P1D"}},
                 "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
             },
             requested_end="2026-02-10",
@@ -730,7 +754,7 @@ def test_latest_available_end_rejects_invalid_provider_period_string(monkeypatch
         sync_engine._latest_available_end(
             source_dataset={
                 "id": "provider_dataset",
-                "period_type": "daily",
+                "extents": {"temporal": {"resolution": "P1D"}},
                 "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
             },
             requested_end="2026-02-10",
@@ -742,7 +766,7 @@ def test_latest_available_end_wraps_invalid_provider_function_path(monkeypatch: 
         sync_engine._latest_available_end(
             source_dataset={
                 "id": "provider_dataset",
-                "period_type": "daily",
+                "extents": {"temporal": {"resolution": "P1D"}},
                 "sync": {"availability": {"latest_available_function": "invalid_path"}},
             },
             requested_end="2026-02-10",
@@ -761,7 +785,7 @@ def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
         "get_dataset",
         lambda _: {
             "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
+            "extents": {"temporal": {"resolution": "P1D"}},
             "sync": {"kind": "temporal", "availability": {"latest_available_function": "provider.latest_available"}},
         },
     )
@@ -803,7 +827,11 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
     with pytest.raises(ValueError, match="Sync execution requires current_start"):
         sync_engine.run_sync(
             latest_artifact=latest_artifact,
-            source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+            source_dataset={
+                "id": "chirps3_precipitation_daily",
+                "extents": {"temporal": {"resolution": "P1D"}},
+                "sync": {"kind": "temporal"},
+            },
             requested_end="2026-02-11",
             country_code=None,
             prefer_zarr=True,
@@ -825,7 +853,11 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "worldpop_population_yearly", "period_type": "yearly", "sync": {"kind": "release"}},
+        lambda _: {
+            "id": "worldpop_population_yearly",
+            "extents": {"temporal": {"resolution": "P1Y"}},
+            "sync": {"kind": "release"},
+        },
     )
     monkeypatch.setattr(
         services,

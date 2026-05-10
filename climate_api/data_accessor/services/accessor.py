@@ -11,6 +11,7 @@ from pyproj import Transformer
 
 from ...data_manager.services.downloader import get_cache_files, get_zarr_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
+from ...data_registry.services.datasets import get_period_type
 from ...shared.time import numpy_datetime_to_period_string
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
     native_crs = api_config.get_crs() or "EPSG:4326"
     ds = get_data(dataset)
     try:
-        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]), native_crs=native_crs)
+        return _coverage_from_dataset(ds=ds, period_type=get_period_type(dataset), native_crs=native_crs)
     finally:
         ds.close()
 
@@ -96,7 +97,7 @@ def get_data_coverage_for_paths(
 
     native_crs = api_config.get_crs() or "EPSG:4326"
     try:
-        return _coverage_from_dataset(ds=ds, period_type=str(dataset["period_type"]), native_crs=native_crs)
+        return _coverage_from_dataset(ds=ds, period_type=get_period_type(dataset), native_crs=native_crs)
     finally:
         ds.close()
 
