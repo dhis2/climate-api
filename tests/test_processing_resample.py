@@ -88,7 +88,9 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}} if dataset_id == "era5land_temperature_hourly" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}}
+            if dataset_id == "era5land_temperature_hourly"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -143,7 +145,9 @@ def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -209,7 +213,9 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -263,7 +269,9 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -317,7 +325,9 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -366,7 +376,9 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -420,7 +432,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}} if dataset_id == "era5land_temperature_hourly" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}}
+            if dataset_id == "era5land_temperature_hourly"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -482,7 +496,9 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}} if dataset_id == "chirps3_precipitation_daily" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "P1D"}}}
+            if dataset_id == "chirps3_precipitation_daily"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -538,7 +554,9 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}} if dataset_id == "era5land_temperature_hourly" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}}
+            if dataset_id == "era5land_temperature_hourly"
+            else None
         ),
     )
     monkeypatch.setattr(
@@ -609,7 +627,9 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
         resample.registry_datasets,
         "get_dataset",
         lambda dataset_id: (
-            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}} if dataset_id == "era5land_temperature_hourly" else None
+            {"id": dataset_id, "extents": {"temporal": {"resolution": "PT1H"}}}
+            if dataset_id == "era5land_temperature_hourly"
+            else None
         ),
     )
     monkeypatch.setattr(

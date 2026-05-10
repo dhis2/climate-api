@@ -11,8 +11,8 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
-from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
 from climate_api.data_registry.services.datasets import get_period_type
+from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
 
 
 def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:

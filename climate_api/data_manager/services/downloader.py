@@ -17,8 +17,8 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
-from climate_api.transforms.reproject import reproject_to_instance_crs
 from climate_api.data_registry.services.datasets import get_period_type
+from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_time_dim, get_x_y_dims
 

@@ -887,7 +887,6 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
     return links
 
 
-
 def _period_type_for_artifact(dataset: dict[str, Any]) -> str:
     try:
         return get_period_type(dataset)
