@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -22,7 +22,7 @@ from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
-from climate_api.shared.time import _coerce_numpy_datetime, utc_today
+from climate_api.shared.time import _coerce_numpy_datetime, _iso_duration_to_offset, utc_today
 
 logger = logging.getLogger(__name__)
 
@@ -234,21 +234,7 @@ def _find_existing_resampled_artifact(
 
 
 def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:
-    if source_period_type == "PT1H":  # hourly
-        return boundary - timedelta(hours=1)
-    if source_period_type == "P1D":  # daily
-        return boundary - timedelta(days=1)
-    if source_period_type == "P1W":  # weekly
-        return boundary - timedelta(days=7)
-    if source_period_type == "P1M":  # monthly
-        previous_month_last_day = boundary.replace(day=1) - timedelta(days=1)
-        return previous_month_last_day.replace(day=1)
-    if source_period_type == "P1Y":  # yearly
-        return boundary.replace(year=boundary.year - 1, month=1, day=1)
-    raise HTTPException(
-        status_code=400,
-        detail=f"Unsupported source temporal resolution '{source_period_type}' for resampling",
-    )
+    return (pd.Timestamp(boundary) - _iso_duration_to_offset(source_period_type)).to_pydatetime()
 
 
 def _write_resampled_zarr(ds: xr.Dataset, zarr_path: Path) -> None:

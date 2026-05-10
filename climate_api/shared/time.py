@@ -8,6 +8,27 @@ import numpy as np
 import pandas as pd
 
 _WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
+_ISO_8601_DURATION_RE = re.compile(
+    r"P(?:(?P<years>\d+)Y)?(?:(?P<months>\d+)M)?(?:(?P<weeks>\d+)W)?(?:(?P<days>\d+)D)?"
+    r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?"
+)
+
+
+def _iso_duration_to_offset(period_type: str) -> pd.DateOffset:
+    """Convert an ISO 8601 duration string to a pandas DateOffset."""
+    m = _ISO_8601_DURATION_RE.fullmatch(period_type)
+    if not m:
+        raise ValueError(f"Invalid ISO 8601 duration '{period_type}'")
+    g = m.groupdict(default="0")
+    return pd.DateOffset(
+        years=int(g["years"]),
+        months=int(g["months"]),
+        weeks=int(g["weeks"]),
+        days=int(g["days"]),
+        hours=int(g["hours"]),
+        minutes=int(g["minutes"]),
+        seconds=int(g["seconds"]),
+    )
 
 
 def _period_family(period_type: str) -> str:

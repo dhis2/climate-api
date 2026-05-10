@@ -1,11 +1,25 @@
 import pytest
 
 from climate_api.shared.time import (
+    _iso_duration_to_offset,
     _period_family,
     datetime_to_period_string,
     normalize_period_string,
     parse_period_string_to_datetime,
 )
+
+
+def test_iso_duration_to_offset() -> None:
+    import pandas as pd
+
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("PT1H")).isoformat() == "2024-02-29T23:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("P1D")).isoformat() == "2024-02-29T00:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("P1W")).isoformat() == "2024-02-23T00:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("P1M")).isoformat() == "2024-02-01T00:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("P1Y")).isoformat() == "2023-03-01T00:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("P2W")).isoformat() == "2024-02-16T00:00:00"
+    assert (pd.Timestamp("2024-03-11") - _iso_duration_to_offset("P10D")).isoformat() == "2024-03-01T00:00:00"
+    assert (pd.Timestamp("2024-03-01") - _iso_duration_to_offset("PT6H")).isoformat() == "2024-02-29T18:00:00"
 
 
 def test_period_family_maps_canonical_values() -> None:
