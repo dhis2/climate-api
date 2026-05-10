@@ -431,6 +431,28 @@
         timeDimKey = getTimeDimKey(dimensions);
         timeSteps = buildTimeSteps(dimensions);
 
+        // For projected-CRS stores, pass crs + proj4 string so ZarrLayer
+        // reprojects natively instead of treating coordinates as WGS84 degrees.
+        const nativeCrs = collection["proj:code"] ?? "EPSG:4326";
+        const WGS84 = new Set(["EPSG:4326", "OGC:CRS84", "CRS84"]);
+        const isWgs84 = WGS84.has(nativeCrs.toUpperCase());
+        let proj4String = null;
+        if (!isWgs84) {
+          try {
+            const match = nativeCrs.match(/(\d+)$/);
+            const epsgId = match?.[1];
+            if (epsgId) {
+              const p4res = await fetch(`https://epsg.io/${epsgId}.proj4`);
+              if (p4res.ok) proj4String = (await p4res.text()).trim();
+              else console.warn(`[map] Could not fetch proj4 for ${nativeCrs} (HTTP ${p4res.status})`);
+            } else {
+              console.warn(`[map] Cannot extract EPSG id from CRS "${nativeCrs}" — rendering may be incorrect`);
+            }
+          } catch (err) {
+            console.warn(`[map] Failed to fetch proj4 string for "${nativeCrs}":`, err);
+          }
+        }
+
         let cm;
         try {
           cm = buildColormap(colormapName);
@@ -447,6 +469,8 @@
             selector,
             ...(zarrVersion !== null && { zarrVersion }),
             ...(fillValue !== null && { fillValue }),
+            ...(!isWgs84 && { crs: nativeCrs }),
+            ...(proj4String !== null && { proj4: proj4String }),
           });
           map.addLayer(activeLayer);
           for (const layer of map.getStyle().layers) {
