@@ -17,7 +17,6 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
-from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_time_dim, get_x_y_dims
@@ -299,14 +298,14 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    period_type = get_period_type(dataset)
-    if period_type == "hourly":
+    resolution: str = str(dataset.get("extents", {}).get("temporal", {}).get("resolution", ""))  # type: ignore[union-attr]
+    if "T" in resolution.upper():
         chunks[dim] = 24 * 7
-    elif period_type == "daily":
+    elif resolution == "P1D":
         chunks[dim] = 30
-    elif period_type == "monthly":
+    elif resolution == "P1M":
         chunks[dim] = 12
-    elif period_type == "yearly":
+    elif resolution == "P1Y":
         chunks[dim] = 1
 
     x_dim, y_dim = get_x_y_dims(ds)

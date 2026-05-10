@@ -25,21 +25,21 @@ def _coerce_numpy_datetime(value: object) -> datetime:
     return datetime.fromisoformat(np.datetime_as_string(np_value, unit="s"))
 
 
-def datetime_to_period_string(value: datetime, period_type: str) -> str:
+def datetime_to_period_string(value: datetime, resolution: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
-    if period_type == "hourly":
+    if "T" in resolution.upper():
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
-    if period_type == "daily":
+    if resolution == "P1D":
         return value.date().isoformat()
-    if period_type == "weekly":
+    if resolution == "P1W":
         iso_year, iso_week, _ = value.isocalendar()
         return f"{iso_year:04d}-W{iso_week:02d}"
-    if period_type == "monthly":
+    if resolution == "P1M":
         return f"{value.year:04d}-{value.month:02d}"
-    if period_type == "yearly":
+    if resolution == "P1Y":
         return str(value.year)
-    raise ValueError(f"Unsupported period_type '{period_type}'")
+    raise ValueError(f"Unsupported resolution '{resolution}'")
 
 
 def utc_now() -> datetime:
@@ -69,40 +69,40 @@ def parse_weekly_period_string(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def normalize_period_string(value: str, period_type: str) -> str:
+def normalize_period_string(value: str, resolution: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
-    if period_type == "hourly":
+    if "T" in resolution.upper():
         try:
-            return datetime_to_period_string(parse_hourly_period_string(value), period_type)
+            return datetime_to_period_string(parse_hourly_period_string(value), resolution)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
-    if period_type == "daily":
+    if resolution == "P1D":
         try:
-            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+            return datetime_to_period_string(datetime.fromisoformat(value), resolution)
         except ValueError as exc:
             raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
-    if period_type == "weekly":
+    if resolution == "P1W":
         try:
-            return datetime_to_period_string(parse_weekly_period_string(value), period_type)
+            return datetime_to_period_string(parse_weekly_period_string(value), resolution)
         except ValueError as exc:
             raise ValueError(f"Invalid weekly period '{value}'; expected YYYY-Www or ISO datetime") from exc
-    if period_type == "monthly":
+    if resolution == "P1M":
         try:
             if len(value) == 7:
                 datetime.fromisoformat(f"{value}-01")
                 return value
-            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+            return datetime_to_period_string(datetime.fromisoformat(value), resolution)
         except ValueError as exc:
             raise ValueError(f"Invalid monthly period '{value}'; expected YYYY-MM or ISO datetime") from exc
-    if period_type == "yearly":
+    if resolution == "P1Y":
         try:
             if len(value) == 4:
                 int(value)
                 return value
-            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+            return datetime_to_period_string(datetime.fromisoformat(value), resolution)
         except ValueError as exc:
             raise ValueError(f"Invalid yearly period '{value}'; expected YYYY or ISO datetime") from exc
-    raise ValueError(f"Unsupported period_type '{period_type}'")
+    raise ValueError(f"Unsupported resolution '{resolution}'")
 
 
 def parse_period_string_to_datetime(value: str) -> datetime:
@@ -124,11 +124,12 @@ def parse_period_string_to_datetime(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
+def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], resolution: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
-    if period_type != "weekly":
-        lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
-        return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
+    if resolution != "P1W":
+        lengths = {"PT1H": 13, "P1D": 10, "P1M": 7, "P1Y": 4}
+        length = lengths.get(resolution, 13 if "T" in resolution.upper() else 10)
+        return np.datetime_as_string(datetimes, unit="s").astype(f"U{length}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))
     iso = dt_index.isocalendar()

@@ -613,7 +613,7 @@ def test_coverage_from_dataset_populates_spatial_wgs84_for_projected_crs() -> No
         coords={"time": times, "y": y, "x": x},
     )
 
-    result = _coverage_from_dataset(ds=ds, period_type="daily", native_crs="EPSG:25833")
+    result = _coverage_from_dataset(ds=ds, resolution="P1D", native_crs="EPSG:25833")
 
     wgs84 = result["coverage"]["spatial_wgs84"]
     assert wgs84 is not None
@@ -639,6 +639,6 @@ def test_coverage_from_dataset_leaves_spatial_wgs84_none_for_wgs84() -> None:
         coords={"time": times, "y": y, "x": x},
     )
 
-    result = _coverage_from_dataset(ds=ds, period_type="daily", native_crs="EPSG:4326")
+    result = _coverage_from_dataset(ds=ds, resolution="P1D", native_crs="EPSG:4326")
 
     assert result["coverage"]["spatial_wgs84"] is None

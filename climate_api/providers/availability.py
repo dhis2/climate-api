@@ -11,7 +11,6 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
-from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
 
 
@@ -38,23 +37,26 @@ def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: st
 def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
     """Return latest available period by applying YAML-declared lag metadata."""
     availability = _availability_metadata(dataset)
-    period_type = get_period_type(dataset)
+    try:
+        resolution: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    except (KeyError, TypeError):
+        return requested_end
 
-    if period_type == "hourly":
+    if "T" in resolution.upper():
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
             latest = utc_now() - timedelta(hours=lag_hours)
-            return datetime_to_period_string(latest, period_type)
+            return datetime_to_period_string(latest, resolution)
         return requested_end
 
     lag_days = availability.get("lag_days")
-    if period_type in {"daily", "monthly"} and isinstance(lag_days, int) and lag_days > 0:
+    if resolution in {"P1D", "P1M"} and isinstance(lag_days, int) and lag_days > 0:
         latest_date = utc_today() - timedelta(days=lag_days)
-        if period_type == "monthly":
+        if resolution == "P1M":
             return f"{latest_date.year:04d}-{latest_date.month:02d}"
         return latest_date.isoformat()
 
-    if period_type == "yearly":
+    if resolution == "P1Y":
         latest_year_offset = availability.get("latest_year_offset")
         if isinstance(latest_year_offset, int) and latest_year_offset >= 0:
             return str(utc_today().year - latest_year_offset)

@@ -11,7 +11,6 @@ from pyproj import Transformer
 
 from ...data_manager.services.downloader import get_cache_files, get_zarr_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
-from ...data_registry.services.datasets import get_period_type
 from ...shared.time import numpy_datetime_to_period_string
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,8 @@ def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
     native_crs = api_config.get_crs() or "EPSG:4326"
     ds = get_data(dataset)
     try:
-        return _coverage_from_dataset(ds=ds, period_type=get_period_type(dataset), native_crs=native_crs)
+        resolution: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        return _coverage_from_dataset(ds=ds, resolution=resolution, native_crs=native_crs)
     finally:
         ds.close()
 
@@ -97,7 +97,8 @@ def get_data_coverage_for_paths(
 
     native_crs = api_config.get_crs() or "EPSG:4326"
     try:
-        return _coverage_from_dataset(ds=ds, period_type=get_period_type(dataset), native_crs=native_crs)
+        resolution: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        return _coverage_from_dataset(ds=ds, resolution=resolution, native_crs=native_crs)
     finally:
         ds.close()
 
@@ -130,7 +131,7 @@ def _open_zarr(zarr_path: str) -> xr.Dataset:
     return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
 
 
-def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
+def _coverage_from_dataset(*, ds: xr.Dataset, resolution: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
     """Summarize temporal and spatial coverage for an already opened dataset."""
     if any(size == 0 for size in ds.sizes.values()):
         return {
@@ -145,8 +146,8 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str 
     time_dim = get_time_dim(ds)
     x_dim, y_dim = get_x_y_dims(ds)
 
-    start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]
-    end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), period_type))  # type: ignore[arg-type]
+    start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), resolution))  # type: ignore[arg-type]
+    end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), resolution))  # type: ignore[arg-type]
 
     xmin, xmax = ds[x_dim].min().item(), ds[x_dim].max().item()
     ymin, ymax = ds[y_dim].min().item(), ds[y_dim].max().item()

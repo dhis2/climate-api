@@ -18,7 +18,6 @@ from fastapi import HTTPException
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.data_registry.services import datasets as registry_datasets
-from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
@@ -99,7 +98,7 @@ def materialize_resampled_artifact(
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
-            source_period_type=get_period_type(source_dataset),
+            source_resolution=str(source_dataset["extents"]["temporal"]["resolution"]),  # type: ignore[index]
             frequency=frequency,
             method=method,
             start=start,
@@ -149,7 +148,7 @@ def _resolve_source_artifact(*, source_dataset_id: str) -> ArtifactRecord:
 def _resample_dataset(
     *,
     source_ds: xr.Dataset,
-    source_period_type: str,
+    source_resolution: str,
     frequency: str,
     method: str,
     start: str,
@@ -177,7 +176,7 @@ def _resample_dataset(
         result=result,
         source_start=source_start,
         source_end=source_end,
-        source_period_type=source_period_type,
+        source_resolution=source_resolution,
         frequency=frequency,
     )
     return result
@@ -188,7 +187,7 @@ def _drop_incomplete_edge_periods(
     result: xr.Dataset,
     source_start: datetime,
     source_end: datetime,
-    source_period_type: str,
+    source_resolution: str,
     frequency: str,
 ) -> xr.Dataset:
     time_dim = get_time_dim(result)
@@ -204,7 +203,7 @@ def _drop_incomplete_edge_periods(
     last_output_start = _coerce_numpy_datetime(result[time_dim].values[-1])
     offset = pd.tseries.frequencies.to_offset(frequency)
     next_target_start = (pd.Timestamp(last_output_start) + offset).to_pydatetime().replace(tzinfo=None)
-    required_source_end = _previous_source_period_start(next_target_start, source_period_type=source_period_type)
+    required_source_end = _previous_source_period_start(next_target_start, source_resolution=source_resolution)
     if source_end < required_source_end:
         return result.isel({time_dim: slice(0, -1)})
     return result
@@ -225,19 +224,19 @@ def _find_existing_resampled_artifact(
     )
 
 
-def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:
-    if source_period_type == "hourly":
+def _previous_source_period_start(boundary: datetime, *, source_resolution: str) -> datetime:
+    if "T" in source_resolution.upper():
         return boundary - timedelta(hours=1)
-    if source_period_type == "daily":
+    if source_resolution == "P1D":
         return boundary - timedelta(days=1)
-    if source_period_type == "weekly":
+    if source_resolution == "P1W":
         return boundary - timedelta(days=7)
-    if source_period_type == "monthly":
+    if source_resolution == "P1M":
         previous_month_last_day = boundary.replace(day=1) - timedelta(days=1)
         return previous_month_last_day.replace(day=1)
-    if source_period_type == "yearly":
+    if source_resolution == "P1Y":
         return boundary.replace(year=boundary.year - 1, month=1, day=1)
-    raise HTTPException(status_code=400, detail=f"Unsupported source period_type '{source_period_type}' for resampling")
+    raise HTTPException(status_code=400, detail=f"Unsupported source resolution '{source_resolution}' for resampling")
 
 
 def _write_resampled_zarr(ds: xr.Dataset, zarr_path: Path) -> None:

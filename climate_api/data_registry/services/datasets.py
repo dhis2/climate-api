@@ -20,7 +20,6 @@ SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
 
-
 def list_datasets() -> list[dict[str, Any]]:
     """Load all dataset templates and return a flat list.
 
@@ -166,40 +165,6 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
     resolution = temporal.get("resolution") if isinstance(temporal, dict) else None
     if not isinstance(resolution, str) or not resolution:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define extents.temporal.resolution")
-    try:
-        _iso_resolution_to_period_type(resolution)
-    except ValueError:
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has unrecognised "
-            f"extents.temporal.resolution '{resolution}'"
-        )
-
-
-def _iso_resolution_to_period_type(resolution: str) -> str:
-    """Map an ISO 8601 duration string to a Climate API period-class string."""
-    r = resolution.strip().upper()
-    if "T" in r:
-        return "hourly"
-    if "Y" in r:
-        return "yearly"
-    if "M" in r:
-        return "monthly"
-    if "W" in r:
-        return "weekly"
-    if "D" in r:
-        return "daily"
-    raise ValueError(f"Cannot determine period type from resolution '{resolution}'")
-
-
-def get_period_type(dataset: dict[str, Any]) -> str:
-    """Return the period-class string derived from extents.temporal.resolution."""
-    try:
-        resolution: object = dataset["extents"]["temporal"]["resolution"]
-    except (KeyError, TypeError):
-        raise ValueError(f"Dataset '{dataset.get('id')}' is missing extents.temporal.resolution")
-    if not isinstance(resolution, str):
-        raise ValueError(f"Dataset '{dataset.get('id')}' extents.temporal.resolution must be a string")
-    return _iso_resolution_to_period_type(resolution)
 
 
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:

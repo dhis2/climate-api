@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from climate_api.data_registry.services import datasets
-from climate_api.data_registry.services.datasets import get_period_type
 
 
 def test_dataset_registry_requires_sync_kind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -208,7 +207,7 @@ def test_dataset_registry_accepts_sync_availability_function(
     )
 
 
-def test_dataset_registry_derives_period_type_from_resolution(
+def test_dataset_registry_stores_iso_resolutions(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -271,11 +270,11 @@ def test_dataset_registry_derives_period_type_from_resolution(
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     loaded = {d["id"]: d for d in datasets.list_datasets()}
-    assert get_period_type(loaded["hourly_ds"]) == "hourly"
-    assert get_period_type(loaded["daily_ds"]) == "daily"
-    assert get_period_type(loaded["weekly_ds"]) == "weekly"
-    assert get_period_type(loaded["monthly_ds"]) == "monthly"
-    assert get_period_type(loaded["yearly_ds"]) == "yearly"
+    assert loaded["hourly_ds"]["extents"]["temporal"]["resolution"] == "PT1H"
+    assert loaded["daily_ds"]["extents"]["temporal"]["resolution"] == "P1D"
+    assert loaded["weekly_ds"]["extents"]["temporal"]["resolution"] == "P1W"
+    assert loaded["monthly_ds"]["extents"]["temporal"]["resolution"] == "P1M"
+    assert loaded["yearly_ds"]["extents"]["temporal"]["resolution"] == "P1Y"
 
 
 def test_dataset_registry_rejects_missing_resolution(
@@ -326,15 +325,15 @@ def test_dataset_registry_rejects_missing_extents(
         datasets.list_datasets()
 
 
-def test_dataset_registry_rejects_unrecognised_resolution(
+def test_dataset_registry_accepts_non_standard_resolution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    registry_file = tmp_path / "bad_resolution.yaml"
+    registry_file = tmp_path / "non_standard_resolution.yaml"
     registry_file.write_text(
         """
-- id: bad_resolution
-  name: Bad resolution
+- id: non_standard_resolution
+  name: Non-standard resolution
   variable: value
   sync:
     kind: temporal
@@ -348,5 +347,5 @@ def test_dataset_registry_rejects_unrecognised_resolution(
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    with pytest.raises(ValueError, match="unrecognised.*extents.temporal.resolution.*P6H"):
-        datasets.list_datasets()
+    loaded = datasets.list_datasets()
+    assert loaded[0]["extents"]["temporal"]["resolution"] == "P6H"

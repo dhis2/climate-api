@@ -111,7 +111,7 @@ def test_list_datasets_groups_artifacts_by_managed_dataset_id(monkeypatch: pytes
     dataset = result.items[0]
     assert dataset.dataset_id == "chirps3_precipitation_daily"
     assert dataset.source_dataset_id == "chirps3_precipitation_daily"
-    assert dataset.period_type == "daily"
+    assert dataset.period_type == "P1D"
     assert dataset.units == "mm"
     assert dataset.extent.temporal.end == "2026-01-11"
     assert dataset.publication.status == PublicationStatus.PUBLISHED

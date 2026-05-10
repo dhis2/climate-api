@@ -16,7 +16,6 @@ from xstac import xarray_to_stac
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
-from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 from climate_api.shared.time import parse_period_string_to_datetime
@@ -120,10 +119,10 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
     try:
-        pt: str | None = get_period_type(source_dataset)
-    except (KeyError, ValueError):
-        pt = None
-    _override_time_step(collection_payload, _period_step(pt))
+        resolution: str | None = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    except (KeyError, TypeError):
+        resolution = None
+    _override_time_step(collection_payload, _period_step(resolution))
     _override_spatial_extent_from_artifact(collection_payload, artifact)
     _override_temporal_extent_from_artifact(collection_payload, artifact)
     _sanitize_variable_attrs(collection_payload)
@@ -323,15 +322,19 @@ def _abs_url(request: Request, path: str) -> str:
     return f"{str(request.base_url).rstrip('/')}{path}"
 
 
-def _period_step(period_type: object) -> str | None:
-    if period_type == "hourly":
+def _period_step(resolution: object) -> str | None:
+    if not isinstance(resolution, str):
+        return None
+    if "T" in resolution.upper():
         return "PT1H"
-    if period_type == "daily":
+    if resolution == "P1D":
         return "P1D"
-    if period_type == "monthly":
+    if resolution == "P1M":
         return "P1M"
-    if period_type == "yearly":
+    if resolution == "P1Y":
         return "P1Y"
+    if resolution == "P1W":
+        return "P1W"
     return None
 
 

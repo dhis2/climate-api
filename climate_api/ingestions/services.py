@@ -22,7 +22,6 @@ from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
-from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
@@ -161,13 +160,13 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
-    period_type = get_period_type(dataset)
-    start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    resolution = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    start = _normalize_request_period(start, resolution=resolution, field_name="start")
+    end = _normalize_optional_request_period(end, resolution=resolution, field_name="end")
     download_start = _normalize_optional_request_period(
-        download_start, period_type=period_type, field_name="download_start"
+        download_start, resolution=resolution, field_name="download_start"
     )
-    download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
+    download_end = _normalize_optional_request_period(download_end, resolution=resolution, field_name="download_end")
     _validate_download_scope(
         start=start,
         end=end,
@@ -177,7 +176,7 @@ def create_artifact(
     requires_canonical_zarr = download_start is not None
     resolved_download_end = download_end if download_end is not None else end
     if resolved_download_end is None:
-        resolved_download_end = _default_request_end(period_type)
+        resolved_download_end = _default_request_end(resolution)
     request_scope = ArtifactRequestScope(
         start=start,
         end=end,
@@ -346,9 +345,9 @@ def store_materialized_zarr_artifact(
     publish: bool,
 ) -> ArtifactRecord:
     """Store metadata for a locally materialized Zarr artifact."""
-    period_type = get_period_type(dataset)
-    normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    resolution = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    normalized_start = _normalize_request_period(start, resolution=resolution, field_name="start")
+    normalized_end = _normalize_optional_request_period(end, resolution=resolution, field_name="end")
     request_scope = ArtifactRequestScope(
         start=normalized_start,
         end=normalized_end,
@@ -685,10 +684,10 @@ def _find_existing_artifact(
     )
 
 
-def _normalize_request_period(value: str, *, period_type: str, field_name: str) -> str:
+def _normalize_request_period(value: str, *, resolution: str, field_name: str) -> str:
     """Normalize a required request period or raise a clear client error."""
     try:
-        return normalize_period_string(value, period_type)
+        return normalize_period_string(value, resolution)
     except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
@@ -696,27 +695,27 @@ def _normalize_request_period(value: str, *, period_type: str, field_name: str) 
         ) from exc
 
 
-def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
+def _normalize_optional_request_period(value: str | None, *, resolution: str, field_name: str) -> str | None:
     """Normalize an optional request period or raise a clear client error."""
     if value is None:
         return None
-    return _normalize_request_period(value, period_type=period_type, field_name=field_name)
+    return _normalize_request_period(value, resolution=resolution, field_name=field_name)
 
 
-def _default_request_end(period_type: str) -> str:
+def _default_request_end(resolution: str) -> str:
     """Return the current dataset-native period string for omitted ingestion end values."""
-    if period_type == "hourly":
-        return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "daily":
+    if "T" in resolution.upper():
+        return datetime_to_period_string(utc_now(), resolution)
+    if resolution == "P1D":
         return utc_today().isoformat()
-    if period_type == "weekly":
-        return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "monthly":
+    if resolution == "P1W":
+        return datetime_to_period_string(utc_now(), resolution)
+    if resolution == "P1M":
         today = utc_today()
         return f"{today.year:04d}-{today.month:02d}"
-    if period_type == "yearly":
+    if resolution == "P1Y":
         return str(utc_today().year)
-    raise HTTPException(status_code=400, detail=f"Invalid period_type '{period_type}' for request end defaulting")
+    raise HTTPException(status_code=400, detail=f"Invalid resolution '{resolution}' for request end defaulting")
 
 
 def _validate_download_scope(
@@ -828,7 +827,7 @@ def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> D
         dataset_name=latest.dataset_name,
         short_name=_as_optional_str(source_dataset.get("short_name")),
         variable=latest.variable,
-        period_type=_period_type_for_artifact(source_dataset),
+        period_type=_resolution_for_artifact(source_dataset),
         units=_as_optional_str(source_dataset.get("units")),
         resolution=_as_optional_str(source_dataset.get("resolution")),
         source=_as_optional_str(source_dataset.get("source")),
@@ -887,11 +886,12 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
     return links
 
 
-def _period_type_for_artifact(dataset: dict[str, Any]) -> str:
-    """Return the period-class string for a dataset dict, falling back to 'unknown'."""
+def _resolution_for_artifact(dataset: dict[str, Any]) -> str:
+    """Return the ISO 8601 resolution for a dataset dict, falling back to 'unknown'."""
     try:
-        return get_period_type(dataset)
-    except (KeyError, ValueError):
+        resolution: object = dataset["extents"]["temporal"]["resolution"]
+        return str(resolution) if isinstance(resolution, str) else "unknown"
+    except (KeyError, TypeError):
         return "unknown"
 
 
