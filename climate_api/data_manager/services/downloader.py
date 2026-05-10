@@ -298,7 +298,7 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    period_type: str = str(dataset.get("extents", {}).get("temporal", {}).get("resolution", ""))  # type: ignore[union-attr]
+    period_type: str = str(dataset["extents"]["temporal"]["resolution"])
     if "T" in period_type.upper():
         chunks[dim] = 24 * 7
     elif period_type == "P1D":
