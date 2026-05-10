@@ -209,6 +209,12 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
         ds.attrs.update(geozarr_attrs)
         ds_chunked = ds.chunk(uniform_chunks)
+        # Remove _FillValue from each variable's encoding so that in-memory NaN values
+        # are stored as IEEE NaN in zarr rather than re-encoded as a sentinel (e.g.
+        # -999.99). ZarrLayer uses the zarr fill_value attribute (nan for floats) to
+        # render missing pixels as transparent — not a separately specified fillValue.
+        for var in ds_chunked.data_vars:
+            ds_chunked[var].encoding.pop("_FillValue", None)
         ds_chunked.to_zarr(zarr_path, mode="w", consolidated=True)
         ds_chunked.close()
 
