@@ -54,7 +54,7 @@ def test_post_resample_execution_returns_completed_response(
         "/processes/resample/execution",
         json={
             "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
+            "resolution": "P1W",
             "method": "sum",
             "start": "2026-01-05",
             "end": "2026-01-12",
@@ -85,7 +85,7 @@ def test_post_resample_execution_passes_params_to_service(
         "/processes/resample/execution",
         json={
             "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
+            "resolution": "P1W",
             "method": "sum",
             "start": "2026-01-05",
             "end": "2026-01-12",
@@ -96,7 +96,7 @@ def test_post_resample_execution_passes_params_to_service(
 
     assert response.status_code == 200
     assert captured["source_dataset_id"] == "chirps3_precipitation_daily"
-    assert captured["frequency"] == "W-MON"
+    assert captured["resolution"] == "P1W"
     assert captured["method"] == "sum"
     assert captured["start"] == "2026-01-05"
     assert captured["end"] == "2026-01-12"
@@ -104,7 +104,7 @@ def test_post_resample_execution_passes_params_to_service(
     assert captured["publish"] is False
 
 
-def test_post_resample_execution_returns_400_for_invalid_frequency(
+def test_post_resample_execution_returns_400_for_invalid_resolution(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -112,7 +112,7 @@ def test_post_resample_execution_returns_400_for_invalid_frequency(
         "/processes/resample/execution",
         json={
             "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "invalid",
+            "resolution": "invalid",
             "method": "sum",
             "start": "2026-01-01",
         },
@@ -128,7 +128,7 @@ def test_post_resample_execution_returns_400_for_unsupported_method(
         "/processes/resample/execution",
         json={
             "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
+            "resolution": "P1W",
             "method": "median",
             "start": "2026-01-05",
         },
@@ -144,7 +144,7 @@ def test_post_unknown_process_id_returns_404(
         "/processes/unknown_process/execution",
         json={
             "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
+            "resolution": "P1W",
             "method": "sum",
             "start": "2026-01-05",
         },

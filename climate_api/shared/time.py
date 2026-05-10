@@ -31,6 +31,36 @@ def _iso_duration_to_offset(period_type: str) -> pd.DateOffset:
     )
 
 
+def _iso_resolution_to_frequency(period_type: str) -> str:
+    """Convert an ISO 8601 duration to a pandas frequency alias for xarray resampling.
+
+    Weekly durations are anchored on Monday for ISO week compatibility.
+    Month and year durations use period-start labels (MS, YS).
+    """
+    m = _ISO_8601_DURATION_RE.fullmatch(period_type)
+    if not m:
+        raise ValueError(f"Invalid ISO 8601 duration '{period_type}'")
+    g = m.groupdict(default="0")
+    years, months, weeks, days, hours, minutes, seconds = (
+        int(g[k]) for k in ("years", "months", "weeks", "days", "hours", "minutes", "seconds")
+    )
+    if years:
+        return f"{years}YS"
+    if months:
+        return f"{months}MS"
+    if weeks:
+        return "W-MON" if weeks == 1 else f"{weeks}W-MON"
+    if days:
+        return f"{days}D"
+    if hours:
+        return f"{hours}h"
+    if minutes:
+        return f"{minutes}min"
+    if seconds:
+        return f"{seconds}s"
+    raise ValueError(f"ISO 8601 duration '{period_type}' specifies no time components")
+
+
 def _period_family(period_type: str) -> str:
     """Map an ISO 8601 duration to the canonical period type used for string formatting.
 

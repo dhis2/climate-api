@@ -22,7 +22,12 @@ from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
-from climate_api.shared.time import _coerce_numpy_datetime, _iso_duration_to_offset, utc_today
+from climate_api.shared.time import (
+    _coerce_numpy_datetime,
+    _iso_duration_to_offset,
+    _iso_resolution_to_frequency,
+    utc_today,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,38 +45,16 @@ def _derived_data_dir() -> Path:
 DERIVED_DATA_DIR: Path = _derived_data_dir()
 
 
-def _frequency_to_iso_resolution(frequency: str) -> str:
-    """Map a pandas frequency alias to an ISO 8601 duration string preserving the multiplier."""
-    offset = pd.tseries.frequencies.to_offset(frequency)
-    n = abs(offset.n)
-    name = type(offset).__name__
-    if "Hour" in name:
-        return f"PT{n}H"
-    if "Minute" in name:
-        return f"PT{n}M"
-    if "Second" in name:
-        return f"PT{n}S"
-    if "Week" in name:
-        return f"P{n}W"
-    if "Quarter" in name:
-        return f"P{n * 3}M"
-    if "Month" in name:
-        return f"P{n}M"
-    if "Year" in name or "Annual" in name:
-        return f"P{n}Y"
-    return f"P{n}D"
-
-
-def derived_dataset_id(*, source_dataset_id: str, frequency: str, method: str) -> str:
+def derived_dataset_id(*, source_dataset_id: str, resolution: str, method: str) -> str:
     """Return the stable derived dataset id auto-generated from source + parameters."""
-    freq_slug = re.sub(r"[^a-z0-9]", "_", frequency.lower()).strip("_")
-    return f"{source_dataset_id}_{freq_slug}_{method}"
+    resolution_slug = re.sub(r"[^a-z0-9]", "", resolution.lower())
+    return f"{source_dataset_id}_{resolution_slug}_{method}"
 
 
 def materialize_resampled_artifact(
     *,
     source_dataset_id: str,
-    frequency: str,
+    resolution: str,
     method: str,
     start: str,
     end: str | None,
@@ -79,7 +62,7 @@ def materialize_resampled_artifact(
     publish: bool,
 ) -> ArtifactRecord:
     """Materialize a derived dataset by resampling an existing managed source dataset."""
-    target_dataset_id = derived_dataset_id(source_dataset_id=source_dataset_id, frequency=frequency, method=method)
+    target_dataset_id = derived_dataset_id(source_dataset_id=source_dataset_id, resolution=resolution, method=method)
     resolved_end = end or utc_today().isoformat()
 
     existing = ingestion_services._find_existing_artifact(
@@ -103,12 +86,13 @@ def materialize_resampled_artifact(
     target_managed_dataset_id = managed_dataset_id_for_scope(target_dataset_id)
     zarr_path = DERIVED_DATA_DIR / f"{target_managed_dataset_id}.zarr"
 
+    pandas_frequency = _iso_resolution_to_frequency(resolution)
     source_ds = open_zarr_dataset(source_artifact.path or source_artifact.asset_paths[0])
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
             source_period_type=get_period_type(source_dataset),
-            frequency=frequency,
+            pandas_frequency=pandas_frequency,
             method=method,
             start=start,
             end=resolved_end,
@@ -134,7 +118,7 @@ def materialize_resampled_artifact(
         "variable": source_dataset.get("variable", "value"),
         "extents": {
             "temporal": {
-                "resolution": _frequency_to_iso_resolution(frequency),
+                "resolution": resolution,
             }
         },
     }
@@ -158,13 +142,13 @@ def _resample_dataset(
     *,
     source_ds: xr.Dataset,
     source_period_type: str,
-    frequency: str,
+    pandas_frequency: str,
     method: str,
     start: str,
     end: str,
 ) -> xr.Dataset:
     time_dim = get_time_dim(source_ds)
-    offset = pd.tseries.frequencies.to_offset(frequency)
+    offset = pd.tseries.frequencies.to_offset(pandas_frequency)
     target_start = pd.Timestamp(start).to_pydatetime().replace(tzinfo=None)
     target_end_exclusive = (pd.Timestamp(end) + offset).to_pydatetime().replace(tzinfo=None)
     subset = source_ds.where(source_ds[time_dim] >= np.datetime64(target_start), drop=True)
@@ -176,7 +160,7 @@ def _resample_dataset(
 
     with xr.set_options(keep_attrs=True):
         resampler = subset.resample(
-            {time_dim: frequency},
+            {time_dim: pandas_frequency},
             label="left",
             closed="left",
         )
@@ -186,7 +170,7 @@ def _resample_dataset(
         source_start=source_start,
         source_end=source_end,
         source_period_type=source_period_type,
-        frequency=frequency,
+        pandas_frequency=pandas_frequency,
     )
     return result
 
@@ -197,7 +181,7 @@ def _drop_incomplete_edge_periods(
     source_start: datetime,
     source_end: datetime,
     source_period_type: str,
-    frequency: str,
+    pandas_frequency: str,
 ) -> xr.Dataset:
     time_dim = get_time_dim(result)
     if result.sizes.get(time_dim, 0) == 0:
@@ -210,7 +194,7 @@ def _drop_incomplete_edge_periods(
             return result
 
     last_output_start = _coerce_numpy_datetime(result[time_dim].values[-1])
-    offset = pd.tseries.frequencies.to_offset(frequency)
+    offset = pd.tseries.frequencies.to_offset(pandas_frequency)
     next_target_start = (pd.Timestamp(last_output_start) + offset).to_pydatetime().replace(tzinfo=None)
     required_source_end = _previous_source_period_start(next_target_start, source_period_type=source_period_type)
     if source_end < required_source_end:

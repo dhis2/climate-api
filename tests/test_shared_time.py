@@ -2,11 +2,28 @@ import pytest
 
 from climate_api.shared.time import (
     _iso_duration_to_offset,
+    _iso_resolution_to_frequency,
     _period_family,
     datetime_to_period_string,
     normalize_period_string,
     parse_period_string_to_datetime,
 )
+
+
+def test_iso_resolution_to_frequency_canonical_values() -> None:
+    assert _iso_resolution_to_frequency("P1Y") == "1YS"
+    assert _iso_resolution_to_frequency("P1M") == "1MS"
+    assert _iso_resolution_to_frequency("P1W") == "W-MON"
+    assert _iso_resolution_to_frequency("P1D") == "1D"
+    assert _iso_resolution_to_frequency("PT1H") == "1h"
+
+
+def test_iso_resolution_to_frequency_preserves_multiplier() -> None:
+    assert _iso_resolution_to_frequency("P2Y") == "2YS"
+    assert _iso_resolution_to_frequency("P3M") == "3MS"
+    assert _iso_resolution_to_frequency("P2W") == "2W-MON"
+    assert _iso_resolution_to_frequency("P10D") == "10D"
+    assert _iso_resolution_to_frequency("PT6H") == "6h"
 
 
 def test_iso_duration_to_offset() -> None:

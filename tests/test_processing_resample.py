@@ -19,22 +19,6 @@ from climate_api.ingestions.schemas import (
 from climate_api.processing import resample
 
 
-def test_frequency_to_iso_resolution_preserves_multiplier() -> None:
-    assert resample._frequency_to_iso_resolution("6h") == "PT6H"
-    assert resample._frequency_to_iso_resolution("10D") == "P10D"
-    assert resample._frequency_to_iso_resolution("2W") == "P2W"
-    assert resample._frequency_to_iso_resolution("3ME") == "P3M"
-    assert resample._frequency_to_iso_resolution("2YE") == "P2Y"
-
-
-def test_frequency_to_iso_resolution_canonical_values() -> None:
-    assert resample._frequency_to_iso_resolution("1h") == "PT1H"
-    assert resample._frequency_to_iso_resolution("1D") == "P1D"
-    assert resample._frequency_to_iso_resolution("W-MON") == "P1W"
-    assert resample._frequency_to_iso_resolution("ME") == "P1M"
-    assert resample._frequency_to_iso_resolution("YE") == "P1Y"
-
-
 @pytest.fixture(autouse=True)
 def isolated_artifact_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     artifacts_dir = tmp_path / "artifacts"
@@ -117,7 +101,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-02",
@@ -125,7 +109,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
         publish=False,
     )
 
-    assert artifact.dataset_id == "era5land_temperature_hourly_1d_mean"
+    assert artifact.dataset_id == "era5land_temperature_hourly_p1d_mean"
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-01-02"
     result = xr.open_zarr(artifact.path, consolidated=True)
@@ -174,7 +158,7 @@ def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="10D",
+        resolution="P10D",
         method="sum",
         start="2026-01-01",
         end="2026-01-01",
@@ -182,7 +166,7 @@ def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
         publish=False,
     )
 
-    assert artifact.dataset_id == "chirps3_precipitation_daily_10d_sum"
+    assert artifact.dataset_id == "chirps3_precipitation_daily_p10d_sum"
     assert artifact.coverage.temporal.start == "2026-01-01"
     result = xr.open_zarr(artifact.path, consolidated=True)
     try:
@@ -195,7 +179,7 @@ def test_materialize_resampled_artifact_returns_404_when_source_dataset_template
     with pytest.raises(resample.HTTPException, match="Source dataset template 'missing_daily' not found"):
         resample.materialize_resampled_artifact(
             source_dataset_id="missing_daily",
-            frequency="W-MON",
+            resolution="P1W",
             method="sum",
             start="2026-01-05",
             end="2026-01-12",
@@ -242,7 +226,7 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="W-MON",
+        resolution="P1W",
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
@@ -298,7 +282,7 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="W-MON",
+        resolution="P1W",
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
@@ -358,7 +342,7 @@ def test_materialize_resampled_artifact_returns_409_when_source_has_no_data_in_r
     ):
         resample.materialize_resampled_artifact(
             source_dataset_id="chirps3_precipitation_daily",
-            frequency="W-MON",
+            resolution="P1W",
             method="sum",
             start="2026-03-02",  # 2026-W10 — well beyond source data
             end="2026-03-02",
@@ -405,7 +389,7 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
 
     artifact = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="MS",
+        resolution="P1M",
         method="sum",
         start="2026-01-01",
         end="2026-01-01",
@@ -461,7 +445,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -476,7 +460,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_
     )
     second = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -525,7 +509,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="W-MON",
+        resolution="P1W",
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
@@ -534,7 +518,7 @@ def test_materialize_resampled_artifact_reuses_existing_artifact_by_realized_end
     )
     second = resample.materialize_resampled_artifact(
         source_dataset_id="chirps3_precipitation_daily",
-        frequency="W-MON",
+        resolution="P1W",
         method="sum",
         start="2026-01-05",
         end="2026-01-12",
@@ -583,7 +567,7 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
 
     existing = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -606,7 +590,7 @@ def test_materialize_resampled_artifact_publishes_reused_existing_artifact_when_
 
     reused = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -656,7 +640,7 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
 
     first = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",
@@ -672,7 +656,7 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
 
     second = resample.materialize_resampled_artifact(
         source_dataset_id="era5land_temperature_hourly",
-        frequency="1D",
+        resolution="P1D",
         method="mean",
         start="2026-01-01",
         end="2026-01-01",

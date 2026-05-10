@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import pandas as pd
 from fastapi import HTTPException
 
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import DatasetRecord
 from climate_api.processing.resample import materialize_resampled_artifact
+from climate_api.shared.time import _ISO_8601_DURATION_RE
 
 _SUPPORTED_RESAMPLE_METHODS: frozenset[str] = frozenset({"mean", "sum", "min", "max"})
 
@@ -17,7 +17,7 @@ _SUPPORTED_RESAMPLE_METHODS: frozenset[str] = frozenset({"mean", "sum", "min", "
 def execute_resample(
     *,
     source_dataset_id: str,
-    frequency: str,
+    resolution: str,
     method: str,
     start: str,
     end: str | None = None,
@@ -33,16 +33,15 @@ def execute_resample(
     if method not in _SUPPORTED_RESAMPLE_METHODS:
         supported = ", ".join(sorted(_SUPPORTED_RESAMPLE_METHODS))
         raise HTTPException(status_code=400, detail=f"Unsupported method '{method}'. Supported: {supported}")
-    try:
-        _offset = pd.tseries.frequencies.to_offset(frequency)
-    except ValueError:
-        _offset = None
-    if _offset is None:
-        raise HTTPException(status_code=400, detail=f"Invalid frequency '{frequency}'")
+    if not _ISO_8601_DURATION_RE.fullmatch(resolution):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid resolution '{resolution}'; expected an ISO 8601 duration (e.g. P1M, P1W, P1D, PT1H)",
+        )
 
     artifact_id, dataset_summary = run_resample_process(
         source_dataset_id=source_dataset_id,
-        frequency=frequency,
+        resolution=resolution,
         method=method,
         start=start,
         end=end,
@@ -59,7 +58,7 @@ def execute_resample(
 def run_resample_process(
     *,
     source_dataset_id: str,
-    frequency: str,
+    resolution: str,
     method: str,
     start: str,
     end: str | None,
@@ -69,7 +68,7 @@ def run_resample_process(
     """Materialize one derived resampled dataset and return its artifact id plus dataset summary."""
     artifact = materialize_resampled_artifact(
         source_dataset_id=source_dataset_id,
-        frequency=frequency,
+        resolution=resolution,
         method=method,
         start=start,
         end=end,
