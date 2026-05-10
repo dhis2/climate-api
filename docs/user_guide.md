@@ -84,19 +84,9 @@ spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["y", "x"])
 print(spatial_mean.to_dataframe())
 ```
 
-## Dataset IDs
-
-Dataset IDs match the template `id` field from the dataset YAML. Available datasets in the built-in catalogue:
-
-| Dataset ID                      | Variable    | Period | Source    |
-| ------------------------------- | ----------- | ------ | --------- |
-| `chirps3_precipitation_daily`   | `precip`    | Daily  | CHIRPS v3 |
-| `era5land_temperature_hourly`   | `t2m`       | Hourly | ERA5-Land |
-| `era5land_precipitation_hourly` | `tp`        | Hourly | ERA5-Land |
-| `worldpop_population_yearly`    | `pop_total` | Yearly | WorldPop  |
-
 ## What's next
 
+- See [built_in_datasets.md](built_in_datasets.md) for coverage, units, and sync behaviour of each built-in dataset.
 - See [`examples/stac_discover_and_open.py`](../examples/stac_discover_and_open.py) for a complete discovery and access script.
 - See [`examples/zarr_direct_access.py`](../examples/zarr_direct_access.py) for direct Zarr access and spatial/temporal subsetting.
 - See [managed_data_api_guide.md](managed_data_api_guide.md) for the full ingestion and sync API reference.

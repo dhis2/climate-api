@@ -54,7 +54,7 @@ Transforms are functions applied to a dataset after download and before the Zarr
 ```yaml
 transforms:
   - climate_api.transforms.kelvin_to_celsius
-  - mypackage.transforms.clip_to_bbox
+  - mypackage.transforms.clamp_negatives
 ```
 
 Each transform receives the `xr.Dataset` and the dataset template dict, and returns a (possibly modified) `xr.Dataset`:
@@ -63,21 +63,10 @@ Each transform receives the `xr.Dataset` and the dataset template dict, and retu
 import xarray as xr
 from typing import Any
 
-def clip_to_bbox(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
-    """Clip values outside a valid range."""
+def clamp_negatives(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
     varname = dataset["variable"]
     return ds.assign({varname: ds[varname].clip(min=0)})
 ```
-
-Transforms are applied in order. The built-in transforms are:
-
-| Function | Description |
-| -------- | ----------- |
-| `climate_api.transforms.kelvin_to_celsius` | Convert temperature from K to °C |
-| `climate_api.transforms.metres_to_mm` | Convert precipitation from m to mm |
-| `climate_api.transforms.reproject_to_instance_crs` | Reproject to the instance CRS (applied automatically — no need to declare this one) |
-
-Custom transforms can live in any importable package or in a module under `plugins_dir`.
 
 Dict entries with params are also supported:
 
@@ -88,7 +77,9 @@ transforms:
       factor: 0.01
 ```
 
-The `params` dict is forwarded as keyword arguments to the transform function.
+The `params` dict is forwarded as keyword arguments to the transform function. Custom transforms can live in any importable package or in a module under `plugins_dir`.
+
+For the built-in transforms and a full description of the pipeline, see [Transforms](transforms.md).
 
 ---
 
@@ -135,6 +126,8 @@ def execute(*, source_dataset_id: str, factor: float, **_ignored: Any) -> dict[s
 ```
 
 Invalid or missing arguments raise `TypeError`, which the route dispatcher catches and returns as HTTP 400.
+
+For the built-in `resample` process and usage examples, see [Processes](processes.md).
 
 ---
 
