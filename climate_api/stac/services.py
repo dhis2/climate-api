@@ -25,6 +25,7 @@ CATALOG_TITLE = "DHIS2 Climate API"
 CATALOG_DESCRIPTION = "Published Climate API GeoZarr datasets"
 STAC_VERSION = "1.1.0"
 DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.3.0/schema.json"
+PROJECTION_EXTENSION = "https://stac-extensions.github.io/projection/v1.1.0/schema.json"
 RENDER_EXTENSION = "https://stac-extensions.github.io/render/v2.0.0/schema.json"
 ZARR_EXTENSION = "https://stac-extensions.github.io/zarr/v1.1.0/schema.json"
 DEFAULT_STAC_LICENSE = "various"
@@ -160,6 +161,7 @@ def _build_collection_template(
         title=artifact.dataset_name,
         stac_extensions=[
             DATACUBE_EXTENSION,
+            PROJECTION_EXTENSION,
             ZARR_EXTENSION,
         ],
         license=DEFAULT_STAC_LICENSE,
