@@ -19,7 +19,7 @@ from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
-from climate_api.shared.time import parse_period_string_to_datetime
+from climate_api.shared.time import _period_family, parse_period_string_to_datetime
 
 CATALOG_ID = "climate-api"
 CATALOG_TITLE = "DHIS2 Climate API"
@@ -326,17 +326,11 @@ def _abs_url(request: Request, path: str) -> str:
 def _period_step(period_type: object) -> str | None:
     if not isinstance(period_type, str):
         return None
-    if period_type == "PT1H":  # hourly
-        return "PT1H"
-    if period_type == "P1D":  # daily
-        return "P1D"
-    if period_type == "P1M":  # monthly
-        return "P1M"
-    if period_type == "P1Y":  # yearly
-        return "P1Y"
-    if period_type == "P1W":  # weekly
-        return "P1W"
-    return None
+    try:
+        _period_family(period_type)
+    except ValueError:
+        return None
+    return period_type
 
 
 def _override_time_step(collection: dict[str, Any], step: str | None) -> None:

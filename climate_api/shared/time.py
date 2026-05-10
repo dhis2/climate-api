@@ -10,6 +10,25 @@ import pandas as pd
 _WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
 
 
+def _period_family(period_type: str) -> str:
+    """Map an ISO 8601 duration to the canonical period type used for string formatting.
+
+    Compound durations are resolved by their largest component (years beat months, etc.).
+    Sub-daily durations (any with a T designator) map to the hourly family.
+    """
+    if "T" in period_type:  # sub-daily: PTnH, PTnM, PnDTnH, …
+        return "PT1H"
+    if "Y" in period_type:
+        return "P1Y"
+    if "M" in period_type:  # months (date portion — no T present)
+        return "P1M"
+    if "W" in period_type:
+        return "P1W"
+    if "D" in period_type:
+        return "P1D"
+    raise ValueError(f"Unsupported period_type '{period_type}'")
+
+
 def _normalize_datetime_for_period(value: datetime) -> datetime:
     """Convert aware datetimes to UTC before deriving dataset-native periods."""
     if value.tzinfo is not None:
@@ -28,18 +47,17 @@ def _coerce_numpy_datetime(value: object) -> datetime:
 def datetime_to_period_string(value: datetime, period_type: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
-    if period_type == "PT1H":  # hourly
+    family = _period_family(period_type)
+    if family == "PT1H":  # hourly
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
-    if period_type == "P1D":  # daily
+    if family == "P1D":  # daily
         return value.date().isoformat()
-    if period_type == "P1W":  # weekly
+    if family == "P1W":  # weekly
         iso_year, iso_week, _ = value.isocalendar()
         return f"{iso_year:04d}-W{iso_week:02d}"
-    if period_type == "P1M":  # monthly
+    if family == "P1M":  # monthly
         return f"{value.year:04d}-{value.month:02d}"
-    if period_type == "P1Y":  # yearly
-        return str(value.year)
-    raise ValueError(f"Unsupported period_type '{period_type}'")
+    return str(value.year)  # yearly
 
 
 def utc_now() -> datetime:
@@ -71,22 +89,23 @@ def parse_weekly_period_string(value: str) -> datetime:
 
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
-    if period_type == "PT1H":  # hourly
+    family = _period_family(period_type)
+    if family == "PT1H":  # hourly
         try:
             return datetime_to_period_string(parse_hourly_period_string(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
-    if period_type == "P1D":  # daily
+    if family == "P1D":  # daily
         try:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
-    if period_type == "P1W":  # weekly
+    if family == "P1W":  # weekly
         try:
             return datetime_to_period_string(parse_weekly_period_string(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid weekly period '{value}'; expected YYYY-Www or ISO datetime") from exc
-    if period_type == "P1M":  # monthly
+    if family == "P1M":  # monthly
         try:
             if len(value) == 7:
                 datetime.fromisoformat(f"{value}-01")
@@ -94,15 +113,14 @@ def normalize_period_string(value: str, period_type: str) -> str:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid monthly period '{value}'; expected YYYY-MM or ISO datetime") from exc
-    if period_type == "P1Y":  # yearly
-        try:
-            if len(value) == 4:
-                int(value)
-                return value
-            return datetime_to_period_string(datetime.fromisoformat(value), period_type)
-        except ValueError as exc:
-            raise ValueError(f"Invalid yearly period '{value}'; expected YYYY or ISO datetime") from exc
-    raise ValueError(f"Unsupported period_type '{period_type}'")
+    # yearly
+    try:
+        if len(value) == 4:
+            int(value)
+            return value
+        return datetime_to_period_string(datetime.fromisoformat(value), period_type)
+    except ValueError as exc:
+        raise ValueError(f"Invalid yearly period '{value}'; expected YYYY or ISO datetime") from exc
 
 
 def parse_period_string_to_datetime(value: str) -> datetime:
@@ -126,11 +144,10 @@ def parse_period_string_to_datetime(value: str) -> datetime:
 
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
-    if period_type != "P1W":
+    family = _period_family(period_type)
+    if family != "P1W":
         lengths = {"PT1H": 13, "P1D": 10, "P1M": 7, "P1Y": 4}
-        if period_type not in lengths:
-            raise ValueError(f"Unsupported period_type '{period_type}'")
-        return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
+        return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[family]}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))
     iso = dt_index.isocalendar()

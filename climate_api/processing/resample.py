@@ -41,17 +41,25 @@ DERIVED_DATA_DIR: Path = _derived_data_dir()
 
 
 def _frequency_to_iso_resolution(frequency: str) -> str:
-    """Map a pandas frequency alias to a canonical ISO 8601 duration string."""
-    name = type(pd.tseries.frequencies.to_offset(frequency)).__name__
-    if any(x in name for x in ("Hour", "Minute", "Second")):
-        return "PT1H"
+    """Map a pandas frequency alias to an ISO 8601 duration string preserving the multiplier."""
+    offset = pd.tseries.frequencies.to_offset(frequency)
+    n = abs(offset.n)
+    name = type(offset).__name__
+    if "Hour" in name:
+        return f"PT{n}H"
+    if "Minute" in name:
+        return f"PT{n}M"
+    if "Second" in name:
+        return f"PT{n}S"
     if "Week" in name:
-        return "P1W"
-    if any(x in name for x in ("Month", "Quarter")):
-        return "P1M"
-    if any(x in name for x in ("Year", "Annual")):
-        return "P1Y"
-    return "P1D"
+        return f"P{n}W"
+    if "Quarter" in name:
+        return f"P{n * 3}M"
+    if "Month" in name:
+        return f"P{n}M"
+    if "Year" in name or "Annual" in name:
+        return f"P{n}Y"
+    return f"P{n}D"
 
 
 def derived_dataset_id(*, source_dataset_id: str, frequency: str, method: str) -> str:

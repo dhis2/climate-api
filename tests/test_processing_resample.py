@@ -19,6 +19,22 @@ from climate_api.ingestions.schemas import (
 from climate_api.processing import resample
 
 
+def test_frequency_to_iso_resolution_preserves_multiplier() -> None:
+    assert resample._frequency_to_iso_resolution("6h") == "PT6H"
+    assert resample._frequency_to_iso_resolution("10D") == "P10D"
+    assert resample._frequency_to_iso_resolution("2W") == "P2W"
+    assert resample._frequency_to_iso_resolution("3ME") == "P3M"
+    assert resample._frequency_to_iso_resolution("2YE") == "P2Y"
+
+
+def test_frequency_to_iso_resolution_canonical_values() -> None:
+    assert resample._frequency_to_iso_resolution("1h") == "PT1H"
+    assert resample._frequency_to_iso_resolution("1D") == "P1D"
+    assert resample._frequency_to_iso_resolution("W-MON") == "P1W"
+    assert resample._frequency_to_iso_resolution("ME") == "P1M"
+    assert resample._frequency_to_iso_resolution("YE") == "P1Y"
+
+
 @pytest.fixture(autouse=True)
 def isolated_artifact_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     artifacts_dir = tmp_path / "artifacts"

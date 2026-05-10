@@ -18,6 +18,7 @@ from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
 from climate_api.data_registry.services.datasets import get_period_type
+from climate_api.shared.time import _period_family
 from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_time_dim, get_x_y_dims
@@ -299,16 +300,16 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    period_type: str = get_period_type(dataset)
-    if period_type == "PT1H":  # hourly
+    family = _period_family(get_period_type(dataset))
+    if family == "PT1H":  # hourly
         chunks[dim] = 24 * 7
-    elif period_type == "P1D":  # daily
+    elif family == "P1D":  # daily
         chunks[dim] = 30
-    elif period_type == "P1W":  # weekly
+    elif family == "P1W":  # weekly
         chunks[dim] = 52
-    elif period_type == "P1M":  # monthly
+    elif family == "P1M":  # monthly
         chunks[dim] = 12
-    elif period_type == "P1Y":  # yearly
+    elif family == "P1Y":  # yearly
         chunks[dim] = 1
 
     x_dim, y_dim = get_x_y_dims(ds)
