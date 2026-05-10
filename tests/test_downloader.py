@@ -164,12 +164,8 @@ def test_get_cache_prefix_uses_dataset_id() -> None:
 # ---------------------------------------------------------------------------
 
 
-_CHIRPS3_EXTENTS: dict[str, Any] = {
-    "spatial": {"bbox": [-180, -50, 180, 50], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
-}
-_LIMITED_LON_EXTENTS: dict[str, Any] = {
-    "spatial": {"bbox": [-180, -90, 60, 90], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
-}
+_CHIRPS3_EXTENTS: dict[str, Any] = {"spatial": {"bbox": [-180, -50, 180, 50]}}
+_LIMITED_LON_EXTENTS: dict[str, Any] = {"spatial": {"bbox": [-180, -90, 60, 90]}}
 
 
 def test_validate_spatial_coverage_passes_when_no_extents_declared() -> None:
