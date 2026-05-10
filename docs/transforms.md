@@ -1,6 +1,6 @@
 # Transforms
 
-Transforms are functions applied to a dataset **after download and before the Zarr store is written**. They handle things like unit conversion and reprojection that would be awkward or costly to do at read time.
+Transforms are functions applied to a dataset **after download and before the Zarr store is written**. They handle things like unit conversion that would be awkward or costly to do at read time.
 
 ---
 
@@ -46,13 +46,13 @@ mm = m × 1000
 
 Used by: ERA5-Land total precipitation (`era5land_precipitation_hourly`).
 
-### `climate_api.transforms.reproject_to_instance_crs`
+---
 
-Reprojects the dataset to the CRS configured for the API instance. It is a no-op when the instance CRS matches the transform's `source_crs` parameter (default `EPSG:4326`).
+## Reprojection
 
-This transform is applied **automatically** by the ingestion pipeline — always, as the final step after any user-declared transforms. You do not need to declare it in your dataset YAML. **Do not declare it explicitly**: doing so would run reprojection twice, with the second pass using the wrong source CRS.
+Reprojection to the instance CRS is handled automatically by the ingestion pipeline as a separate step after all user-declared transforms have run. It is not a transform and should not be declared in the `transforms` list.
 
-If your source data is not in `EPSG:4326`, set `source_crs` in the dataset template rather than declaring the transform manually:
+If your source data is not in `EPSG:4326`, declare `source_crs` in the dataset template so the pipeline knows what to reproject from:
 
 ```yaml
 source_crs: EPSG:32633
