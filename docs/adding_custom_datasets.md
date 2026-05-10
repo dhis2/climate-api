@@ -102,7 +102,6 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 **Period and sync**
 
-The temporal resolution (`period_type`) is derived automatically from `extents.temporal.resolution` — you do not set it directly.
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
