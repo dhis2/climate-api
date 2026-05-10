@@ -822,13 +822,17 @@ def _temporal_coverage_matches_request_scope(
 def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:
     latest = max(artifacts, key=lambda artifact: artifact.created_at)
     source_dataset = registry_datasets.get_dataset(latest.dataset_id) or {}
+    try:
+        period_type = get_period_type(source_dataset)
+    except (KeyError, TypeError):
+        period_type = "unknown"
     return DatasetRecord(
         dataset_id=dataset_id,
         source_dataset_id=latest.dataset_id,
         dataset_name=latest.dataset_name,
         short_name=_as_optional_str(source_dataset.get("short_name")),
         variable=latest.variable,
-        period_type=_resolution_for_artifact(source_dataset),
+        period_type=period_type,
         units=_as_optional_str(source_dataset.get("units")),
         resolution=_as_optional_str(source_dataset.get("resolution")),
         source=_as_optional_str(source_dataset.get("source")),
@@ -886,13 +890,6 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
         )
     return links
 
-
-def _resolution_for_artifact(dataset: dict[str, Any]) -> str:
-    """Return the ISO 8601 resolution for a dataset dict, falling back to 'unknown'."""
-    try:
-        return get_period_type(dataset)
-    except (KeyError, TypeError):
-        return "unknown"
 
 
 def _as_optional_str(value: object) -> str | None:
