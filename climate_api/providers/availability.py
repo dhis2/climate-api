@@ -43,7 +43,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     except (KeyError, TypeError):
         return requested_end
 
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
             latest = utc_now() - timedelta(hours=lag_hours)

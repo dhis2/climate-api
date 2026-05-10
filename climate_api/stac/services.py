@@ -326,7 +326,7 @@ def _abs_url(request: Request, path: str) -> str:
 def _period_step(period_type: object) -> str | None:
     if not isinstance(period_type, str):
         return None
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         return "PT1H"
     if period_type == "P1D":
         return "P1D"

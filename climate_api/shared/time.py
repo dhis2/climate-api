@@ -28,7 +28,7 @@ def _coerce_numpy_datetime(value: object) -> datetime:
 def datetime_to_period_string(value: datetime, period_type: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
     if period_type == "P1D":
         return value.date().isoformat()
@@ -71,7 +71,7 @@ def parse_weekly_period_string(value: str) -> datetime:
 
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         try:
             return datetime_to_period_string(parse_hourly_period_string(value), period_type)
         except ValueError as exc:
@@ -128,7 +128,7 @@ def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type
     """Convert an array of numpy datetimes to truncated period strings."""
     if period_type != "P1W":
         lengths = {"PT1H": 13, "P1D": 10, "P1M": 7, "P1Y": 4}
-        length = lengths.get(period_type, 13 if "T" in period_type.upper() else 10)
+        length = lengths.get(period_type, 13 if period_type == "PT1H" else 10)
         return np.datetime_as_string(datetimes, unit="s").astype(f"U{length}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))

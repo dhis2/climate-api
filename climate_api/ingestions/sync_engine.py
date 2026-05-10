@@ -293,7 +293,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     This helper is part of sync planning because temporal datasets need to know
     whether another period could exist beyond the current materialized coverage.
     """
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         timestamp = parse_hourly_period_string(latest_period_end)
         return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
     if period_type == "P1D":
@@ -317,7 +317,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
 def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
     today = utc_today()
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "P1D":
         return today.isoformat()

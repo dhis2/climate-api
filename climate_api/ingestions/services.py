@@ -705,7 +705,7 @@ def _normalize_optional_request_period(value: str | None, *, period_type: str, f
 
 def _default_request_end(period_type: str) -> str:
     """Return the current dataset-native period string for omitted ingestion end values."""
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         return datetime_to_period_string(utc_now(), period_type)
     if period_type == "P1D":
         return utc_today().isoformat()

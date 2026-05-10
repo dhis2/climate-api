@@ -300,7 +300,7 @@ def _compute_time_space_chunks(
 
     dim = get_time_dim(ds)
     period_type: str = get_period_type(dataset)
-    if "T" in period_type.upper():
+    if period_type == "PT1H":
         chunks[dim] = 24 * 7
     elif period_type == "P1D":
         chunks[dim] = 30
