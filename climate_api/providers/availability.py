@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
+from climate_api.data_registry.services.datasets import get_period_type
 
 
 def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
@@ -38,7 +39,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     """Return latest available period by applying YAML-declared lag metadata."""
     availability = _availability_metadata(dataset)
     try:
-        period_type: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        period_type: str = get_period_type(dataset)
     except (KeyError, TypeError):
         return requested_end
 

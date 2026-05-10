@@ -22,6 +22,7 @@ from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import (
     ArtifactCoverage,
@@ -160,7 +161,7 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
-    period_type = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    period_type = get_period_type(dataset)
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
     download_start = _normalize_optional_request_period(
@@ -345,7 +346,7 @@ def store_materialized_zarr_artifact(
     publish: bool,
 ) -> ArtifactRecord:
     """Store metadata for a locally materialized Zarr artifact."""
-    period_type = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    period_type = get_period_type(dataset)
     normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
     normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
     request_scope = ArtifactRequestScope(
@@ -889,8 +890,7 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
 def _resolution_for_artifact(dataset: dict[str, Any]) -> str:
     """Return the ISO 8601 resolution for a dataset dict, falling back to 'unknown'."""
     try:
-        period_type: object = dataset["extents"]["temporal"]["resolution"]
-        return str(period_type) if isinstance(period_type, str) else "unknown"
+        return get_period_type(dataset)
     except (KeyError, TypeError):
         return "unknown"
 

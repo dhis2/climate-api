@@ -167,6 +167,11 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define extents.temporal.resolution")
 
 
+def get_period_type(dataset: dict[str, Any]) -> str:
+    """Return the ISO 8601 temporal resolution from a dataset dict."""
+    return str(dataset["extents"]["temporal"]["resolution"])
+
+
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:
     """Validate optional source availability policy metadata."""
     if not isinstance(sync_availability, dict):

@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
 from climate_api.publications.services import managed_dataset_id_for_scope
@@ -98,7 +99,7 @@ def materialize_resampled_artifact(
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
-            source_period_type=str(source_dataset["extents"]["temporal"]["resolution"]),  # type: ignore[index]
+            source_period_type=get_period_type(source_dataset),
             frequency=frequency,
             method=method,
             start=start,

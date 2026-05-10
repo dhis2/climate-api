@@ -16,6 +16,7 @@ from xstac import xarray_to_stac
 from climate_api.data_accessor.services.accessor import open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
+from climate_api.data_registry.services.datasets import get_period_type
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 from climate_api.shared.time import parse_period_string_to_datetime
@@ -119,7 +120,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
     try:
-        period_type: str | None = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        period_type: str | None = get_period_type(source_dataset)
     except (KeyError, TypeError):
         period_type = None
     _override_time_step(collection_payload, _period_step(period_type))

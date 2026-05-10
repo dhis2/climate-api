@@ -18,6 +18,7 @@ from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
 from climate_api.transforms.reproject import reproject_to_instance_crs
+from climate_api.data_registry.services.datasets import get_period_type
 
 from .utils import get_time_dim, get_x_y_dims
 
@@ -298,7 +299,7 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    period_type: str = str(dataset["extents"]["temporal"]["resolution"])
+    period_type: str = get_period_type(dataset)
     if "T" in period_type.upper():
         chunks[dim] = 24 * 7
     elif period_type == "P1D":
