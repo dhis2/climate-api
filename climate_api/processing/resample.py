@@ -226,7 +226,7 @@ def _find_existing_resampled_artifact(
 
 
 def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:
-    if "T" in source_period_type.upper():
+    if source_period_type == "PT1H":  # hourly
         return boundary - timedelta(hours=1)
     if source_period_type == "P1D":  # daily
         return boundary - timedelta(days=1)
