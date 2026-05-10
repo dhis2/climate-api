@@ -10,3 +10,4 @@ data/derived
 data/pygeoapi
 docs/internal/
 site/
+.claude/
