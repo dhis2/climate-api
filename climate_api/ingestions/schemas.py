@@ -162,7 +162,7 @@ class DatasetRecord(BaseModel):
     dataset_name: str = Field(description="Full display name of the dataset.")
     short_name: str | None = Field(default=None, description="Short display name of the dataset.")
     variable: str = Field(description="Primary raster variable stored in the dataset.")
-    period_type: str = Field(description="Temporal period type of the dataset, for example daily or yearly.")
+    period_type: str = Field(description="ISO 8601 duration string representing the temporal resolution of the dataset, for example P1D or P1Y.")
     units: str | None = Field(default=None, description="Units of the primary variable.")
     resolution: str | None = Field(default=None, description="Native spatial resolution summary.")
     source: str | None = Field(default=None, description="Upstream source name.")
@@ -237,7 +237,7 @@ class DatasetListResponse(BaseModel):
                     "dataset_name": "Total precipitation (CHIRPS3)",
                     "short_name": "Total precipitation",
                     "variable": "precip",
-                    "period_type": "daily",
+                    "period_type": "P1D",
                     "units": "mm",
                     "resolution": "5 km x 5 km",
                     "source": "CHIRPS v3",

@@ -235,7 +235,7 @@ Example response:
       "dataset_name": "Total precipitation (CHIRPS3)",
       "short_name": "Total precipitation",
       "variable": "precip",
-      "period_type": "daily",
+      "period_type": "P1D",
       "units": "mm",
       "resolution": "5 km x 5 km",
       "source": "CHIRPS v3",
