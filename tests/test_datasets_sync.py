@@ -66,7 +66,7 @@ def _dataset_detail(dataset_id: str) -> DatasetDetailRecord:
         dataset_name="CHIRPS3 precipitation",
         short_name="CHIRPS3 precip",
         variable="precip",
-        period_type="daily",
+        period_type="P1D",
         units="mm",
         resolution="5 km x 5 km",
         source="CHIRPS v3",
@@ -357,18 +357,18 @@ def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(sync_engine, "utc_now", lambda: FixedDateTime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
 
-    result = sync_engine._default_target_end(resolution="PT1H")
+    result = sync_engine._default_target_end(period_type="PT1H")
 
     assert result == "2026-04-21T13"
 
 
 def test_default_target_end_rejects_unsupported_resolution() -> None:
-    with pytest.raises(ValueError, match="Unsupported resolution 'P14D' for sync"):
-        sync_engine._default_target_end(resolution="P14D")
+    with pytest.raises(ValueError, match="Unsupported period_type 'P14D' for sync"):
+        sync_engine._default_target_end(period_type="P14D")
 
 
 def test_next_period_start_preserves_hourly_period_format() -> None:
-    result = sync_engine._next_period_start("2026-04-21T13", resolution="PT1H")
+    result = sync_engine._next_period_start("2026-04-21T13", period_type="PT1H")
 
     assert result == "2026-04-21T14"
 
@@ -376,19 +376,19 @@ def test_next_period_start_preserves_hourly_period_format() -> None:
 def test_default_weekly_target_end_uses_iso_week_format(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sync_engine, "utc_now", lambda: datetime(2026, 4, 21, 13, 47, 31, tzinfo=UTC))
 
-    result = sync_engine._default_target_end(resolution="P1W")
+    result = sync_engine._default_target_end(period_type="P1W")
 
     assert result == "2026-W17"
 
 
 def test_next_period_start_preserves_weekly_period_format() -> None:
-    result = sync_engine._next_period_start("2026-W17", resolution="P1W")
+    result = sync_engine._next_period_start("2026-W17", period_type="P1W")
 
     assert result == "2026-W18"
 
 
 def test_next_period_start_rolls_weekly_period_across_iso_year_boundary() -> None:
-    result = sync_engine._next_period_start("2020-W53", resolution="P1W")
+    result = sync_engine._next_period_start("2020-W53", period_type="P1W")
 
     assert result == "2021-W01"
 

@@ -75,14 +75,14 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
-    resolution: str = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+    period_type: str = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
     requested_target_end_source = "request" if normalized_requested_end is not None else "default_today"
     if normalized_requested_end is not None:
-        resolved_end = normalize_period_string(normalized_requested_end, resolution)
+        resolved_end = normalize_period_string(normalized_requested_end, period_type)
     else:
-        resolved_end = _default_target_end(resolution=resolution)
+        resolved_end = _default_target_end(period_type=period_type)
     latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
     target_end_source = (
         requested_target_end_source
@@ -91,7 +91,7 @@ def plan_sync(
     )
 
     if sync_kind == SyncKind.TEMPORAL:
-        next_period_start = _next_period_start(current_end, resolution=resolution)
+        next_period_start = _next_period_start(current_end, period_type=period_type)
         if next_period_start > latest_available_end:
             return SyncDetail(
                 source_dataset_id=latest_artifact.dataset_id,
@@ -286,47 +286,47 @@ def _sync_plan_message(
     return f"Data exists through {current_end}. Sync will rematerialize the dataset through {target_end}."
 
 
-def _next_period_start(latest_period_end: str, *, resolution: str) -> str:
+def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     """Return the next dataset-native period after a covered temporal end value.
 
     This helper is part of sync planning because temporal datasets need to know
     whether another period could exist beyond the current materialized coverage.
     """
-    if "T" in resolution.upper():
+    if "T" in period_type.upper():
         timestamp = parse_hourly_period_string(latest_period_end)
-        return datetime_to_period_string(timestamp + timedelta(hours=1), resolution)
-    if resolution == "P1D":
+        return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
+    if period_type == "P1D":
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
-    if resolution == "P1W":
+    if period_type == "P1W":
         current = parse_period_string_to_datetime(latest_period_end).date()
         next_week = datetime.combine(current + timedelta(days=7), time(0))
-        return datetime_to_period_string(next_week, resolution)
-    if resolution == "P1M":
+        return datetime_to_period_string(next_week, period_type)
+    if period_type == "P1M":
         current = date.fromisoformat(f"{latest_period_end}-01")
         month = current.month + 1
         year = current.year + (1 if month == 13 else 0)
         month = 1 if month == 13 else month
         return f"{year:04d}-{month:02d}"
-    if resolution == "P1Y":
+    if period_type == "P1Y":
         return str(int(latest_period_end) + 1)
-    raise ValueError(f"Unsupported resolution '{resolution}' for sync")
+    raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
 
-def _default_target_end(*, resolution: str) -> str:
+def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
     today = utc_today()
-    if "T" in resolution.upper():
-        return datetime_to_period_string(utc_now(), resolution)
-    if resolution == "P1D":
+    if "T" in period_type.upper():
+        return datetime_to_period_string(utc_now(), period_type)
+    if period_type == "P1D":
         return today.isoformat()
-    if resolution == "P1W":
-        return datetime_to_period_string(utc_now(), resolution)
-    if resolution == "P1M":
+    if period_type == "P1W":
+        return datetime_to_period_string(utc_now(), period_type)
+    if period_type == "P1M":
         return f"{today.year:04d}-{today.month:02d}"
-    if resolution == "P1Y":
+    if period_type == "P1Y":
         return str(today.year)
-    raise ValueError(f"Unsupported resolution '{resolution}' for sync")
+    raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
 
 def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str) -> str:
@@ -402,8 +402,8 @@ def _provider_latest_available_end(
     if not isinstance(result, str):
         raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
     try:
-        resolution: object = source_dataset["extents"]["temporal"]["resolution"]  # type: ignore[index]
-        return normalize_period_string(result, str(resolution))
+        period_type: object = source_dataset["extents"]["temporal"]["resolution"]  # type: ignore[index]
+        return normalize_period_string(result, str(period_type))
     except (KeyError, TypeError, ValueError) as exc:
         raise SyncConfigurationError(
             f"Latest availability function '{function_path}' returned invalid period "

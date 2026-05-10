@@ -38,25 +38,25 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     """Return latest available period by applying YAML-declared lag metadata."""
     availability = _availability_metadata(dataset)
     try:
-        resolution: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        period_type: str = str(dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
     except (KeyError, TypeError):
         return requested_end
 
-    if "T" in resolution.upper():
+    if "T" in period_type.upper():
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
             latest = utc_now() - timedelta(hours=lag_hours)
-            return datetime_to_period_string(latest, resolution)
+            return datetime_to_period_string(latest, period_type)
         return requested_end
 
     lag_days = availability.get("lag_days")
-    if resolution in {"P1D", "P1M"} and isinstance(lag_days, int) and lag_days > 0:
+    if period_type in {"P1D", "P1M"} and isinstance(lag_days, int) and lag_days > 0:
         latest_date = utc_today() - timedelta(days=lag_days)
-        if resolution == "P1M":
+        if period_type == "P1M":
             return f"{latest_date.year:04d}-{latest_date.month:02d}"
         return latest_date.isoformat()
 
-    if resolution == "P1Y":
+    if period_type == "P1Y":
         latest_year_offset = availability.get("latest_year_offset")
         if isinstance(latest_year_offset, int) and latest_year_offset >= 0:
             return str(utc_today().year - latest_year_offset)

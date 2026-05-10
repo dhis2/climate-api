@@ -98,7 +98,7 @@ def materialize_resampled_artifact(
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
-            source_resolution=str(source_dataset["extents"]["temporal"]["resolution"]),  # type: ignore[index]
+            source_period_type=str(source_dataset["extents"]["temporal"]["resolution"]),  # type: ignore[index]
             frequency=frequency,
             method=method,
             start=start,
@@ -148,7 +148,7 @@ def _resolve_source_artifact(*, source_dataset_id: str) -> ArtifactRecord:
 def _resample_dataset(
     *,
     source_ds: xr.Dataset,
-    source_resolution: str,
+    source_period_type: str,
     frequency: str,
     method: str,
     start: str,
@@ -176,7 +176,7 @@ def _resample_dataset(
         result=result,
         source_start=source_start,
         source_end=source_end,
-        source_resolution=source_resolution,
+        source_period_type=source_period_type,
         frequency=frequency,
     )
     return result
@@ -187,7 +187,7 @@ def _drop_incomplete_edge_periods(
     result: xr.Dataset,
     source_start: datetime,
     source_end: datetime,
-    source_resolution: str,
+    source_period_type: str,
     frequency: str,
 ) -> xr.Dataset:
     time_dim = get_time_dim(result)
@@ -203,7 +203,7 @@ def _drop_incomplete_edge_periods(
     last_output_start = _coerce_numpy_datetime(result[time_dim].values[-1])
     offset = pd.tseries.frequencies.to_offset(frequency)
     next_target_start = (pd.Timestamp(last_output_start) + offset).to_pydatetime().replace(tzinfo=None)
-    required_source_end = _previous_source_period_start(next_target_start, source_resolution=source_resolution)
+    required_source_end = _previous_source_period_start(next_target_start, source_period_type=source_period_type)
     if source_end < required_source_end:
         return result.isel({time_dim: slice(0, -1)})
     return result
@@ -224,19 +224,19 @@ def _find_existing_resampled_artifact(
     )
 
 
-def _previous_source_period_start(boundary: datetime, *, source_resolution: str) -> datetime:
-    if "T" in source_resolution.upper():
+def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:
+    if "T" in source_period_type.upper():
         return boundary - timedelta(hours=1)
-    if source_resolution == "P1D":
+    if source_period_type == "P1D":
         return boundary - timedelta(days=1)
-    if source_resolution == "P1W":
+    if source_period_type == "P1W":
         return boundary - timedelta(days=7)
-    if source_resolution == "P1M":
+    if source_period_type == "P1M":
         previous_month_last_day = boundary.replace(day=1) - timedelta(days=1)
         return previous_month_last_day.replace(day=1)
-    if source_resolution == "P1Y":
+    if source_period_type == "P1Y":
         return boundary.replace(year=boundary.year - 1, month=1, day=1)
-    raise HTTPException(status_code=400, detail=f"Unsupported source resolution '{source_resolution}' for resampling")
+    raise HTTPException(status_code=400, detail=f"Unsupported source resolution '{source_period_type}' for resampling")
 
 
 def _write_resampled_zarr(ds: xr.Dataset, zarr_path: Path) -> None:

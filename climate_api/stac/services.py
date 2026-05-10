@@ -119,10 +119,10 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
     try:
-        resolution: str | None = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
+        period_type: str | None = str(source_dataset["extents"]["temporal"]["resolution"])  # type: ignore[index]
     except (KeyError, TypeError):
-        resolution = None
-    _override_time_step(collection_payload, _period_step(resolution))
+        period_type = None
+    _override_time_step(collection_payload, _period_step(period_type))
     _override_spatial_extent_from_artifact(collection_payload, artifact)
     _override_temporal_extent_from_artifact(collection_payload, artifact)
     _sanitize_variable_attrs(collection_payload)
@@ -322,18 +322,18 @@ def _abs_url(request: Request, path: str) -> str:
     return f"{str(request.base_url).rstrip('/')}{path}"
 
 
-def _period_step(resolution: object) -> str | None:
-    if not isinstance(resolution, str):
+def _period_step(period_type: object) -> str | None:
+    if not isinstance(period_type, str):
         return None
-    if "T" in resolution.upper():
+    if "T" in period_type.upper():
         return "PT1H"
-    if resolution == "P1D":
+    if period_type == "P1D":
         return "P1D"
-    if resolution == "P1M":
+    if period_type == "P1M":
         return "P1M"
-    if resolution == "P1Y":
+    if period_type == "P1Y":
         return "P1Y"
-    if resolution == "P1W":
+    if period_type == "P1W":
         return "P1W"
     return None
 

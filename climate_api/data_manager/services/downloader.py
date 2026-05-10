@@ -298,14 +298,14 @@ def _compute_time_space_chunks(
     chunks: dict[str, int] = {}
 
     dim = get_time_dim(ds)
-    resolution: str = str(dataset.get("extents", {}).get("temporal", {}).get("resolution", ""))  # type: ignore[union-attr]
-    if "T" in resolution.upper():
+    period_type: str = str(dataset.get("extents", {}).get("temporal", {}).get("resolution", ""))  # type: ignore[union-attr]
+    if "T" in period_type.upper():
         chunks[dim] = 24 * 7
-    elif resolution == "P1D":
+    elif period_type == "P1D":
         chunks[dim] = 30
-    elif resolution == "P1M":
+    elif period_type == "P1M":
         chunks[dim] = 12
-    elif resolution == "P1Y":
+    elif period_type == "P1Y":
         chunks[dim] = 1
 
     x_dim, y_dim = get_x_y_dims(ds)
