@@ -339,7 +339,7 @@ def test_dataset_registry_accepts_non_standard_resolution(
     kind: temporal
   extents:
     temporal:
-      resolution: P6H
+      resolution: PT6H
   ingestion:
     function: some.download.function
 """,
@@ -348,4 +348,4 @@ def test_dataset_registry_accepts_non_standard_resolution(
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     loaded = datasets.list_datasets()
-    assert loaded[0]["extents"]["temporal"]["resolution"] == "P6H"
+    assert loaded[0]["extents"]["temporal"]["resolution"] == "PT6H"

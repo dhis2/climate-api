@@ -128,8 +128,9 @@ def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type
     """Convert an array of numpy datetimes to truncated period strings."""
     if period_type != "P1W":
         lengths = {"PT1H": 13, "P1D": 10, "P1M": 7, "P1Y": 4}
-        length = lengths.get(period_type, 13 if period_type == "PT1H" else 10)
-        return np.datetime_as_string(datetimes, unit="s").astype(f"U{length}")
+        if period_type not in lengths:
+            raise ValueError(f"Unsupported period_type '{period_type}'")
+        return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))
     iso = dt_index.isocalendar()

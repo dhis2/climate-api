@@ -237,7 +237,10 @@ def _previous_source_period_start(boundary: datetime, *, source_period_type: str
         return previous_month_last_day.replace(day=1)
     if source_period_type == "P1Y":  # yearly
         return boundary.replace(year=boundary.year - 1, month=1, day=1)
-    raise HTTPException(status_code=400, detail=f"Unsupported source temporal resolution '{source_period_type}' for resampling")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unsupported source temporal resolution '{source_period_type}' for resampling",
+    )
 
 
 def _write_resampled_zarr(ds: xr.Dataset, zarr_path: Path) -> None:

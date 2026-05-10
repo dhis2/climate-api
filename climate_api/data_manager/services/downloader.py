@@ -304,6 +304,8 @@ def _compute_time_space_chunks(
         chunks[dim] = 24 * 7
     elif period_type == "P1D":  # daily
         chunks[dim] = 30
+    elif period_type == "P1W":  # weekly
+        chunks[dim] = 52
     elif period_type == "P1M":  # monthly
         chunks[dim] = 12
     elif period_type == "P1Y":  # yearly
