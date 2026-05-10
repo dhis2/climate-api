@@ -373,6 +373,51 @@
   color: var(--dhis2-blue);
 }
 
+/* ── Documentation index ─────────────────────────────────────────────── */
+
+.home-docs {
+  padding: 4rem 1rem;
+  background: var(--md-code-bg-color);
+}
+
+.docs-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.docs-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1rem 1.2rem;
+  border: 1.5px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--md-default-fg-color);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.docs-link:hover {
+  border-color: var(--dhis2-blue);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+  color: var(--md-default-fg-color);
+}
+
+.docs-link__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--dhis2-blue);
+}
+
+.docs-link__desc {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+}
+
 /* ── Ecosystem links ─────────────────────────────────────────────────── */
 
 .home-ecosystem {

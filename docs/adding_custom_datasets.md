@@ -138,7 +138,7 @@ transforms:
   - mypackage.transforms.my_custom_transform
 ```
 
-See [Extensibility — Transform functions](extensibility.md#transform-functions) for the full transform contract and built-in options.
+See [Transforms](transforms.md) for the full pipeline description, built-in options, and how to write a custom transform.
 
 **Spatial and temporal extents** — declares what the source dataset covers. Used to validate ingest requests before hitting the provider:
 
