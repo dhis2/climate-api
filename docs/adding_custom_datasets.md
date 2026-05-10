@@ -70,10 +70,15 @@ Create a directory for your custom templates and add a YAML file. Each file cont
   name: ENACTS Rainfall (daily)
   short_name: Rainfall
   variable: rainfall
-  period_type: daily
   sync:
     kind: temporal
     execution: append
+  extents:
+    spatial:
+      bbox: [-20, 5, 55, 25]
+    temporal:
+      begin: "1981-01-01"
+      resolution: P1D
   ingestion:
     function: mypackage.sources.enacts.download
   units: mm
@@ -97,9 +102,10 @@ Create a directory for your custom templates and add a YAML file. Each file cont
 
 **Period and sync**
 
+The temporal resolution (`period_type`) is derived automatically from `extents.temporal.resolution` — you do not set it directly.
+
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `period_type` | Yes | Temporal resolution: `hourly`, `daily`, `monthly`, `yearly` |
 | `sync.kind` | Yes | `temporal` — data grows over time; `release` — versioned releases; `static` — never synced |
 | `sync.execution` | No | `append` — new time steps appended to existing store; `rematerialize` — full rebuild on each sync |
 | `sync.availability` | No | Provider availability policy — see below |
@@ -146,13 +152,13 @@ See [Extensibility — Transform functions](extensibility.md#transform-functions
 extents:
   spatial:
     bbox: [-180, -50, 180, 50]   # [xmin, ymin, xmax, ymax] in WGS84
-    crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
   temporal:
     begin: "1981-01-01"
     end: "2030-12-31"            # omit if ongoing
-    trs: http://www.opengis.net/def/uom/ISO-8601/0/Gregorian
-    resolution: P1D              # ISO 8601 duration: PT1H, P1D, P1M, P1Y
+    resolution: P1D              # required — ISO 8601 duration, see https://en.wikipedia.org/wiki/ISO_8601#Durations
 ```
+
+`extents.temporal.resolution` is required and must be one of: `PT1H` (hourly), `P1D` (daily), `P1W` (weekly), `P1M` (monthly), `P1Y` (yearly). It drives the `period_type` used internally — you do not set `period_type` directly.
 
 If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, the API returns HTTP 400 immediately. Partial overlap is allowed — the provider will return data for the intersecting area.
 
@@ -219,9 +225,11 @@ The smallest valid template for a static dataset with no sync:
 - id: my_static_dataset
   name: My static dataset
   variable: value
-  period_type: daily
   sync:
     kind: static
+  extents:
+    temporal:
+      resolution: P1D
   ingestion:
     function: mypackage.sources.my_source.download
 ```

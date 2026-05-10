@@ -19,14 +19,6 @@ CONFIGS_DIR: Path | None = None
 SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
-_ISO_RESOLUTION_TO_PERIOD_TYPE: dict[str, str] = {
-    "PT1H": "hourly",
-    "P1D": "daily",
-    "P1W": "weekly",
-    "P1M": "monthly",
-    "P1Y": "yearly",
-}
-SUPPORTED_PERIOD_TYPES: frozenset[str] = frozenset(_ISO_RESOLUTION_TO_PERIOD_TYPE.values())
 
 
 def list_datasets() -> list[dict[str, Any]]:
@@ -178,14 +170,21 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
 
 
 def _resolution_to_period_type(resolution: str, *, dataset_id: str, source: str) -> str:
-    period_type = _ISO_RESOLUTION_TO_PERIOD_TYPE.get(resolution.strip())
-    if period_type is None:
-        supported = ", ".join(sorted(_ISO_RESOLUTION_TO_PERIOD_TYPE))
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} has unrecognised "
-            f"extents.temporal.resolution '{resolution}'. Supported values: {supported}"
-        )
-    return period_type
+    r = resolution.strip().upper()
+    if "T" in r:
+        return "hourly"
+    if "Y" in r:
+        return "yearly"
+    if "M" in r:
+        return "monthly"
+    if "W" in r:
+        return "weekly"
+    if "D" in r:
+        return "daily"
+    raise ValueError(
+        f"Dataset template '{dataset_id}' in {source} has unrecognised "
+        f"extents.temporal.resolution '{resolution}'"
+    )
 
 
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:
