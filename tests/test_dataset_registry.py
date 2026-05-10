@@ -349,3 +349,29 @@ def test_dataset_registry_accepts_non_standard_resolution(
 
     loaded = datasets.list_datasets()
     assert loaded[0]["extents"]["temporal"]["resolution"] == "PT6H"
+
+
+def test_dataset_registry_rejects_invalid_iso_8601_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "invalid_resolution.yaml"
+    registry_file.write_text(
+        """
+- id: invalid_resolution
+  name: Invalid resolution
+  variable: value
+  sync:
+    kind: temporal
+  extents:
+    temporal:
+      resolution: P6H
+  ingestion:
+    function: some.download.function
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="invalid extents.temporal.resolution"):
+        datasets.list_datasets()

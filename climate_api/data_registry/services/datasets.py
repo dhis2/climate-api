@@ -2,6 +2,7 @@
 
 import importlib.resources
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -165,6 +166,11 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
     resolution = temporal.get("resolution") if isinstance(temporal, dict) else None
     if not isinstance(resolution, str) or not resolution:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define extents.temporal.resolution")
+    if not re.fullmatch(r"P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?", resolution):
+        raise ValueError(
+            f"Dataset template '{dataset_id}' in {source} has invalid extents.temporal.resolution '{resolution}'"
+            " — must be a valid ISO 8601 duration (e.g. P1D, PT1H, P1M)"
+        )
 
 
 def get_period_type(dataset: dict[str, Any]) -> str:
