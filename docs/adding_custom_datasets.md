@@ -158,7 +158,7 @@ extents:
     resolution: P1D              # required — ISO 8601 duration, see https://en.wikipedia.org/wiki/ISO_8601#Durations
 ```
 
-`extents.temporal.resolution` is required and must be one of: `PT1H` (hourly), `P1D` (daily), `P1W` (weekly), `P1M` (monthly), `P1Y` (yearly). It drives the `period_type` used internally — you do not set `period_type` directly.
+`extents.temporal.resolution` is required and must be a valid [ISO 8601 duration](https://en.wikipedia.org/wiki/ISO_8601#Durations). Common values: `PT1H` (hourly), `P1D` (daily), `P1W` (weekly), `P1M` (monthly), `P1Y` (yearly). The `period_type` used internally is derived from the largest time component — you do not set it directly.
 
 If an ingest request's bounding box has no overlap with `extents.spatial.bbox`, the API returns HTTP 400 immediately. Partial overlap is allowed — the provider will return data for the intersecting area.
 
