@@ -164,7 +164,11 @@ def _build_collection_template(
         ],
         license=DEFAULT_STAC_LICENSE,
     )
+    from climate_api import config as api_config
+
+    native_crs = api_config.get_crs() or "EPSG:4326"
     template.extra_fields["keywords"] = _keywords(artifact, source_dataset)
+    template.extra_fields["proj:code"] = native_crs
     template.clear_links()
     template.add_link(pystac.Link(rel="self", target=collection_href, media_type="application/json"))
     template.add_link(pystac.Link(rel="root", target=catalog_href, media_type="application/json"))
