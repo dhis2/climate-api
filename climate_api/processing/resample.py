@@ -228,14 +228,14 @@ def _find_existing_resampled_artifact(
 def _previous_source_period_start(boundary: datetime, *, source_period_type: str) -> datetime:
     if "T" in source_period_type.upper():
         return boundary - timedelta(hours=1)
-    if source_period_type == "P1D":
+    if source_period_type == "P1D":  # daily
         return boundary - timedelta(days=1)
-    if source_period_type == "P1W":
+    if source_period_type == "P1W":  # weekly
         return boundary - timedelta(days=7)
-    if source_period_type == "P1M":
+    if source_period_type == "P1M":  # monthly
         previous_month_last_day = boundary.replace(day=1) - timedelta(days=1)
         return previous_month_last_day.replace(day=1)
-    if source_period_type == "P1Y":
+    if source_period_type == "P1Y":  # yearly
         return boundary.replace(year=boundary.year - 1, month=1, day=1)
     raise HTTPException(status_code=400, detail=f"Unsupported source resolution '{source_period_type}' for resampling")
 

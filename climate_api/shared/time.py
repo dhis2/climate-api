@@ -28,16 +28,16 @@ def _coerce_numpy_datetime(value: object) -> datetime:
 def datetime_to_period_string(value: datetime, period_type: str) -> str:
     """Convert a datetime to the dataset-native period string format."""
     value = _normalize_datetime_for_period(value)
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         return value.date().isoformat()
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         iso_year, iso_week, _ = value.isocalendar()
         return f"{iso_year:04d}-W{iso_week:02d}"
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         return f"{value.year:04d}-{value.month:02d}"
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         return str(value.year)
     raise ValueError(f"Unsupported period_type '{period_type}'")
 
@@ -71,22 +71,22 @@ def parse_weekly_period_string(value: str) -> datetime:
 
 def normalize_period_string(value: str, period_type: str) -> str:
     """Normalize an input period string to the dataset-native period format."""
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         try:
             return datetime_to_period_string(parse_hourly_period_string(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         try:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         try:
             return datetime_to_period_string(parse_weekly_period_string(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid weekly period '{value}'; expected YYYY-Www or ISO datetime") from exc
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         try:
             if len(value) == 7:
                 datetime.fromisoformat(f"{value}-01")
@@ -94,7 +94,7 @@ def normalize_period_string(value: str, period_type: str) -> str:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid monthly period '{value}'; expected YYYY-MM or ISO datetime") from exc
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         try:
             if len(value) == 4:
                 int(value)

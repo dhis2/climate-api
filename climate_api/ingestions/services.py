@@ -705,16 +705,16 @@ def _normalize_optional_request_period(value: str | None, *, period_type: str, f
 
 def _default_request_end(period_type: str) -> str:
     """Return the current dataset-native period string for omitted ingestion end values."""
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         return utc_today().isoformat()
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         today = utc_today()
         return f"{today.year:04d}-{today.month:02d}"
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         return str(utc_today().year)
     raise HTTPException(status_code=400, detail=f"Invalid period_type '{period_type}' for request end defaulting")
 

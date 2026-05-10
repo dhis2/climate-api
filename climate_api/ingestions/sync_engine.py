@@ -293,23 +293,23 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     This helper is part of sync planning because temporal datasets need to know
     whether another period could exist beyond the current materialized coverage.
     """
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         timestamp = parse_hourly_period_string(latest_period_end)
         return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         current = parse_period_string_to_datetime(latest_period_end).date()
         next_week = datetime.combine(current + timedelta(days=7), time(0))
         return datetime_to_period_string(next_week, period_type)
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         current = date.fromisoformat(f"{latest_period_end}-01")
         month = current.month + 1
         year = current.year + (1 if month == 13 else 0)
         month = 1 if month == 13 else month
         return f"{year:04d}-{month:02d}"
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         return str(int(latest_period_end) + 1)
     raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
@@ -317,15 +317,15 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
 def _default_target_end(*, period_type: str) -> str:
     """Return the default sync target in the dataset-native period format."""
     today = utc_today()
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         return today.isoformat()
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         return f"{today.year:04d}-{today.month:02d}"
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         return str(today.year)
     raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 

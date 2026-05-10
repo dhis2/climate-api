@@ -43,7 +43,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     except (KeyError, TypeError):
         return requested_end
 
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         lag_hours = availability.get("lag_hours")
         if isinstance(lag_hours, int) and lag_hours > 0:
             latest = utc_now() - timedelta(hours=lag_hours)
@@ -53,11 +53,11 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     lag_days = availability.get("lag_days")
     if period_type in {"P1D", "P1M"} and isinstance(lag_days, int) and lag_days > 0:
         latest_date = utc_today() - timedelta(days=lag_days)
-        if period_type == "P1M":
+        if period_type == "P1M":  # monthly
             return f"{latest_date.year:04d}-{latest_date.month:02d}"
         return latest_date.isoformat()
 
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         latest_year_offset = availability.get("latest_year_offset")
         if isinstance(latest_year_offset, int) and latest_year_offset >= 0:
             return str(utc_today().year - latest_year_offset)

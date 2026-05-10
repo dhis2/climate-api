@@ -300,13 +300,13 @@ def _compute_time_space_chunks(
 
     dim = get_time_dim(ds)
     period_type: str = get_period_type(dataset)
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         chunks[dim] = 24 * 7
-    elif period_type == "P1D":
+    elif period_type == "P1D":  # daily
         chunks[dim] = 30
-    elif period_type == "P1M":
+    elif period_type == "P1M":  # monthly
         chunks[dim] = 12
-    elif period_type == "P1Y":
+    elif period_type == "P1Y":  # yearly
         chunks[dim] = 1
 
     x_dim, y_dim = get_x_y_dims(ds)

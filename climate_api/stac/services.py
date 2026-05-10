@@ -326,15 +326,15 @@ def _abs_url(request: Request, path: str) -> str:
 def _period_step(period_type: object) -> str | None:
     if not isinstance(period_type, str):
         return None
-    if period_type == "PT1H":
+    if period_type == "PT1H":  # hourly
         return "PT1H"
-    if period_type == "P1D":
+    if period_type == "P1D":  # daily
         return "P1D"
-    if period_type == "P1M":
+    if period_type == "P1M":  # monthly
         return "P1M"
-    if period_type == "P1Y":
+    if period_type == "P1Y":  # yearly
         return "P1Y"
-    if period_type == "P1W":
+    if period_type == "P1W":  # weekly
         return "P1W"
     return None
 
