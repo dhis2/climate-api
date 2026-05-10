@@ -2,7 +2,6 @@
   name: 2m temperature (ERA5-Land)
   short_name: 2m temperature
   variable: t2m
-  period_type: hourly
   sync:
     kind: temporal
     execution: append
@@ -35,7 +34,6 @@
   name: Total precipitation (ERA5-Land)
   short_name: Total precipitation
   variable: tp
-  period_type: hourly
   sync:
     kind: temporal
     execution: append

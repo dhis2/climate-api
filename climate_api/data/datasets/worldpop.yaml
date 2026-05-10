@@ -2,7 +2,6 @@
   name: Total population (WorldPop Global2)
   short_name: Total population
   variable: pop_total
-  period_type: yearly
   sync:
     kind: release
     availability:

@@ -2,7 +2,6 @@
   name: Total precipitation (CHIRPS3)
   short_name: Total precipitation
   variable: precip
-  period_type: daily
   sync:
     kind: temporal
     execution: append

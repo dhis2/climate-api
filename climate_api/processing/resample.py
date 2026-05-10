@@ -53,6 +53,20 @@ def _frequency_to_period_type(frequency: str) -> str:
     return "daily"
 
 
+_PERIOD_TYPE_TO_ISO_RESOLUTION: dict[str, str] = {
+    "hourly": "PT1H",
+    "daily": "P1D",
+    "weekly": "P1W",
+    "monthly": "P1M",
+    "yearly": "P1Y",
+}
+
+
+def _frequency_to_iso_resolution(frequency: str) -> str:
+    """Return the ISO 8601 duration string for the given pandas frequency alias."""
+    return _PERIOD_TYPE_TO_ISO_RESOLUTION[_frequency_to_period_type(frequency)]
+
+
 def derived_dataset_id(*, source_dataset_id: str, frequency: str, method: str) -> str:
     """Return the stable derived dataset id auto-generated from source + parameters."""
     freq_slug = re.sub(r"[^a-z0-9]", "_", frequency.lower()).strip("_")
@@ -124,6 +138,7 @@ def materialize_resampled_artifact(
         "name": target_dataset_id,
         "variable": source_dataset.get("variable", "value"),
         "period_type": _frequency_to_period_type(frequency),
+        "extents": {"temporal": {"resolution": _frequency_to_iso_resolution(frequency)}},
     }
     return ingestion_services.store_materialized_zarr_artifact(
         dataset=target_dataset,
