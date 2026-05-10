@@ -48,9 +48,15 @@ Used by: ERA5-Land total precipitation (`era5land_precipitation_hourly`).
 
 ### `climate_api.transforms.reproject_to_instance_crs`
 
-Reprojects the dataset to the CRS configured for the API instance. If the instance CRS already matches the source CRS (both WGS84, which is the default), this transform is a no-op.
+Reprojects the dataset to the CRS configured for the API instance. It is a no-op when the instance CRS matches the transform's `source_crs` parameter (default `EPSG:4326`).
 
-This transform is applied **automatically** by the ingestion pipeline whenever the instance CRS differs from WGS84. You do not need to declare it in your dataset YAML — it runs implicitly after any user-declared transforms.
+This transform is applied **automatically** by the ingestion pipeline — always, as the final step after any user-declared transforms. You do not need to declare it in your dataset YAML. **Do not declare it explicitly**: doing so would run reprojection twice, with the second pass using the wrong source CRS.
+
+If your source data is not in `EPSG:4326`, set `source_crs` in the dataset template rather than declaring the transform manually:
+
+```yaml
+source_crs: EPSG:32633
+```
 
 ---
 

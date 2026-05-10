@@ -54,7 +54,7 @@ Transforms are functions applied to a dataset after download and before the Zarr
 ```yaml
 transforms:
   - climate_api.transforms.kelvin_to_celsius
-  - mypackage.transforms.clip_to_bbox
+  - mypackage.transforms.clamp_negatives
 ```
 
 Each transform receives the `xr.Dataset` and the dataset template dict, and returns a (possibly modified) `xr.Dataset`:
@@ -63,7 +63,7 @@ Each transform receives the `xr.Dataset` and the dataset template dict, and retu
 import xarray as xr
 from typing import Any
 
-def clip_to_bbox(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+def clamp_negatives(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
     varname = dataset["variable"]
     return ds.assign({varname: ds[varname].clip(min=0)})
 ```

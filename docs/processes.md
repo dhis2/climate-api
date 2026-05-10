@@ -15,7 +15,7 @@ Content-Type: application/json
 { ...parameters... }
 ```
 
-Available processes are listed at `GET /processes`.
+Available processes are listed at `GET /ogcapi/processes`.
 
 ---
 
@@ -53,11 +53,11 @@ The derived dataset is stored under an auto-generated ID:
 {source_dataset_id}_{frequency_slug}_{method}
 ```
 
-Where `frequency_slug` is the frequency alias lowercased with non-alphanumeric characters removed. For example:
+Where `frequency_slug` is the frequency alias lowercased with non-alphanumeric characters replaced by `_` and leading/trailing underscores stripped. For example:
 
 | Source | Frequency | Method | Derived ID |
 | --- | --- | --- | --- |
-| `chirps3_precipitation_daily` | `W-MON` | `sum` | `chirps3_precipitation_daily_wmon_sum` |
+| `chirps3_precipitation_daily` | `W-MON` | `sum` | `chirps3_precipitation_daily_w_mon_sum` |
 | `era5land_temperature_hourly` | `1D` | `mean` | `era5land_temperature_hourly_1d_mean` |
 | `chirps3_precipitation_daily` | `MS` | `sum` | `chirps3_precipitation_daily_ms_sum` |
 
@@ -84,7 +84,7 @@ Response:
 
 ```json
 {
-  "artifact_id": "era5land_temperature_hourly_1d_mean_abc123",
+  "artifact_id": "3f2a1b4c-8e7d-4f9a-b2c1-0d5e6f7a8b9c",
   "status": "completed",
   "dataset": {
     "dataset_id": "era5land_temperature_hourly_1d_mean",
