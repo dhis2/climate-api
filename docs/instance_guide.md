@@ -93,11 +93,7 @@ help: ## Show this help
 install: ## Install dependencies with uv
 	uv sync
 
-openapi: ## Generate pygeoapi OpenAPI spec
-	@set -a && . ./.env && set +a && \
-		uv run python -c "from climate_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
-
-run: openapi ## Start the API with uvicorn
+run: ## Start the API with uvicorn
 	set -a && . ./.env && set +a && \
 		uv run uvicorn climate_api.main:app --reload --reload-include "*.yaml" --reload-include "*.yml" --port 8000
 ```
