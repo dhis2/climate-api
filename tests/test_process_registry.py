@@ -19,8 +19,9 @@ def test_builtin_resample_has_execution_function(monkeypatch: pytest.MonkeyPatch
 
     resample = process_registry.get_process("resample")
     assert resample is not None
-    assert "execution_function" in resample
-    assert resample["execution_function"] == "climate_api.processing.services.execute_resample"
+    assert resample["title"] == "Temporal resampling"
+    assert resample["execution"]["function"] == "climate_api.processing.services.execute_resample"
+    assert resample["jobControlOptions"] == ["sync-execute"]
 
 
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -30,7 +31,7 @@ def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch
     assert process_registry.get_process("does_not_exist") is None
 
 
-def test_process_registry_rejects_missing_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_process_registry_rejects_missing_title_and_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
     (processes_subdir / "no_name.yaml").write_text(
@@ -39,7 +40,7 @@ def test_process_registry_rejects_missing_name(monkeypatch: pytest.MonkeyPatch, 
     )
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
 
-    with pytest.raises(ValueError, match="must define name"):
+    with pytest.raises(ValueError, match="must define title"):
         process_registry.list_processes()
 
 
@@ -49,8 +50,9 @@ def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.Monkey
     (processes_subdir / "custom.yaml").write_text(
         """
 - id: custom_process
-  name: Custom process
-  execution_function: mypackage.custom.execute
+  title: Custom process
+  execution:
+    function: mypackage.custom.execute
 """,
         encoding="utf-8",
     )
@@ -71,8 +73,9 @@ def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyP
     (processes_subdir / "resample.yaml").write_text(
         """
 - id: resample
-  name: Custom resample override
-  execution_function: mypackage.resample.execute
+  title: Custom resample override
+  execution:
+    function: mypackage.resample.execute
 """,
         encoding="utf-8",
     )
@@ -83,5 +86,25 @@ def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
 
     processes = {p["id"]: p for p in process_registry.list_processes()}
-    assert processes["resample"]["name"] == "Custom resample override"
-    assert processes["resample"]["execution_function"] == "mypackage.resample.execute"
+    assert processes["resample"]["title"] == "Custom resample override"
+    assert processes["resample"]["execution"]["function"] == "mypackage.resample.execute"
+
+
+def test_process_registry_accepts_legacy_name_and_execution_function(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "legacy.yaml").write_text(
+        """
+- id: legacy_process
+  name: Legacy process
+  execution_function: mypackage.legacy.execute
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    process = process_registry.list_processes()[0]
+    assert process["title"] == "Legacy process"
+    assert process["execution"]["function"] == "mypackage.legacy.execute"

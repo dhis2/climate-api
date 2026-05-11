@@ -99,23 +99,31 @@ plugins/
 
 ```yaml
 - id: my_process
-  name: My custom process
+  title: My custom process
   description: Describe what this process does.
-  execution_function: mypackage.processes.my_process.execute
+  version: "0.1.0"
+  expose: true
+  jobControlOptions:
+    - sync-execute
+  execution:
+    function: mypackage.processes.my_process.execute
 ```
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
 | `id` | Yes | Unique process identifier. Used in `POST /processes/{id}/execution` |
-| `name` | Yes | Human-readable name |
+| `title` | Yes | Human-readable title exposed through the public process catalogue |
 | `description` | No | Longer description shown in API responses |
-| `execution_function` | Yes | Dotted path to the Python function that runs the process |
+| `version` | No | Process version string exposed through the public process description |
+| `expose` | No | Whether the process appears in the public `/processes` listing. Default: `true` |
+| `jobControlOptions` | No | Supported execution modes exposed publicly. Default: `["sync-execute"]` |
+| `execution.function` | Yes | Dotted path to the Python function that runs the process |
 
 A custom process with the same `id` as a built-in overrides it.
 
 ### Execution function
 
-The execution function receives the raw JSON request body as keyword arguments and returns a JSON-serialisable dict:
+The current built-in execution path accepts the raw JSON request body as keyword arguments and returns a JSON-serialisable dict:
 
 ```python
 from typing import Any
@@ -126,6 +134,8 @@ def execute(*, source_dataset_id: str, factor: float, **_ignored: Any) -> dict[s
 ```
 
 Invalid or missing arguments raise `TypeError`, which the route dispatcher catches and returns as HTTP 400.
+
+Longer term, process execution is expected to converge on an `inputs + context` contract; this page documents the current repository behavior.
 
 For the built-in `resample` process and usage examples, see [Processes](processes.md).
 

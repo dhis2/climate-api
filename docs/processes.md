@@ -1,6 +1,6 @@
 # Processes
 
-Processes are named operations that produce derived datasets from existing ingested data. They are dispatched via `POST /processes/{id}/execution` and follow the [OGC API Processes](https://ogcapi.ogc.org/processes/) standard.
+Processes are named operations that produce derived datasets from existing ingested data. They are exposed through the native `/processes` endpoints and are shaped to align progressively with the [OGC API Processes](https://ogcapi.ogc.org/processes/) standard.
 
 ---
 
@@ -15,7 +15,7 @@ Content-Type: application/json
 { ...parameters... }
 ```
 
-Available processes are listed at `GET /ogcapi/processes`.
+Available processes are listed at `GET /processes`.
 
 ---
 

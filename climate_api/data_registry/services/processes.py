@@ -18,6 +18,29 @@ logger = logging.getLogger(__name__)
 CONFIGS_DIR: Path | None = None
 
 
+def _normalize_process_definition(process: dict[str, Any]) -> dict[str, Any]:
+    """Return one process definition normalized to the preferred internal shape."""
+    normalized = dict(process)
+
+    if "title" not in normalized and isinstance(normalized.get("name"), str):
+        normalized["title"] = normalized["name"]
+
+    execution = normalized.get("execution")
+    if not isinstance(execution, dict):
+        execution = {}
+    if "function" not in execution and isinstance(normalized.get("execution_function"), str):
+        execution = {**execution, "function": normalized["execution_function"]}
+    normalized["execution"] = execution
+
+    if "expose" not in normalized:
+        normalized["expose"] = True
+
+    if "jobControlOptions" not in normalized:
+        normalized["jobControlOptions"] = ["sync-execute"]
+
+    return normalized
+
+
 def list_processes() -> list[dict[str, Any]]:
     """Load all process definitions and return a flat list.
 
@@ -75,7 +98,7 @@ def _load_builtin_processes() -> list[dict[str, Any]]:
                 raise ValueError(f"{resource.name} must contain a list of process definitions")
             for process in file_processes:
                 _validate_process(process, source=resource.name)
-            processes.extend(file_processes)
+                processes.append(_normalize_process_definition(process))
         except Exception:
             logger.exception("Error loading %s", resource.name)
             raise
@@ -97,7 +120,7 @@ def _load_from_dir(folder: Path) -> list[dict[str, Any]]:
                     raise ValueError(f"{file_path.name} must contain a list of process definitions")
                 for process in file_processes:
                     _validate_process(process, source=str(file_path))
-                processes.extend(file_processes)
+                    processes.append(_normalize_process_definition(process))
         except Exception:
             logger.exception("Error loading %s", file_path.name)
             raise
@@ -114,13 +137,36 @@ def _validate_process(process: object, *, source: str) -> None:
     if not isinstance(process_id, str) or not process_id:
         raise ValueError(f"{source} contains a process definition with a missing or invalid id")
 
-    name = process.get("name")
-    if not isinstance(name, str) or not name:
-        raise ValueError(f"Process '{process_id}' in {source} must define name")
+    title = process.get("title")
+    legacy_name = process.get("name")
+    if not isinstance(title, str) or not title:
+        if not isinstance(legacy_name, str) or not legacy_name:
+            raise ValueError(f"Process '{process_id}' in {source} must define title (or legacy name during migration)")
 
-    execution_function = process.get("execution_function")
+    execution = process.get("execution")
+    if isinstance(execution, dict):
+        execution_function = execution.get("function")
+    else:
+        execution_function = process.get("execution_function")
     if not isinstance(execution_function, str) or not execution_function:
-        raise ValueError(f"Process '{process_id}' in {source} must define execution_function")
+        raise ValueError(
+            f"Process '{process_id}' in {source} must define execution.function "
+            "(or legacy execution_function during migration)"
+        )
+
+    expose = process.get("expose")
+    if expose is not None and not isinstance(expose, bool):
+        raise ValueError(f"Process '{process_id}' in {source} has invalid expose value")
+
+    job_control_options = process.get("jobControlOptions")
+    if job_control_options is not None and (
+        not isinstance(job_control_options, list) or not all(isinstance(item, str) for item in job_control_options)
+    ):
+        raise ValueError(f"Process '{process_id}' in {source} has invalid jobControlOptions")
+
+    keywords = process.get("keywords")
+    if keywords is not None and (not isinstance(keywords, list) or not all(isinstance(item, str) for item in keywords)):
+        raise ValueError(f"Process '{process_id}' in {source} has invalid keywords")
 
 
 def _get_dynamic_function(full_path: str) -> Any:

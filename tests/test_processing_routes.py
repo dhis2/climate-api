@@ -40,6 +40,65 @@ def _dataset_record(dataset_id: str) -> DatasetRecord:
     )
 
 
+def test_get_processes_lists_registered_processes(client: TestClient) -> None:
+    response = client.get("/processes")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["id"] == "resample" for item in payload["processes"])
+    assert any(link["href"] == "/processes" for link in payload["links"])
+
+
+def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
+    response = client.get("/processes/resample")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "resample"
+    assert payload["title"] == "Temporal resampling"
+    assert payload["jobControlOptions"] == ["sync-execute"]
+    assert "execution_function" not in payload
+    assert payload["inputs"]["source_dataset_id"]["required"] is True
+    assert payload["outputs"]["artifact_id"]["type"] == "string"
+
+
+def test_get_processes_omits_internal_only_processes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.list_processes",
+        lambda: [
+            {
+                "id": "public_process",
+                "title": "Public process",
+                "description": "Visible",
+                "execution": {"function": "mypackage.public.execute"},
+                "expose": True,
+                "jobControlOptions": ["sync-execute"],
+            },
+            {
+                "id": "internal_process",
+                "title": "Internal process",
+                "description": "Hidden",
+                "execution": {"function": "mypackage.internal.execute"},
+                "expose": False,
+                "jobControlOptions": ["sync-execute"],
+            },
+        ],
+    )
+
+    response = client.get("/processes")
+
+    assert response.status_code == 200
+    payload = response.json()
+    ids = {item["id"] for item in payload["processes"]}
+    assert ids == {"public_process"}
+
+
+def test_get_unknown_process_detail_returns_404(client: TestClient) -> None:
+    response = client.get("/processes/unknown_process")
+
+    assert response.status_code == 404
+
+
 def test_post_resample_execution_returns_completed_response(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

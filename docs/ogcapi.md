@@ -118,7 +118,7 @@ The `type` field on a provider determines which OGC API standard the collection 
 | `feature`     | Features         | Vector data (points, lines, polygons). Backends include CSV, GeoJSON, PostGIS, Elasticsearch, and others. |
 | `coverage`    | Coverages        | Gridded / raster data. Backends include rasterio, xarray, and S3-hosted COGs.                             |
 | `map`         | Maps             | Rendered map images, typically proxied from an upstream WMS via `WMSFacade`.                              |
-| `process`     | Processes        | Server-side processing tasks. Defined by a `processor` rather than a `providers` list.                    |
+| `process`     | Processes        | Server-side processing tasks. In Climate API, the native `/processes` surface is authoritative; pygeoapi process support is not the primary process runtime. |
 
 A single collection can have multiple providers (e.g. both `feature` and `tile` on the same resource).
 
