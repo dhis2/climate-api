@@ -109,7 +109,7 @@ extent:
   country_code: RWA                   # ISO 3166-1 alpha-3, required for WorldPop
 
 data_dir: ./data
-crs: EPSG:32736                       # target CRS for Zarr outputs (optional, defaults to EPSG:4326)
+crs: EPSG:4326                         # target CRS for Zarr outputs (optional, defaults to EPSG:4326)
 plugins_dir: ./plugins/
 ```
 
