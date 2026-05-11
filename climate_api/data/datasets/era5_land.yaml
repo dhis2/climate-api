@@ -27,7 +27,7 @@
   source_url: https://earthdatahub.destine.eu/collections/era5/datasets/reanalysis-era5-land
   display:
     colormap: rdbu_r
-    range: [15.0, 40.0]
+    range: [-20.0, 40.0]
 
 - id: era5land_precipitation_hourly
   name: Total precipitation (ERA5-Land)
