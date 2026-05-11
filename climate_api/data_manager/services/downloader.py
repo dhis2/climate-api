@@ -116,7 +116,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     files = get_cache_files(dataset)
     logger.info(f"Opening {len(files)} files from cache")
-    ds = xr.open_mfdataset(files)
+    ds = xr.open_mfdataset(files, parallel=True)
 
     x_dim, y_dim = get_x_y_dims(ds)
     dims = [x_dim, y_dim]
