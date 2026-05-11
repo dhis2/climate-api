@@ -286,7 +286,10 @@
       function generateDateRange(start, end, step) {
         const inc = parseDuration(step);
         if (!inc) return [start];
-        const count = Math.floor((new Date(end) - new Date(start)) / inc) + 1;
+        const startMs = new Date(start).getTime();
+        const endMs = new Date(end).getTime();
+        if (isNaN(startMs) || isNaN(endMs)) return [start];
+        const count = Math.max(1, Math.floor((endMs - startMs) / inc) + 1);
         return { lazy: true, start, inc, count };
       }
 
@@ -396,6 +399,7 @@
 
       async function loadDataset(href) {
         setStatus("Loading...");
+        clearTimeout(_selectorDebounce);
         if (activeLayer) {
           try {
             map.removeLayer("zarr-layer");
@@ -527,9 +531,11 @@
         const i = parseInt(e.target.value, 10);
         timeValueEl.textContent = timeStepAt(i) ?? "—";
         timeCountEl.textContent = `${i + 1} / ${timeStepCount()}`;
+        const layer = activeLayer;
+        const dimKey = timeDimKey;
         clearTimeout(_selectorDebounce);
         _selectorDebounce = setTimeout(() => {
-          activeLayer?.setSelector({ [timeDimKey]: i });
+          layer?.setSelector({ [dimKey]: i });
         }, 150);
       });
 
