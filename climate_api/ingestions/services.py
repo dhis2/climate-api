@@ -272,6 +272,11 @@ def _derive_artifact(
     After the function returns, the service reads back the zarr to compute
     coverage and registers the artifact.  The built-in implementation for GEFS
     is ``climate_api.processing.gefs.derive_dataset``.
+
+    CRS: ``store.crs`` in the template overrides the default of ``EPSG:4326``.
+    Most public remote stores (dynamical.org, ARCO-ERA5) are WGS84 so the
+    default is correct.  Set ``crs: "EPSG:32633"`` (or any EPSG code) for
+    stores in a projected coordinate system.
     """
     from climate_api.data_manager.services.downloader import _get_dynamic_function
 
@@ -302,8 +307,12 @@ def _derive_artifact(
     )
 
     output_path_str = str(output_path.resolve())
-    # Derived forecast data is WGS84-native — pass native_crs explicitly so the
-    # instance CRS (e.g. UTM) is not applied, which would corrupt spatial_wgs84.
+    # Use store.crs when declared; fall back to EPSG:4326 for the common case of
+    # WGS84 remote stores (dynamical.org, ARCO-ERA5, etc.).
+    native_crs: str = str(source_store.get("crs", "EPSG:4326")) or "EPSG:4326"
+    wgs84_codes = {"EPSG:4326", "OGC:CRS84", "CRS84"}
+    is_wgs84 = native_crs.upper() in {c.upper() for c in wgs84_codes}
+
     from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
 
     ds_written = open_zarr_dataset(output_path_str)
@@ -311,7 +320,7 @@ def _derive_artifact(
         coverage_data = _coverage_from_dataset(
             ds=ds_written,
             period_type=str(dataset["period_type"]),
-            native_crs="EPSG:4326",
+            native_crs=native_crs,
         )
     finally:
         ds_written.close()
@@ -320,10 +329,11 @@ def _derive_artifact(
         raise HTTPException(status_code=409, detail="Derived forecast artifact contains no data")
 
     raw_cov = coverage_data["coverage"]
+    wgs84_cov = raw_cov.get("spatial_wgs84")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**raw_cov["temporal"]),
         spatial=CoverageSpatial(**raw_cov["spatial"]),
-        spatial_wgs84=None,
+        spatial_wgs84=CoverageSpatial(**wgs84_cov) if wgs84_cov and not is_wgs84 else None,
     )
     request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
 
