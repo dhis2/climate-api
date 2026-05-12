@@ -320,10 +320,20 @@ def _derive_gefs_artifact(
     finally:
         ds_raw.close()
 
-    coverage_data = get_data_coverage_for_paths(
-        dataset,
-        zarr_path=output_path_str,
-    )
+    # Derived GEFS data is always in WGS84 — use EPSG:4326 explicitly so the
+    # instance CRS (e.g. UTM) is not applied, which would corrupt spatial_wgs84.
+    from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
+
+    ds_written = open_zarr_dataset(output_path_str)
+    try:
+        coverage_data = _coverage_from_dataset(
+            ds=ds_written,
+            period_type=str(dataset["period_type"]),
+            native_crs="EPSG:4326",
+        )
+    finally:
+        ds_written.close()
+
     if not coverage_data.get("has_data", True):
         raise HTTPException(status_code=409, detail="Derived forecast artifact contains no data")
 
@@ -331,7 +341,7 @@ def _derive_gefs_artifact(
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**raw_cov["temporal"]),
         spatial=CoverageSpatial(**raw_cov["spatial"]),
-        spatial_wgs84=CoverageSpatial(**raw_cov["spatial_wgs84"]) if raw_cov.get("spatial_wgs84") else None,
+        spatial_wgs84=None,
     )
     request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
 
@@ -395,11 +405,11 @@ def create_artifact(
     """Download a dataset, persist it locally, and store artifact metadata."""
     from climate_api.providers.remote_zarr import is_remote_source
 
-    if is_remote_source(dataset):
-        return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
-
     if _is_derived_source(dataset):
         return _derive_gefs_artifact(dataset=dataset, publish=publish)
+
+    if is_remote_source(dataset):
+        return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
 
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
