@@ -315,9 +315,13 @@ def _derive_artifact(
         ds_pre = open_zarr_dataset(output_path_str)
         try:
             ds_transformed = _run_transforms(ds_pre, dataset)
-            ds_transformed.to_zarr(output_path, mode="w", consolidated=True)
+            # Load into memory before closing — writing to the same path we are
+            # reading from while the store is still open would truncate the source
+            # and produce all-zero reads.
+            ds_transformed.load()
         finally:
             ds_pre.close()
+        ds_transformed.to_zarr(output_path, mode="w", consolidated=True)
 
     # Use store.crs when declared; fall back to EPSG:4326 for the common case of
     # WGS84 remote stores (dynamical.org, ARCO-ERA5, etc.).
