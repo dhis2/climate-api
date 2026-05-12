@@ -171,6 +171,24 @@ def test_managed_dataset_id_is_derived_from_dataset_id(monkeypatch: pytest.Monke
     assert managed_dataset_id_for(artifact) == "chirps3_precipitation_daily"
 
 
+def test_mutate_records_persists_mutation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    artifacts_dir = tmp_path / "artifacts"
+    monkeypatch.setattr(services, "ARTIFACTS_DIR", artifacts_dir)
+    monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", artifacts_dir / "records.json")
+
+    created = _artifact(artifact_id="mutated")
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        records.append(created)
+        return created
+
+    result = services._mutate_records(mutate)
+
+    assert result.artifact_id == "mutated"
+    records = services._load_records()
+    assert [record.artifact_id for record in records] == ["mutated"]
+
+
 def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     request_scope = ArtifactRequestScope(
         start="2026-01-01",
