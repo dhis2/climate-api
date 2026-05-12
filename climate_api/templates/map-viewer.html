@@ -315,16 +315,11 @@
         return null;
       }
 
-      const map = new maplibregl.Map({
-        container: "map",
-        style: "https://tiles.openfreemap.org/styles/positron",
-        center: [20, 20],
-        zoom: 1.5,
-        projection: { type: "globe" },
-        fitBoundsOptions: { padding: 40 },
-        attributionControl: { compact: true },
-      });
+      const MAP_UNAVAILABLE_MESSAGE =
+        "Map rendering is unavailable in this browser session because WebGL could not be initialized. Dataset discovery still works.";
 
+      let map = null;
+      let mapUnavailable = false;
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
@@ -361,7 +356,39 @@
         statusEl.className = isError ? "status error" : "status";
       }
 
+      function initMap() {
+        try {
+          map = new maplibregl.Map({
+            container: "map",
+            style: "https://tiles.openfreemap.org/styles/positron",
+            center: [20, 20],
+            zoom: 1.5,
+            projection: { type: "globe" },
+            fitBoundsOptions: { padding: 40 },
+            attributionControl: { compact: true },
+          });
+        } catch (err) {
+          mapUnavailable = true;
+          setStatus(MAP_UNAVAILABLE_MESSAGE, true);
+          return;
+        }
+
+        map.on("load", () => {
+          map.setProjection({ type: "globe" });
+          fitToExtent();
+        });
+
+        map.on("error", (event) => {
+          const message = event?.error?.message ?? "";
+          if (message.toLowerCase().includes("webgl")) {
+            mapUnavailable = true;
+            setStatus(MAP_UNAVAILABLE_MESSAGE, true);
+          }
+        });
+      }
+
       async function fitToExtent() {
+        if (!map || mapUnavailable) return;
         try {
           const res = await fetch("{{ base }}/extent");
           if (!res.ok) return;
@@ -372,7 +399,6 @@
       }
 
       async function loadCatalog() {
-        await fitToExtent();
         try {
           const res = await fetch("{{ base }}/stac/catalog.json");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -391,13 +417,22 @@
             opt.textContent = link.title ?? link.href;
             selectEl.appendChild(opt);
           }
-          setStatus("Select a dataset to visualise it on the map.");
+          setStatus(
+            mapUnavailable
+              ? MAP_UNAVAILABLE_MESSAGE
+              : "Select a dataset to visualise it on the map.",
+            mapUnavailable
+          );
         } catch (err) {
           setStatus(`Failed to load catalog: ${err.message}`, true);
         }
       }
 
       async function loadDataset(href) {
+        if (!map || mapUnavailable) {
+          setStatus(MAP_UNAVAILABLE_MESSAGE, true);
+          return;
+        }
         setStatus("Loading...");
         clearTimeout(_selectorDebounce);
         if (activeLayer) {
@@ -539,10 +574,8 @@
         }, 150);
       });
 
-      map.on("load", () => {
-        map.setProjection({ type: "globe" });
-        loadCatalog();
-      });
+      initMap();
+      loadCatalog();
     </script>
   </body>
 </html>

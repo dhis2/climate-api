@@ -123,7 +123,9 @@ def _build_collection_resource(record: ArtifactRecord) -> dict[str, Any]:
         "format": _provider_format(record.format),
     }
     if record.format == ArtifactFormat.ZARR:
-        provider["options"] = {"zarr": {"consolidated": True}, "squeeze": True}
+        # Keep singleton dimensions intact so pygeoapi can still index the
+        # time coordinate for one-step coverages such as monthly aggregates.
+        provider["options"] = {"zarr": {"consolidated": True}}
 
     return {
         "type": "collection",
