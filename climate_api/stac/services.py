@@ -342,7 +342,7 @@ def _cube_dimensions_from_dataset(
                 "step": step,
                 "reference_system": 4326,
             }
-        elif name == time_dim:
+        elif name == time_dim or np.issubdtype(coord.dtype, np.datetime64):
             start = _to_stac_datetime(values[0])
             end = _to_stac_datetime(values[-1])
             step = None
