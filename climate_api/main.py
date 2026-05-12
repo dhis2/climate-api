@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -38,7 +38,7 @@ def _append_vary_value(response: Response, value: str) -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI):  # type: ignore[type-arg]
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Run background warmup tasks on startup so first requests hit warm caches."""
     asyncio.get_event_loop().run_in_executor(None, _warmup_remote_zarr_stores)
     yield
@@ -46,10 +46,10 @@ async def _lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 def _warmup_remote_zarr_stores() -> None:
     """Open and cache every published REMOTE_ZARR store at process startup."""
+    from climate_api.data_registry.services import datasets as registry_datasets
     from climate_api.ingestions.schemas import ArtifactFormat
     from climate_api.ingestions.services import _load_records
     from climate_api.providers.remote_zarr import warmup_remote_store
-    from climate_api.data_registry.services import datasets as registry_datasets
 
     for record in _load_records():
         if record.format != ArtifactFormat.REMOTE_ZARR:

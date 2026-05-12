@@ -345,11 +345,11 @@ def _cube_dimensions_from_dataset(
         elif name == time_dim or np.issubdtype(coord.dtype, np.datetime64):
             start = _to_stac_datetime(values[0])
             end = _to_stac_datetime(values[-1])
-            step = None
+            time_step: str | None = None
             if len(values) > 1:
                 delta = pd.Timestamp(values[1]) - pd.Timestamp(values[0])
-                step = _timedelta_to_iso_duration(delta)
-            dims[name] = {"type": "temporal", "extent": [start, end], "step": step}
+                time_step = _timedelta_to_iso_duration(delta)
+            dims[name] = {"type": "temporal", "extent": [start, end], "step": time_step}
         elif np.issubdtype(coord.dtype, np.timedelta64):
             hours = [int(pd.Timedelta(v).total_seconds() // 3600) for v in values]
             dims[name] = {"type": "ordinal", "values": hours, "climate_api:unit": "hours"}
