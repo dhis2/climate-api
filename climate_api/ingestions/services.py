@@ -9,7 +9,12 @@ import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    import pandas as pd
+    import xarray as xr
 
 import portalocker
 import pyproj
@@ -250,7 +255,7 @@ def _is_derived_source(dataset: dict[str, object]) -> bool:
     return isinstance(sync, dict) and sync.get("kind") == "derived"
 
 
-def _most_recent_complete_init(ds_raw: object, *, variable: str) -> object:
+def _most_recent_complete_init(ds_raw: xr.Dataset, *, variable: str) -> pd.Timestamp:
     """Return the most recent init_time that has a complete forecast.
 
     The latest run is often still being distributed and has NaN placeholders
@@ -336,8 +341,8 @@ def _derive_gefs_artifact(
         # Drop trailing time steps that are entirely NaN — these are unpublished
         # lead_times that exist as placeholders in the icechunk store but have no
         # actual forecast data yet (the run is still being distributed).
-        valid_mask = ds_daily[variable].isnull().all(dim=["latitude", "longitude"]).compute()
-        first_all_nan = int(valid_mask.argmax().item()) if bool(valid_mask.any().item()) else len(valid_mask)
+        valid_mask: xr.DataArray = ds_daily[variable].isnull().all(dim=["latitude", "longitude"]).compute()
+        first_all_nan = int(valid_mask.argmax().item()) if bool(valid_mask.any().item()) else len(valid_mask)  # type: ignore[union-attr]
         if first_all_nan < len(valid_mask):
             ds_daily = ds_daily.isel(time=slice(None, first_all_nan))
 
