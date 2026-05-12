@@ -22,14 +22,9 @@ def _normalize_process_definition(process: dict[str, Any]) -> dict[str, Any]:
     """Return one process definition normalized to the preferred internal shape."""
     normalized = dict(process)
 
-    if "title" not in normalized and isinstance(normalized.get("name"), str):
-        normalized["title"] = normalized["name"]
-
     execution = normalized.get("execution")
     if not isinstance(execution, dict):
         execution = {}
-    if "function" not in execution and isinstance(normalized.get("execution_function"), str):
-        execution = {**execution, "function": normalized["execution_function"]}
     normalized["execution"] = execution
 
     if "expose" not in normalized:
@@ -138,21 +133,16 @@ def _validate_process(process: object, *, source: str) -> None:
         raise ValueError(f"{source} contains a process definition with a missing or invalid id")
 
     title = process.get("title")
-    legacy_name = process.get("name")
     if not isinstance(title, str) or not title:
-        if not isinstance(legacy_name, str) or not legacy_name:
-            raise ValueError(f"Process '{process_id}' in {source} must define title (or legacy name during migration)")
+        raise ValueError(f"Process '{process_id}' in {source} must define title")
 
     execution = process.get("execution")
     if isinstance(execution, dict):
         execution_function = execution.get("function")
     else:
-        execution_function = process.get("execution_function")
+        execution_function = None
     if not isinstance(execution_function, str) or not execution_function:
-        raise ValueError(
-            f"Process '{process_id}' in {source} must define execution.function "
-            "(or legacy execution_function during migration)"
-        )
+        raise ValueError(f"Process '{process_id}' in {source} must define execution.function")
 
     expose = process.get("expose")
     if expose is not None and not isinstance(expose, bool):

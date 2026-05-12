@@ -422,7 +422,7 @@
       }
 
       async function loadDataset(href) {
-        if (!map) {
+        if (!map || mapUnavailable) {
           setStatus(MAP_UNAVAILABLE_MESSAGE, true);
           return;
         }

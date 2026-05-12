@@ -35,7 +35,7 @@ def test_process_registry_rejects_missing_title_and_name(monkeypatch: pytest.Mon
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
     (processes_subdir / "no_name.yaml").write_text(
-        "- id: no_name\n  execution_function: mypackage.execute\n",
+        "- id: no_name\n  execution:\n    function: mypackage.execute\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
@@ -90,7 +90,7 @@ def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyP
     assert processes["resample"]["execution"]["function"] == "mypackage.resample.execute"
 
 
-def test_process_registry_accepts_legacy_name_and_execution_function(
+def test_process_registry_rejects_legacy_name_and_execution_function(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     processes_subdir = tmp_path / "processes"
@@ -105,9 +105,47 @@ def test_process_registry_accepts_legacy_name_and_execution_function(
     )
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
 
-    process = process_registry.list_processes()[0]
-    assert process["title"] == "Legacy process"
-    assert process["execution"]["function"] == "mypackage.legacy.execute"
+    with pytest.raises(ValueError, match="must define title"):
+        process_registry.list_processes()
+
+
+def test_process_registry_rejects_legacy_execution_function_without_execution_block(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "legacy_execution.yaml").write_text(
+        """
+- id: legacy_execution
+  title: Legacy execution
+  execution_function: mypackage.legacy.execute
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match=r"must define execution\.function"):
+        process_registry.list_processes()
+
+
+def test_process_registry_rejects_empty_title_and_empty_execution_function(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "legacy_empty_preferred.yaml").write_text(
+        """
+- id: legacy_empty_preferred
+  title: ""
+  execution:
+    function: ""
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match="must define title"):
+        process_registry.list_processes()
 
 
 def test_process_registry_rejects_invalid_inputs_enum(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
