@@ -659,7 +659,7 @@ async def _proxy_remote_zarr_file(
     from zarr.abc.store import RangeByteRequest, SuffixByteRequest
     from zarr.core.buffer import default_buffer_prototype
 
-    from climate_api.providers.remote_zarr import open_icechunk_store
+    from climate_api.providers.remote_zarr import get_icechunk_key_size, open_icechunk_store
 
     source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
     store_config = source_dataset.get("store")
@@ -669,7 +669,9 @@ async def _proxy_remote_zarr_file(
             detail=f"Direct file access not supported for dataset '{artifact.dataset_id}'. "
             f"Access the store at: {artifact.path}",
         )
+    store_url: str = store_config.get("store_url", "")
     try:
+        # open_icechunk_store is cached after the first call — fast dict lookup after warmup.
         store = await asyncio.to_thread(open_icechunk_store, store_config)
     except Exception as exc:
         logger.warning("Failed to open remote store for '%s': %s", artifact.dataset_id, exc)
@@ -681,7 +683,7 @@ async def _proxy_remote_zarr_file(
     # HEAD: return object size without downloading content.
     if request.method == "HEAD":
         try:
-            size = await store.getsize(relative_path)
+            size = await get_icechunk_key_size(store, relative_path, store_url)
         except Exception:
             size = 0
         return Response(
@@ -700,7 +702,7 @@ async def _proxy_remote_zarr_file(
             # Suffix form: bytes=-N  (last N bytes)
             suffix = int(spec[1:])
             byte_request = SuffixByteRequest(suffix=suffix)
-            total = await store.getsize(relative_path)
+            total = await get_icechunk_key_size(store, relative_path, store_url)
             content_range = f"bytes {total - suffix}-{total - 1}/{total}"
         elif "-" in spec:
             parts = spec.split("-", 1)
@@ -712,7 +714,7 @@ async def _proxy_remote_zarr_file(
             else:
                 # Open-ended: bytes=start-
                 byte_request = RangeByteRequest(start=start, end=None)
-                total = await store.getsize(relative_path)
+                total = await get_icechunk_key_size(store, relative_path, store_url)
                 content_range = f"bytes {start}-{total - 1}/{total}"
 
     try:

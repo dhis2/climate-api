@@ -4,6 +4,10 @@ from typing import Any
 
 import xarray as xr
 
+# Module-level caches keyed by store_url so each remote store is opened once.
+_store_cache: dict[str, Any] = {}
+_store_size_cache: dict[tuple[str, str], int] = {}
+
 
 def is_remote_source(dataset: dict[str, Any]) -> bool:
     """Return True when a dataset template declares a remote zarr store."""
@@ -24,7 +28,10 @@ def open_remote_dataset(source: dict[str, Any]) -> xr.Dataset:
 
 
 def open_icechunk_store(source: dict[str, Any]) -> Any:
-    """Open an Icechunk store and return the raw zarr v3 Store object for direct key access."""
+    """Open an Icechunk store and return the raw zarr v3 Store object for direct key access.
+
+    The store is cached per store_url so the repository is opened only once per process.
+    """
     try:
         import icechunk
     except ImportError as exc:
@@ -33,6 +40,9 @@ def open_icechunk_store(source: dict[str, Any]) -> Any:
         ) from exc
 
     store_url: str = source["store_url"]
+    if store_url in _store_cache:
+        return _store_cache[store_url]
+
     storage_options: dict[str, Any] = source.get("storage_options", {})
     anon: bool = storage_options.get("anon", False)
     client_kwargs: dict[str, Any] = storage_options.get("client_kwargs", {})
@@ -44,7 +54,19 @@ def open_icechunk_store(source: dict[str, Any]) -> Any:
 
     storage = icechunk.s3_storage(bucket=bucket, prefix=prefix, region=region, anonymous=anon)
     repo = icechunk.Repository.open(storage)
-    return repo.readonly_session(branch="main").store
+    store = repo.readonly_session(branch="main").store
+    _store_cache[store_url] = store
+    return store
+
+
+async def get_icechunk_key_size(store: Any, key: str, store_url: str) -> int:
+    """Return the byte size of a key in the store, using a per-process cache."""
+    cache_key = (store_url, key)
+    if cache_key in _store_size_cache:
+        return _store_size_cache[cache_key]
+    size: int = await store.getsize(key)
+    _store_size_cache[cache_key] = size
+    return size
 
 
 def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
