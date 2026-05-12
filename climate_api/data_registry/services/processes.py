@@ -168,6 +168,39 @@ def _validate_process(process: object, *, source: str) -> None:
     if keywords is not None and (not isinstance(keywords, list) or not all(isinstance(item, str) for item in keywords)):
         raise ValueError(f"Process '{process_id}' in {source} has invalid keywords")
 
+    _validate_process_fields(process.get("inputs"), process_id=process_id, field_name="inputs", source=source)
+    _validate_process_fields(process.get("outputs"), process_id=process_id, field_name="outputs", source=source)
+
+
+def _validate_process_fields(raw: object, *, process_id: str, field_name: str, source: str) -> None:
+    """Validate optional process input/output field metadata."""
+    if raw is None:
+        return
+    if not isinstance(raw, dict):
+        raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}")
+
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}")
+        if not isinstance(value, dict):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}.{key}")
+
+        field_type = value.get("type")
+        if field_type is not None and not isinstance(field_type, str):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}.{key}.type")
+
+        required = value.get("required")
+        if required is not None and not isinstance(required, bool):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}.{key}.required")
+
+        description = value.get("description")
+        if description is not None and not isinstance(description, str):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}.{key}.description")
+
+        enum = value.get("enum")
+        if enum is not None and (not isinstance(enum, list) or not all(isinstance(item, str) for item in enum)):
+            raise ValueError(f"Process '{process_id}' in {source} has invalid {field_name}.{key}.enum")
+
 
 def _get_dynamic_function(full_path: str) -> Any:
     """Import and return a function given its dotted module path."""

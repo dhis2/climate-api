@@ -108,3 +108,47 @@ def test_process_registry_accepts_legacy_name_and_execution_function(
     process = process_registry.list_processes()[0]
     assert process["title"] == "Legacy process"
     assert process["execution"]["function"] == "mypackage.legacy.execute"
+
+
+def test_process_registry_rejects_invalid_inputs_enum(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "invalid_inputs.yaml").write_text(
+        """
+- id: bad_inputs
+  title: Bad inputs
+  execution:
+    function: mypackage.bad.execute
+  inputs:
+    frequency:
+      type: string
+      enum:
+        - ok
+        - 1
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match=r"invalid inputs\.frequency\.enum"):
+        process_registry.list_processes()
+
+
+def test_process_registry_rejects_non_mapping_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "invalid_outputs.yaml").write_text(
+        """
+- id: bad_outputs
+  title: Bad outputs
+  execution:
+    function: mypackage.bad.execute
+  outputs:
+    - not-a-mapping
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match="has invalid outputs"):
+        process_registry.list_processes()

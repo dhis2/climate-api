@@ -29,11 +29,12 @@ def _field_map(raw: object) -> dict[str, ProcessField]:
         if not isinstance(key, str):
             continue
         if isinstance(value, dict):
+            raw_enum = value.get("enum")
             result[key] = ProcessField(
                 type=value.get("type") if isinstance(value.get("type"), str) else None,
                 required=value.get("required") if isinstance(value.get("required"), bool) else None,
                 description=value.get("description") if isinstance(value.get("description"), str) else None,
-                enum=value.get("enum") if isinstance(value.get("enum"), list) else None,
+                enum=[item for item in raw_enum if isinstance(item, str)] if isinstance(raw_enum, list) else None,
             )
         else:
             result[key] = ProcessField()
