@@ -49,6 +49,7 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     collection_id = managed_dataset_id_for(record)
     data_path = record.path or record.asset_paths[0]
     is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
+    is_remote_zarr = record.format == ArtifactFormat.REMOTE_ZARR
     published_record = record.model_copy(
         update={
             "publication": record.publication.model_copy(
@@ -56,8 +57,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "status": PublicationStatus.PUBLISHED,
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
-                    # Pyramid zarr stores are served via the /zarr endpoint, not pygeoapi.
-                    "pygeoapi_path": None if is_pyramid_zarr else f"/ogcapi/collections/{collection_id}",
+                    # Pyramid zarr and remote zarr are served via /zarr, not pygeoapi.
+                    "pygeoapi_path": None if (is_pyramid_zarr or is_remote_zarr) else f"/ogcapi/collections/{collection_id}",
                 }
             )
         }
@@ -71,6 +72,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         data_path = active.path or active.asset_paths[0]
         if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():
             continue  # pyramid zarr: not served via pygeoapi, use /zarr endpoint instead
+        if active.format == ArtifactFormat.REMOTE_ZARR:
+            continue  # remote zarr: served via /zarr redirect, not pygeoapi xarray provider
         assert active.publication.collection_id is not None
         resources[active.publication.collection_id] = _build_collection_resource(active)
 
