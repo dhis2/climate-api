@@ -266,35 +266,18 @@ def _derive_gefs_artifact(
     """
     import pandas as pd
 
-    sync_block = dataset.get("sync")
-    source_dataset_id = str(sync_block.get("source_dataset_id", "") if isinstance(sync_block, dict) else "")
-    if not source_dataset_id:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Dataset '{dataset['id']}' is missing sync.source_dataset_id",
-        )
-    source_template = registry_datasets.get_dataset(source_dataset_id)
-    if source_template is None:
-        raise HTTPException(
-            status_code=409,
-            detail=(f"Source dataset '{source_dataset_id}' not found. Register it before deriving '{dataset['id']}'."),
-        )
-    source_store = source_template.get("store")
+    source_store = dataset.get("store")
     if not isinstance(source_store, dict):
         raise HTTPException(
             status_code=500,
-            detail=f"Source dataset '{source_dataset_id}' has no store block",
+            detail=f"Dataset '{dataset['id']}' is missing a store block",
         )
 
     from climate_api.providers.remote_zarr import open_remote_dataset
 
     variable = str(dataset["variable"])
 
-    logger.info(
-        "Deriving forecast artifact for '%s' from remote source '%s'",
-        dataset["id"],
-        source_dataset_id,
-    )
+    logger.info("Deriving forecast artifact for '%s'", dataset["id"])
 
     ds_raw = open_remote_dataset(source_store)
     try:
@@ -331,6 +314,8 @@ def _derive_gefs_artifact(
         output_path_str = str(output_path.resolve())
         output_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("Writing derived forecast zarr to '%s'", output_path_str)
+        # Resampling produces irregular dask chunks; rechunk to uniform before writing.
+        ds_daily = ds_daily.chunk({"time": 10, "latitude": -1, "longitude": -1})
         ds_daily.to_zarr(output_path, mode="w", consolidated=True)
     finally:
         ds_raw.close()
