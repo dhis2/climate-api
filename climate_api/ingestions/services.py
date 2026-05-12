@@ -162,11 +162,12 @@ def _register_remote_zarr_artifact(
     logger.info("Opening remote zarr store for dataset '%s': %s", dataset["id"], store_url)
     ds = open_remote_dataset(source)
     try:
-        native_crs = api_config.get_crs() or "EPSG:4326"
+        # Remote datasets carry their own CRS (always WGS84 for dynamical.org stores).
+        # Do not use the instance CRS here — that applies only to locally ingested data.
         coverage_data = _coverage_from_dataset(
             ds=ds,
             period_type=str(dataset["period_type"]),
-            native_crs=native_crs,
+            native_crs="EPSG:4326",
         )
     finally:
         ds.close()
