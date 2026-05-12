@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import logging
 import mimetypes
@@ -604,11 +603,28 @@ def _upsert_artifact_record(
     return _mutate_records(mutate)
 
 
+try:
+    import fcntl as _fcntl
+
+    def _lock(fd: int) -> None:
+        _fcntl.flock(fd, _fcntl.LOCK_EX)
+
+    def _unlock(fd: int) -> None:
+        _fcntl.flock(fd, _fcntl.LOCK_UN)
+
+except ImportError:  # Windows
+    def _lock(fd: int) -> None:
+        pass
+
+    def _unlock(fd: int) -> None:
+        pass
+
+
 def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) -> ArtifactRecord:
     """Apply a read-modify-write mutation under an exclusive file lock."""
     ensure_store()
     with ARTIFACTS_INDEX_PATH.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        _lock(handle.fileno())
         handle.seek(0)
         raw = handle.read()
         records = [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in json.loads(raw or "[]")]
@@ -619,7 +635,7 @@ def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) 
         handle.write(f"{json.dumps(payload, indent=2)}\n")
         handle.flush()
         os.fsync(handle.fileno())
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        _unlock(handle.fileno())
         return result
 
 
