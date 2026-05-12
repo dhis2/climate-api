@@ -6,13 +6,19 @@ Transforms are functions applied to a dataset **after download and before the Za
 
 ## How transforms work
 
-When an ingestion runs, the pipeline is:
+Transforms run after data is acquired and before the final Zarr store is written. For regular (downloaded) datasets:
 
 ```
 download → (transforms) → write Zarr
 ```
 
-Transforms are applied in declaration order. Each function receives the full `xr.Dataset` and the dataset template dict, and returns a (possibly modified) `xr.Dataset`. The modified dataset is then passed to the next transform, or written to Zarr if there are no more.
+For `sync.kind: derived` datasets, the derivation function writes a zarr first, and transforms are applied immediately after:
+
+```
+derive_fn writes zarr → (transforms) → rewrite Zarr
+```
+
+In both cases, transforms are applied in declaration order. Each function receives the full `xr.Dataset` and the dataset template dict, and returns a (possibly modified) `xr.Dataset`. The modified dataset is then passed to the next transform, or written to Zarr if there are no more.
 
 Transforms are declared in the dataset YAML as a list of dotted Python paths:
 
@@ -45,6 +51,16 @@ mm = m × 1000
 ```
 
 Used by: ERA5-Land total precipitation (`era5land_precipitation_hourly`).
+
+### `climate_api.transforms.unit_conversion.flux_to_mm_per_day`
+
+Converts a precipitation flux variable from kg m⁻² s⁻¹ to mm/day.
+
+```
+mm/day = kg m⁻² s⁻¹ × 86400 s/day
+```
+
+Used by: NOAA GEFS precipitation forecast (`gefs_precipitation_forecast`).
 
 ---
 

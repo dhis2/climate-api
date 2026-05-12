@@ -211,6 +211,121 @@ Verify it appears in the STAC catalog:
 curl -s http://127.0.0.1:8000/stac/catalog.json | jq '.links[] | select(.rel == "child")'
 ```
 
+## Derived datasets
+
+Use `sync.kind: derived` when the data source is a remote zarr store that requires a non-trivial transformation before it is useful — for example a forecast store with `init_time × lead_time × ensemble_member` dimensions that need to be collapsed into a simple `time × latitude × longitude` zarr.
+
+A derived template always rematerialises on each sync (like `remote`). After each sync the existing artifact is replaced with a freshly derived zarr.
+
+### Step 1: Write the derivation function
+
+The derivation function writes a zarr to `output_path`. It must be importable as a dotted Python path:
+
+```python
+# my_plugin/forecast.py
+from __future__ import annotations
+from pathlib import Path
+from typing import Any
+
+def derive_dataset(
+    *,
+    store_config: dict[str, Any],
+    output_path: Path,
+    extent: dict[str, Any] | None,
+    variable: str,
+    period_type: str,
+) -> None:
+    """Read from the remote store, transform, write to output_path."""
+    from climate_api.providers.remote_zarr import open_remote_dataset
+
+    ds_raw = open_remote_dataset(store_config)
+    try:
+        # ... transform logic ...
+        ds_daily = ...
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        ds_daily.to_zarr(output_path, mode="w", consolidated=True)
+    finally:
+        ds_raw.close()
+```
+
+**Contract:**
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `store_config` | `dict` | The template's `store` block — pass directly to `open_remote_dataset` |
+| `output_path` | `Path` | Write a consolidated Zarr v3 store here |
+| `extent` | `dict \| None` | Instance spatial extent (`bbox`, `country_code`, etc.) — use to subset the data |
+| `variable` | `str` | Primary variable name (from `variable` in the template) |
+| `period_type` | `str` | Temporal resolution (`daily`, `hourly`, etc.) |
+
+The function must produce a zarr with dimensions `(time, latitude, longitude)` in ascending coordinate order and a `time` coordinate of calendar dates.
+
+You can import and extend the built-in GEFS derivation:
+
+```python
+from climate_api.processing.gefs import derive_dataset as gefs_derive
+```
+
+### Step 2: Create the dataset template YAML
+
+```yaml
+# datasets/my_forecast.yaml
+- id: my_forecast_precipitation
+  name: Precipitation forecast — My Source
+  short_name: Precipitation forecast
+  variable: precipitation
+  period_type: daily
+  sync:
+    kind: derived
+  ingestion:
+    function: my_plugin.forecast.derive_dataset
+  transforms:
+    - climate_api.transforms.unit_conversion.flux_to_mm_per_day
+  store:
+    kind: remote_zarr
+    store_url: "s3://my-bucket/my-forecast/v1/"
+    store_format: icechunk        # or "zarr"
+    storage_options:
+      anon: true
+      client_kwargs:
+        region_name: us-east-1
+    crs: "EPSG:4326"              # optional; defaults to EPSG:4326
+  units: "mm/day"
+  resolution: 25 km x 25 km (0.25°)
+  source: My Forecast Source
+  source_url: https://example.org/forecast
+  display:
+    colormap: blues
+    range: [0, 25]
+```
+
+**Derived-specific template fields:**
+
+| Field | Required | Description |
+| ----- | -------- | ----------- |
+| `sync.kind` | Yes | Must be `derived` |
+| `ingestion.function` | Yes | Dotted path to the derivation function |
+| `store.kind` | Yes | Must be `remote_zarr` |
+| `store.store_url` | Yes | URL of the remote zarr/icechunk store |
+| `store.store_format` | No | `zarr` (default) or `icechunk` |
+| `store.storage_options` | No | Passed to the fsspec/icechunk opener (credentials, region, etc.) |
+| `store.crs` | No | Native CRS of the derived output. Defaults to `EPSG:4326`. Set this for stores in projected coordinate systems — it controls the `proj:code` in STAC metadata |
+| `transforms` | No | Transforms applied to the written zarr after derivation — same syntax and built-ins as regular datasets |
+
+### Step 3: Trigger sync
+
+Derived artifacts are created by the same ingestion endpoint. No `start`/`end` date is required (the derivation function determines the time range from the remote store):
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/ingestions \
+  -H "Content-Type: application/json" \
+  -d '{"dataset_id": "my_forecast_precipitation", "publish": true}' | jq
+```
+
+Re-syncing the artifact replaces it with a freshly derived zarr. Schedule this daily to keep a rolling forecast window current.
+
+---
+
 ## Minimal example
 
 The smallest valid template for a static dataset with no sync:

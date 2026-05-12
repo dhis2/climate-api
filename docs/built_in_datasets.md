@@ -1,8 +1,8 @@
 # Built-in datasets
 
-The Climate API ships with four built-in dataset templates covering precipitation, temperature, and population. Each template describes a data source and the rules for downloading, transforming, and syncing it. They are available in every instance without any additional configuration.
+The Climate API ships with built-in dataset templates covering precipitation, temperature, population, and medium-range forecasts. Each template describes a data source and the rules for downloading, transforming, and syncing it. They are available in every instance without any additional configuration.
 
-To ingest a built-in dataset for your configured extent, see the [API reference](managed_data_api_guide.md). To add datasets beyond these four, see [Adding custom datasets](adding_custom_datasets.md).
+To ingest a built-in dataset for your configured extent, see the [API reference](managed_data_api_guide.md). To add datasets beyond these, see [Adding custom datasets](adding_custom_datasets.md).
 
 ---
 
@@ -91,6 +91,55 @@ WorldPop Global2 provides gridded population estimates and projections at 100 m 
 
 ---
 
+## NOAA GEFS — precipitation forecast (daily ensemble mean)
+
+| Property | Value |
+| --- | --- |
+| **Dataset ID** | `gefs_precipitation_forecast` |
+| **Variable** | `precipitation_surface` |
+| **Units** | mm/day |
+| **Period** | Daily |
+| **Spatial coverage** | Global |
+| **Spatial resolution** | 25 km (0.25°) |
+| **Forecast horizon** | 35 days |
+| **Source** | [NOAA GEFS via dynamical.org](https://dynamical.org/catalog/noaa-gefs-forecast-35-day/) |
+
+The NOAA Global Ensemble Forecast System (GEFS) provides probabilistic medium-range forecasts out to 35 days at 0.25° resolution. The raw store has five dimensions (`init_time`, `lead_time`, `ensemble_member`, `latitude`, `longitude`). The Climate API derives a simple `time × latitude × longitude` zarr from the latest complete run on each sync:
+
+1. Select the most recent `init_time` with a complete forecast (walks back up to 5 runs — the latest run is often still distributing its longer lead_times)
+2. Average across ensemble members (ensemble mean)
+3. Map `lead_time → valid_time` (calendar dates) to produce a standard `time` dimension
+4. Subset to the configured instance extent
+5. Resample 6-hourly steps to daily mean
+6. Trim trailing NaN time steps (unpublished placeholders)
+
+**Sync behaviour** — always rematerialises (full rebuild on each sync). Schedule daily to keep the 35-day window current.
+
+**Transforms** — raw GEFS precipitation is in kg m⁻² s⁻¹ (instantaneous flux). The `flux_to_mm_per_day` transform multiplies by 86400 s/day, so stored values are in mm/day.
+
+---
+
+## NOAA GEFS — 2 m temperature forecast (daily ensemble mean)
+
+| Property | Value |
+| --- | --- |
+| **Dataset ID** | `gefs_temperature_2m_forecast` |
+| **Variable** | `temperature_2m` |
+| **Units** | °C |
+| **Period** | Daily |
+| **Spatial coverage** | Global |
+| **Spatial resolution** | 25 km (0.25°) |
+| **Forecast horizon** | 35 days |
+| **Source** | [NOAA GEFS via dynamical.org](https://dynamical.org/catalog/noaa-gefs-forecast-35-day/) |
+
+2 m air temperature forecast from NOAA GEFS, derived from the same icechunk store as the precipitation forecast. The derivation pipeline is identical — ensemble mean, lead_time mapped to calendar dates, daily mean, extent subset.
+
+**Sync behaviour** — always rematerialises. Schedule daily alongside the precipitation forecast.
+
+**Transforms** — none; the dynamical.org store already provides temperature in °C.
+
+---
+
 ## Derived datasets
 
-In addition to the four built-in sources, the API can produce **derived datasets** by resampling any ingested dataset to a coarser temporal resolution. Derived datasets are created on demand via the `resample` process. See [Processes](processes.md) for details.
+In addition to the five built-in sources above, the API can produce **derived datasets** by resampling any ingested dataset to a coarser temporal resolution. Derived datasets are created on demand via the `resample` process. See [Processes](processes.md) for details.
