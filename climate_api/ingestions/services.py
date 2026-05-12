@@ -244,6 +244,156 @@ def _upsert_remote_zarr_record(record: ArtifactRecord, *, publish: bool) -> Arti
     return _mutate_records(mutate)
 
 
+def _is_derived_source(dataset: dict[str, object]) -> bool:
+    """Return True when a dataset template declares a derived sync kind."""
+    sync = dataset.get("sync")
+    return isinstance(sync, dict) and sync.get("kind") == "derived"
+
+
+def _derive_gefs_artifact(
+    *,
+    dataset: dict[str, object],
+    publish: bool,
+) -> ArtifactRecord:
+    """Derive a local zarr artifact from the latest GEFS remote store run.
+
+    Selects the most recent init_time, averages over ensemble members (if
+    present), maps lead_time → valid_time, subsets to the configured instance
+    extent, resamples 6-hourly steps to daily mean, and writes a standard
+    flat zarr.  The result is registered as a normal ZARR artifact so all
+    existing serving infrastructure (ZarrLayer, pygeoapi, time slider) works
+    without special-casing.
+    """
+    import pandas as pd
+
+    sync_block = dataset.get("sync")
+    source_dataset_id = str(sync_block.get("source_dataset_id", "") if isinstance(sync_block, dict) else "")
+    if not source_dataset_id:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset '{dataset['id']}' is missing sync.source_dataset_id",
+        )
+    source_template = registry_datasets.get_dataset(source_dataset_id)
+    if source_template is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Source dataset '{source_dataset_id}' not found. Register it before deriving '{dataset['id']}'."),
+        )
+    source_store = source_template.get("store")
+    if not isinstance(source_store, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Source dataset '{source_dataset_id}' has no store block",
+        )
+
+    from climate_api.providers.remote_zarr import open_remote_dataset
+
+    variable = str(dataset["variable"])
+
+    logger.info(
+        "Deriving forecast artifact for '%s' from remote source '%s'",
+        dataset["id"],
+        source_dataset_id,
+    )
+
+    ds_raw = open_remote_dataset(source_store)
+    try:
+        latest_init = pd.Timestamp(ds_raw.init_time.max().item())
+        ds_run = ds_raw[[variable]].sel(init_time=latest_init)
+
+        if "ensemble_member" in ds_run.dims:
+            ds_run = ds_run.mean(dim="ensemble_member")
+
+        valid_times = latest_init + pd.to_timedelta(ds_run.lead_time.values)
+        ds_run = (
+            ds_run.assign_coords(time=("lead_time", valid_times.values))
+            .swap_dims({"lead_time": "time"})
+            .drop_vars("lead_time", errors="ignore")
+        )
+        # Drop 2-D auxiliary coords (e.g. valid_time indexed by init_time×lead_time)
+        # that become meaningless after selecting a single init_time.
+        aux = [c for c in ds_run.coords if c not in ds_run.dims and c != variable]
+        if aux:
+            ds_run = ds_run.drop_vars(aux, errors="ignore")
+
+        extent = get_extent()
+        if extent is not None:
+            xmin, ymin, xmax, ymax = extent["bbox"]
+            lat = ds_run.latitude
+            if float(lat.values[0]) > float(lat.values[-1]):
+                ds_run = ds_run.sel(latitude=slice(ymax, ymin), longitude=slice(xmin, xmax))
+            else:
+                ds_run = ds_run.sel(latitude=slice(ymin, ymax), longitude=slice(xmin, xmax))
+
+        ds_daily = ds_run.resample(time="1D").mean()
+
+        output_path = ARTIFACTS_DIR / f"{dataset['id']}.zarr"
+        output_path_str = str(output_path.resolve())
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Writing derived forecast zarr to '%s'", output_path_str)
+        ds_daily.to_zarr(output_path, mode="w", consolidated=True)
+    finally:
+        ds_raw.close()
+
+    coverage_data = get_data_coverage_for_paths(
+        dataset,
+        zarr_path=output_path_str,
+    )
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Derived forecast artifact contains no data")
+
+    raw_cov = coverage_data["coverage"]
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**raw_cov["temporal"]),
+        spatial=CoverageSpatial(**raw_cov["spatial"]),
+        spatial_wgs84=CoverageSpatial(**raw_cov["spatial_wgs84"]) if raw_cov.get("spatial_wgs84") else None,
+    )
+    request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=str(dataset["id"]),
+        dataset_name=str(dataset["name"]),
+        variable=variable,
+        format=ArtifactFormat.ZARR,
+        path=output_path_str,
+        asset_paths=[output_path_str],
+        variables=[variable],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+    stored_record = _upsert_derived_record(record)
+    logger.info(
+        "Derived artifact '%s' for dataset '%s': coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
+
+
+def _upsert_derived_record(record: ArtifactRecord) -> ArtifactRecord:
+    """Replace any existing derived artifact for the same dataset, or insert a new one."""
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for index, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.format == ArtifactFormat.ZARR:
+                replacement = record.model_copy(
+                    update={"artifact_id": existing.artifact_id, "publication": existing.publication}
+                )
+                records[index] = replacement
+                return replacement
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
 def create_artifact(
     *,
     dataset: dict[str, object],
@@ -262,6 +412,9 @@ def create_artifact(
 
     if is_remote_source(dataset):
         return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
+
+    if _is_derived_source(dataset):
+        return _derive_gefs_artifact(dataset=dataset, publish=publish)
 
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")

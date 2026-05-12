@@ -47,3 +47,35 @@
   display:
     colormap: rdbu_r
     range: [-30.0, 30.0]
+
+- id: gefs_precipitation_forecast
+  name: Precipitation forecast — ensemble mean (NOAA GEFS)
+  short_name: Precipitation forecast
+  variable: precipitation_surface
+  period_type: daily
+  sync:
+    kind: derived
+    source_dataset_id: gefs_precipitation
+  units: "kg m-2 s-1"
+  resolution: 25 km x 25 km (0.25°)
+  source: "NOAA GEFS (via dynamical.org)"
+  source_url: "https://dynamical.org/catalog/noaa-gefs-forecast-35-day/"
+  display:
+    colormap: blues
+    range: [0.0, 0.001]
+
+- id: gefs_temperature_2m_forecast
+  name: 2 metre temperature forecast — ensemble mean (NOAA GEFS)
+  short_name: Temperature forecast
+  variable: temperature_2m
+  period_type: daily
+  sync:
+    kind: derived
+    source_dataset_id: gefs_temperature_2m
+  units: "°C"
+  resolution: 25 km x 25 km (0.25°)
+  source: "NOAA GEFS (via dynamical.org)"
+  source_url: "https://dynamical.org/catalog/noaa-gefs-forecast-35-day/"
+  display:
+    colormap: rdbu_r
+    range: [-30.0, 30.0]

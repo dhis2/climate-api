@@ -28,6 +28,7 @@ class SyncKind(StrEnum):
     RELEASE = "release"
     STATIC = "static"
     REMOTE = "remote"
+    DERIVED = "derived"
 
 
 class SyncAction(StrEnum):

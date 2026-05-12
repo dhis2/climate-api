@@ -89,6 +89,19 @@ def plan_sync(
             target_end_source="remote",
         )
 
+    if sync_kind == SyncKind.DERIVED:
+        return SyncDetail(
+            source_dataset_id=latest_artifact.dataset_id,
+            sync_kind=sync_kind,
+            action=SyncAction.REMATERIALIZE,
+            reason="derived_forecast_refresh",
+            message="Derived forecast artifact is re-derived from the latest remote run on every sync.",
+            current_start=current_start,
+            current_end=current_end,
+            target_end=None,
+            target_end_source="remote",
+        )
+
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
@@ -231,8 +244,8 @@ def run_sync(
             sync_detail=sync_detail,
         )
 
-    # Remote datasets re-register through create_artifact; start/end are ignored.
-    if sync_detail.sync_kind == SyncKind.REMOTE:
+    # Remote and derived datasets re-derive through create_artifact; start/end are ignored.
+    if sync_detail.sync_kind in (SyncKind.REMOTE, SyncKind.DERIVED):
         artifact = create_artifact_fn(
             dataset=source_dataset,
             start=latest_artifact.coverage.temporal.start,
@@ -243,10 +256,15 @@ def run_sync(
             prefer_zarr=prefer_zarr,
             publish=publish,
         )
+        message = (
+            "Derived forecast artifact has been re-derived from the latest remote run."
+            if sync_detail.sync_kind == SyncKind.DERIVED
+            else "Remote zarr store coverage metadata has been refreshed."
+        )
         return SyncResponse(
             sync_id=artifact.artifact_id,
             status="completed",
-            message="Remote zarr store coverage metadata has been refreshed.",
+            message=message,
             dataset=get_dataset_fn(managed_dataset_id_for(artifact)),
             sync_detail=sync_detail,
         )
