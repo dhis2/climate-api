@@ -11,6 +11,7 @@ class ArtifactFormat(StrEnum):
 
     ZARR = "zarr"
     NETCDF = "netcdf"
+    REMOTE_ZARR = "remote_zarr"
 
 
 class PublicationStatus(StrEnum):
@@ -26,6 +27,7 @@ class SyncKind(StrEnum):
     TEMPORAL = "temporal"
     RELEASE = "release"
     STATIC = "static"
+    REMOTE = "remote"
 
 
 class SyncAction(StrEnum):
