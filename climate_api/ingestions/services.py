@@ -169,6 +169,23 @@ def _register_remote_zarr_artifact(
             period_type=str(dataset["period_type"]),
             native_crs="EPSG:4326",
         )
+
+        # Forecast datasets have a lead_time dimension — the actual data horizon extends
+        # beyond the last init_time. Extend the temporal end by max lead_time so the
+        # coverage reflects when the latest forecast reaches, not when it was issued.
+        if coverage_data.get("has_data") and "lead_time" in ds.dims:
+            import pandas as pd
+
+            from climate_api.data_manager.services.utils import get_time_dim
+            from climate_api.shared.time import numpy_datetime_to_period_string
+
+            from climate_api.data_accessor.services.accessor import _period_string_scalar  # noqa: PLC0415
+
+            time_dim = get_time_dim(ds)
+            forecast_end = pd.Timestamp(ds[time_dim].max().item()) + pd.Timedelta(ds["lead_time"].max().item())
+            coverage_data["coverage"]["temporal"]["end"] = _period_string_scalar(
+                numpy_datetime_to_period_string(forecast_end.to_datetime64(), str(dataset["period_type"]))
+            )
     finally:
         ds.close()
 

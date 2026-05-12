@@ -51,6 +51,25 @@ def _make_gefs_ds() -> xr.Dataset:
     )
 
 
+def _make_gefs_ds_with_lead_time() -> xr.Dataset:
+    """Return a fake GEFS dataset that includes a lead_time dimension (35-day forecast)."""
+    lead_times = pd.to_timedelta(np.arange(0, 841, 6), unit="h")  # 0–840 h in 6-h steps
+    return xr.Dataset(
+        {
+            "precipitation_surface": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                np.ones((3, len(lead_times), 4, 4), dtype="float32"),
+            )
+        },
+        coords={
+            "init_time": pd.date_range("2026-05-01", periods=3, freq="D"),
+            "lead_time": lead_times,
+            "latitude": [10.0, 5.0, 0.0, -5.0],
+            "longitude": [30.0, 35.0, 40.0, 45.0],
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # providers.remote_zarr
 # ---------------------------------------------------------------------------
@@ -175,6 +194,22 @@ def test_register_remote_zarr_artifact_creates_remote_zarr_record(
     assert record.dataset_id == "gefs_precipitation"
     assert record.coverage.temporal.start == "2026-05-01"
     assert record.coverage.temporal.end == "2026-05-03"
+
+
+def test_register_remote_zarr_artifact_extends_end_by_lead_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Temporal end must be last init_time + max lead_time, not just last init_time."""
+    monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
+    monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
+
+    fake_ds = _make_gefs_ds_with_lead_time()
+    with patch("climate_api.providers.remote_zarr.open_remote_dataset", return_value=fake_ds):
+        record = services._register_remote_zarr_artifact(dataset=_GEFS_DATASET, publish=False)
+
+    # last init_time = 2026-05-03, max lead_time = 840 h = 35 days → end = 2026-06-07
+    assert record.coverage.temporal.start == "2026-05-01"
+    assert record.coverage.temporal.end == "2026-06-07"
 
 
 def test_register_remote_zarr_artifact_upserts_on_re_register(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
