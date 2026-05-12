@@ -613,6 +613,7 @@ try:
         _fcntl.flock(fd, _fcntl.LOCK_UN)
 
 except ImportError:  # Windows
+
     def _lock(fd: int) -> None:
         pass
 
