@@ -269,9 +269,11 @@ def _derive_artifact(
             period_type: str,         # e.g. "daily"
         ) -> None
 
-    After the function returns, the service reads back the zarr to compute
-    coverage and registers the artifact.  The built-in implementation for GEFS
-    is ``climate_api.processing.gefs.derive_dataset``.
+    After the function returns, the service applies any declared transforms,
+    writes GeoZarr root attributes (``spatial:bbox``, ``proj:code``) so map
+    clients can position tiles, computes coverage, and registers the artifact.
+    The built-in implementation for GEFS is
+    ``climate_api.processing.gefs.derive_dataset``.
 
     CRS: ``store.crs`` in the template overrides the default of ``EPSG:4326``.
     Most public remote stores (dynamical.org, ARCO-ERA5) are WGS84 so the
@@ -308,8 +310,13 @@ def _derive_artifact(
 
     output_path_str = str(output_path.resolve())
 
+    from geozarr_toolkit import create_geozarr_attrs
+
+    import zarr as _zarr
+
     from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
     from climate_api.data_manager.services.downloader import _run_transforms
+    from climate_api.data_manager.services.utils import get_x_y_dims
 
     if dataset.get("transforms"):
         ds_pre = open_zarr_dataset(output_path_str)
@@ -331,6 +338,20 @@ def _derive_artifact(
 
     ds_written = open_zarr_dataset(output_path_str)
     try:
+        x_dim, y_dim = get_x_y_dims(ds_written)
+        bbox = [
+            float(ds_written[x_dim].min()),
+            float(ds_written[y_dim].min()),
+            float(ds_written[x_dim].max()),
+            float(ds_written[y_dim].max()),
+        ]
+        shape = (ds_written.sizes[x_dim], ds_written.sizes[y_dim])
+        geozarr_attrs = create_geozarr_attrs(
+            dimensions=[x_dim, y_dim],
+            crs=native_crs,
+            bbox=bbox,
+            shape=shape,
+        )
         coverage_data = _coverage_from_dataset(
             ds=ds_written,
             period_type=str(dataset["period_type"]),
@@ -338,6 +359,12 @@ def _derive_artifact(
         )
     finally:
         ds_written.close()
+
+    # Write GeoZarr root attrs without touching data chunks, then re-consolidate.
+    # The map viewer reads spatial:bbox and proj:code from these attrs to position tiles.
+    root = _zarr.open_group(str(output_path), mode="r+")
+    root.attrs.update(geozarr_attrs)
+    _zarr.consolidate_metadata(str(output_path))
 
     if not coverage_data.get("has_data", True):
         raise HTTPException(status_code=409, detail="Derived forecast artifact contains no data")
@@ -398,7 +425,7 @@ def _upsert_derived_record(record: ArtifactRecord) -> ArtifactRecord:
 def create_artifact(
     *,
     dataset: dict[str, object],
-    start: str,
+    start: str | None,
     end: str | None,
     bbox: list[float] | None,
     country_code: str | None,
@@ -416,6 +443,12 @@ def create_artifact(
 
     if is_remote_source(dataset):
         return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
+
+    if start is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"'start' is required for dataset '{dataset['id']}' (sync kind: {dataset.get('sync', {}).get('kind')})",
+        )
 
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
