@@ -1,7 +1,9 @@
 """DHIS2 Climate API -- Climate and earth observation data API for DHIS2."""
 
+import asyncio
 import os
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +37,29 @@ def _append_vary_value(response: Response, value: str) -> None:
         response.headers["Vary"] = ", ".join([*values, value])
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):  # type: ignore[type-arg]
+    """Run background warmup tasks on startup so first requests hit warm caches."""
+    asyncio.get_event_loop().run_in_executor(None, _warmup_remote_zarr_stores)
+    yield
+
+
+def _warmup_remote_zarr_stores() -> None:
+    """Open and cache every published REMOTE_ZARR store at process startup."""
+    from climate_api.ingestions.schemas import ArtifactFormat
+    from climate_api.ingestions.services import _load_records
+    from climate_api.providers.remote_zarr import warmup_remote_store
+    from climate_api.data_registry.services import datasets as registry_datasets
+
+    for record in _load_records():
+        if record.format != ArtifactFormat.REMOTE_ZARR:
+            continue
+        source_dataset = registry_datasets.get_dataset(record.dataset_id) or {}
+        store_config = source_dataset.get("store")
+        if isinstance(store_config, dict):
+            warmup_remote_store(store_config)
+
+
 def create_app() -> FastAPI:
     """Create and configure the Climate API FastAPI application.
 
@@ -43,7 +68,7 @@ def create_app() -> FastAPI:
         from climate_api.main import create_app
         app = create_app()
     """
-    _app = FastAPI()
+    _app = FastAPI(lifespan=_lifespan)
 
     _app.add_middleware(
         CORSMiddleware,
