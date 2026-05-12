@@ -24,7 +24,7 @@ def open_remote_dataset(source: dict[str, Any]) -> xr.Dataset:
 
 
 def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
-    """Open an Icechunk store via the icechunk library."""
+    """Open an Icechunk store via the icechunk library (v2 API)."""
     try:
         import icechunk
     except ImportError as exc:
@@ -36,17 +36,15 @@ def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
     storage_options: dict[str, Any] = source.get("storage_options", {})
     anon: bool = storage_options.get("anon", False)
     client_kwargs: dict[str, Any] = storage_options.get("client_kwargs", {})
-    region: str = client_kwargs.get("region_name", "us-east-1")
+    region: str | None = client_kwargs.get("region_name")
 
     s3_path = store_url.removeprefix("s3://")
     bucket, _, prefix = s3_path.partition("/")
+    prefix = prefix.rstrip("/")
 
-    if anon:
-        storage = icechunk.StorageConfig.s3_anonymous(bucket=bucket, prefix=prefix, region=region)
-    else:
-        storage = icechunk.StorageConfig.s3_from_env(bucket=bucket, prefix=prefix, region=region)
-
-    store = icechunk.IcechunkStore.open_existing(storage, mode="r")
+    storage = icechunk.s3_storage(bucket=bucket, prefix=prefix, region=region, anonymous=anon)
+    repo = icechunk.Repository.open(storage)
+    store = repo.readonly_session(branch="main").store
     return xr.open_zarr(store, consolidated=False)  # type: ignore[no-any-return]
 
 
