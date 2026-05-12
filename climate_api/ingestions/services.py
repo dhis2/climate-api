@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import logging
 import mimetypes
@@ -12,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+import portalocker
 import pyproj
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -608,7 +608,7 @@ def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) 
     """Apply a read-modify-write mutation under an exclusive file lock."""
     ensure_store()
     with ARTIFACTS_INDEX_PATH.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        portalocker.lock(handle, portalocker.LOCK_EX)
         handle.seek(0)
         raw = handle.read()
         records = [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in json.loads(raw or "[]")]
@@ -619,7 +619,7 @@ def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) 
         handle.write(f"{json.dumps(payload, indent=2)}\n")
         handle.flush()
         os.fsync(handle.fileno())
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        portalocker.unlock(handle)
         return result
 
 

@@ -37,6 +37,7 @@ dependencies = [
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*",
     "rioxarray>=0.17",
+    "portalocker>=3.2.0",
 ]
 
 [project.urls]
