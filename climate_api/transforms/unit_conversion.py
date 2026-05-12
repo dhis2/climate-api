@@ -25,3 +25,9 @@ def metres_to_mm(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
     """Convert the dataset variable from metres to millimetres."""
     logger.info("Converting '%s' from m to mm", dataset["variable"])
     return _apply(ds, dataset, scale=1000.0, offset=0.0, units="mm")
+
+
+def flux_to_mm_per_day(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+    """Convert precipitation flux (kg m-2 s-1) to mm/day."""
+    logger.info("Converting '%s' from kg m-2 s-1 to mm/day", dataset["variable"])
+    return _apply(ds, dataset, scale=86400.0, offset=0.0, units="mm/day")

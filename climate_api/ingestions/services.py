@@ -307,13 +307,23 @@ def _derive_artifact(
     )
 
     output_path_str = str(output_path.resolve())
+
+    from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
+    from climate_api.data_manager.services.downloader import _run_transforms
+
+    if dataset.get("transforms"):
+        ds_pre = open_zarr_dataset(output_path_str)
+        try:
+            ds_transformed = _run_transforms(ds_pre, dataset)
+            ds_transformed.to_zarr(output_path, mode="w", consolidated=True)
+        finally:
+            ds_pre.close()
+
     # Use store.crs when declared; fall back to EPSG:4326 for the common case of
     # WGS84 remote stores (dynamical.org, ARCO-ERA5, etc.).
     native_crs: str = str(source_store.get("crs", "EPSG:4326")) or "EPSG:4326"
     wgs84_codes = {"EPSG:4326", "OGC:CRS84", "CRS84"}
     is_wgs84 = native_crs.upper() in {c.upper() for c in wgs84_codes}
-
-    from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
 
     ds_written = open_zarr_dataset(output_path_str)
     try:
