@@ -290,6 +290,9 @@ def test_zarr_store_info_for_remote_artifact_returns_remote_url(
 ) -> None:
     monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
     monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
+    monkeypatch.setattr(
+        registry, "get_dataset", lambda dataset_id: _GEFS_DATASET if dataset_id == "gefs_precipitation" else None
+    )
 
     fake_ds = _make_gefs_ds()
     with patch("climate_api.providers.remote_zarr.open_remote_dataset", return_value=fake_ds):
@@ -315,6 +318,9 @@ def test_zarr_store_file_for_remote_artifact_proxies_from_icechunk(
 
     monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
     monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
+    monkeypatch.setattr(
+        registry, "get_dataset", lambda dataset_id: _GEFS_DATASET if dataset_id == "gefs_precipitation" else None
+    )
 
     fake_ds = _make_gefs_ds()
     with patch("climate_api.providers.remote_zarr.open_remote_dataset", return_value=fake_ds):
