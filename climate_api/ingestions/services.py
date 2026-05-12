@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import portalocker
 import pyproj
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
@@ -626,13 +626,13 @@ def _read_zarr_bounds(store_attrs: dict[str, object] | None) -> list[float] | No
     return [xmin, ymin, xmax, ymax]
 
 
-def get_dataset_zarr_store_file_or_404(
-    dataset_id: str, relative_path: str
+async def get_dataset_zarr_store_file_or_404(
+    request: Request, dataset_id: str, relative_path: str
 ) -> FileResponse | Response | dict[str, object]:
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     if artifact.format == ArtifactFormat.REMOTE_ZARR:
-        return _proxy_remote_zarr_file(artifact, relative_path)
+        return await _proxy_remote_zarr_file(request, artifact, relative_path)
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -648,13 +648,15 @@ def get_dataset_zarr_store_file_or_404(
     return FileResponse(target, media_type=media_type, filename=target.name)
 
 
-def _proxy_remote_zarr_file(
+async def _proxy_remote_zarr_file(
+    request: Request,
     artifact: ArtifactRecord,
     relative_path: str,
 ) -> Response | JSONResponse:
-    """Proxy a zarr v3 key from the underlying icechunk store."""
+    """Proxy a zarr v3 key from the underlying icechunk store, with HTTP Range support."""
     import asyncio
 
+    from zarr.abc.store import RangeByteRequest, SuffixByteRequest
     from zarr.core.buffer import default_buffer_prototype
 
     from climate_api.providers.remote_zarr import open_icechunk_store
@@ -668,8 +670,53 @@ def _proxy_remote_zarr_file(
             f"Access the store at: {artifact.path}",
         )
     try:
-        store = open_icechunk_store(store_config)
-        buf = asyncio.run(store.get(relative_path, default_buffer_prototype()))
+        store = await asyncio.to_thread(open_icechunk_store, store_config)
+    except Exception as exc:
+        logger.warning("Failed to open remote store for '%s': %s", artifact.dataset_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+        ) from exc
+
+    # HEAD: return object size without downloading content.
+    if request.method == "HEAD":
+        try:
+            size = await store.getsize(relative_path)
+        except Exception:
+            size = 0
+        return Response(
+            status_code=200,
+            headers={"Content-Length": str(size), "Accept-Ranges": "bytes"},
+            media_type="application/octet-stream",
+        )
+
+    # Parse HTTP Range header into a zarr ByteRequest.
+    byte_request = None
+    content_range: str | None = None
+    range_header = request.headers.get("range", "")
+    if range_header.startswith("bytes="):
+        spec = range_header[6:]
+        if spec.startswith("-"):
+            # Suffix form: bytes=-N  (last N bytes)
+            suffix = int(spec[1:])
+            byte_request = SuffixByteRequest(suffix=suffix)
+            total = await store.getsize(relative_path)
+            content_range = f"bytes {total - suffix}-{total - 1}/{total}"
+        elif "-" in spec:
+            parts = spec.split("-", 1)
+            start = int(parts[0])
+            if parts[1]:
+                end_inc = int(parts[1])
+                byte_request = RangeByteRequest(start=start, end=end_inc + 1)
+                content_range = f"bytes {start}-{end_inc}/*"
+            else:
+                # Open-ended: bytes=start-
+                byte_request = RangeByteRequest(start=start, end=None)
+                total = await store.getsize(relative_path)
+                content_range = f"bytes {start}-{total - 1}/{total}"
+
+    try:
+        buf = await store.get(relative_path, default_buffer_prototype(), byte_request)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
     except Exception as exc:
@@ -683,9 +730,17 @@ def _proxy_remote_zarr_file(
         raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
 
     data: bytes = bytes(buf.as_array_like())
+
+    if content_range:
+        return Response(
+            content=data,
+            status_code=206,
+            headers={"Accept-Ranges": "bytes", "Content-Range": content_range},
+            media_type="application/octet-stream",
+        )
     if relative_path.endswith(".json"):
-        return JSONResponse(content=json.loads(data))
-    return Response(content=data, media_type="application/octet-stream")
+        return JSONResponse(content=json.loads(data), headers={"Accept-Ranges": "bytes"})
+    return Response(content=data, media_type="application/octet-stream", headers={"Accept-Ranges": "bytes"})
 
 
 def _load_records() -> list[ArtifactRecord]:
