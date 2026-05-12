@@ -6,7 +6,7 @@ help: ## Show this help
 sync: ## Install dependencies with uv
 	uv sync
 
-run: openapi ## Start the app with uvicorn
+run: ## Start the app with uvicorn
 	uv run uvicorn climate_api.main:app --reload --reload-include "*.html" --reload-include "*.yaml" --reload-include "*.yml"
 
 lint: ## Check linting, formatting, and types (no autofix)
@@ -26,8 +26,8 @@ openapi: ## Generate pygeoapi OpenAPI spec
 	@set -a && . ./.env && set +a && \
 		uv run python -c "from climate_api.publications.services import ensure_pygeoapi_base_config; ensure_pygeoapi_base_config()"
 
-start: openapi ## Start the Docker stack (builds images first)
+start: ## Start the Docker stack (builds images first)
 	docker compose up --build
 
-restart: openapi ## Tear down, rebuild, and start the Docker stack from scratch
+restart: ## Tear down, rebuild, and start the Docker stack from scratch
 	docker compose down -v && docker compose build --no-cache && docker compose up
