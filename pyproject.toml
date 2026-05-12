@@ -38,6 +38,7 @@ dependencies = [
     "topozarr==0.0.*",
     "rioxarray>=0.17",
     "portalocker>=3.2.0",
+    "dhis2eo>=1.2.1",
 ]
 
 [project.urls]
