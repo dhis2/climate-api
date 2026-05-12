@@ -30,7 +30,7 @@ def _normalize_process_definition(process: dict[str, Any]) -> dict[str, Any]:
     if "expose" not in normalized:
         normalized["expose"] = True
 
-    if "jobControlOptions" not in normalized:
+    if "jobControlOptions" not in normalized or normalized["jobControlOptions"] is None:
         normalized["jobControlOptions"] = ["sync-execute"]
 
     return normalized
@@ -197,7 +197,7 @@ def _get_dynamic_function(full_path: str) -> Any:
     parts = [p for p in full_path.split(".") if p]
     if len(parts) < 2:
         raise ValueError(
-            f"execution_function must be a dotted path with at least one module and one attribute, got '{full_path}'"
+            f"execution.function must be a dotted path with at least one module and one attribute, got '{full_path}'"
         )
     module_path = ".".join(parts[:-1])
     function_name = parts[-1]
