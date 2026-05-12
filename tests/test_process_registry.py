@@ -192,9 +192,7 @@ def test_process_registry_rejects_non_mapping_outputs(monkeypatch: pytest.Monkey
         process_registry.list_processes()
 
 
-def test_process_registry_defaults_null_job_control_options(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
     (processes_subdir / "null_job_control_options.yaml").write_text(
