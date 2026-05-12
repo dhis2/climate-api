@@ -1,6 +1,6 @@
 """Routes for EO ingestion, datasets, and sync operations."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
@@ -94,9 +94,11 @@ def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
 
 
 @zarr_router.api_route("/{dataset_id}/{relative_path:path}", methods=["GET", "HEAD"], response_model=None)
-def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> FileResponse | Response | dict[str, object]:
+async def get_canonical_zarr_store_file(
+    request: Request, dataset_id: str, relative_path: str
+) -> FileResponse | Response | dict[str, object]:
     """Serve canonical Zarr store content for a managed dataset."""
-    return services.get_dataset_zarr_store_file_or_404(dataset_id, relative_path)
+    return await services.get_dataset_zarr_store_file_or_404(request, dataset_id, relative_path)
 
 
 @sync_router.post("/{dataset_id}", response_model=SyncResponse)
