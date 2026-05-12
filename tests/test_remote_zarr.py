@@ -272,8 +272,10 @@ def test_zarr_store_info_for_remote_artifact_returns_remote_url(
     assert info["provider"] == "dynamical"
 
 
-def test_zarr_store_file_for_remote_artifact_returns_501(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from fastapi import HTTPException
+def test_zarr_store_file_for_remote_artifact_proxies_from_icechunk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json as _json
 
     monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
     monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
@@ -287,10 +289,23 @@ def test_zarr_store_file_for_remote_artifact_returns_501(tmp_path: Path, monkeyp
     record = services._load_records()[0]
     dataset_id = managed_dataset_id_for(record)
 
-    with pytest.raises(HTTPException) as exc_info:
-        services.get_dataset_zarr_store_file_or_404(dataset_id, "zarr.json")
+    fake_zarr_json = _json.dumps({"zarr_format": 3, "node_type": "group"}).encode()
 
-    assert exc_info.value.status_code == 501
+    class _FakeBuffer:
+        def as_array_like(self) -> bytes:
+            return fake_zarr_json
+
+    class _FakeStore:
+        async def get(self, key: str, prototype: object) -> _FakeBuffer:  # type: ignore[override]
+            return _FakeBuffer()
+
+    with patch("climate_api.providers.remote_zarr.open_icechunk_store", return_value=_FakeStore()):
+        response = services.get_dataset_zarr_store_file_or_404(dataset_id, "zarr.json")
+
+    from fastapi.responses import JSONResponse
+
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -632,13 +632,7 @@ def get_dataset_zarr_store_file_or_404(
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     if artifact.format == ArtifactFormat.REMOTE_ZARR:
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                f"Direct file access for remote zarr dataset '{dataset_id}' is not supported. "
-                f"Access the store directly at: {artifact.path}"
-            ),
-        )
+        return _proxy_remote_zarr_file(artifact, relative_path)
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -652,6 +646,46 @@ def get_dataset_zarr_store_file_or_404(
     if media_type is None:
         media_type = "application/octet-stream"
     return FileResponse(target, media_type=media_type, filename=target.name)
+
+
+def _proxy_remote_zarr_file(
+    artifact: ArtifactRecord,
+    relative_path: str,
+) -> Response | JSONResponse:
+    """Proxy a zarr v3 key from the underlying icechunk store."""
+    import asyncio
+
+    from zarr.core.buffer import default_buffer_prototype
+
+    from climate_api.providers.remote_zarr import open_icechunk_store
+
+    source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
+    store_config = source_dataset.get("store")
+    if not isinstance(store_config, dict) or store_config.get("store_format") != "icechunk":
+        raise HTTPException(
+            status_code=501,
+            detail=f"Direct file access not supported for dataset '{artifact.dataset_id}'. "
+            f"Access the store at: {artifact.path}",
+        )
+    try:
+        store = open_icechunk_store(store_config)
+        buf = asyncio.run(store.get(relative_path, default_buffer_prototype()))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
+    except Exception as exc:
+        logger.warning("Failed to proxy zarr key '%s' from remote store: %s", relative_path, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+        ) from exc
+
+    if buf is None:
+        raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
+
+    data: bytes = bytes(buf.as_array_like())
+    if relative_path.endswith(".json"):
+        return JSONResponse(content=json.loads(data))
+    return Response(content=data, media_type="application/octet-stream")
 
 
 def _load_records() -> list[ArtifactRecord]:

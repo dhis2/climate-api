@@ -23,8 +23,8 @@ def open_remote_dataset(source: dict[str, Any]) -> xr.Dataset:
     return _open_zarr_url(source)
 
 
-def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
-    """Open an Icechunk store via the icechunk library (v2 API)."""
+def open_icechunk_store(source: dict[str, Any]) -> Any:
+    """Open an Icechunk store and return the raw zarr v3 Store object for direct key access."""
     try:
         import icechunk
     except ImportError as exc:
@@ -44,7 +44,12 @@ def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
 
     storage = icechunk.s3_storage(bucket=bucket, prefix=prefix, region=region, anonymous=anon)
     repo = icechunk.Repository.open(storage)
-    store = repo.readonly_session(branch="main").store
+    return repo.readonly_session(branch="main").store
+
+
+def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:
+    """Open an Icechunk store via the icechunk library (v2 API)."""
+    store = open_icechunk_store(source)
     return xr.open_zarr(store, consolidated=False)  # type: ignore[no-any-return]
 
 
