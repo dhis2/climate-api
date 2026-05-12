@@ -314,6 +314,8 @@ def _derive_gefs_artifact(
         output_path_str = str(output_path.resolve())
         output_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("Writing derived forecast zarr to '%s'", output_path_str)
+        # Ensure ascending lat/lon order (GEFS raw store is lat-descending).
+        ds_daily = ds_daily.sortby(["latitude", "longitude"])
         # Resampling produces irregular dask chunks; rechunk to uniform before writing.
         ds_daily = ds_daily.chunk({"time": 10, "latitude": -1, "longitude": -1})
         ds_daily.to_zarr(output_path, mode="w", consolidated=True)
