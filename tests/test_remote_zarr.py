@@ -313,8 +313,6 @@ def test_zarr_store_file_for_remote_artifact_proxies_from_icechunk(
     import asyncio
     import json as _json
 
-    from starlette.testclient import TestClient
-
     monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
     monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
 

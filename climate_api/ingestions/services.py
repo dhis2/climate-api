@@ -176,15 +176,14 @@ def _register_remote_zarr_artifact(
         if coverage_data.get("has_data") and "lead_time" in ds.dims:
             import pandas as pd
 
+            from climate_api.data_accessor.services.accessor import _period_string_scalar  # noqa: PLC0415
             from climate_api.data_manager.services.utils import get_time_dim
             from climate_api.shared.time import numpy_datetime_to_period_string
-
-            from climate_api.data_accessor.services.accessor import _period_string_scalar  # noqa: PLC0415
 
             time_dim = get_time_dim(ds)
             forecast_end = pd.Timestamp(ds[time_dim].max().item()) + pd.Timedelta(ds["lead_time"].max().item())
             coverage_data["coverage"]["temporal"]["end"] = _period_string_scalar(
-                numpy_datetime_to_period_string(forecast_end.to_datetime64(), str(dataset["period_type"]))
+                numpy_datetime_to_period_string(forecast_end.to_datetime64(), str(dataset["period_type"]))  # type: ignore[arg-type]
             )
     finally:
         ds.close()
@@ -711,7 +710,7 @@ async def _proxy_remote_zarr_file(
         )
 
     # Parse HTTP Range header into a zarr ByteRequest.
-    byte_request = None
+    byte_request: SuffixByteRequest | RangeByteRequest | None = None
     content_range: str | None = None
     range_header = request.headers.get("range", "")
     if range_header.startswith("bytes="):
@@ -731,12 +730,12 @@ async def _proxy_remote_zarr_file(
                 content_range = f"bytes {start}-{end_inc}/*"
             else:
                 # Open-ended: bytes=start-
-                byte_request = RangeByteRequest(start=start, end=None)
                 total = await get_icechunk_key_size(store, relative_path, store_url)
+                byte_request = RangeByteRequest(start=start, end=total)
                 content_range = f"bytes {start}-{total - 1}/{total}"
 
     try:
-        buf = await store.get(relative_path, default_buffer_prototype(), byte_request)
+        buf = await store.get(relative_path, default_buffer_prototype(), byte_request)  # type: ignore[union-attr]
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
     except Exception as exc:

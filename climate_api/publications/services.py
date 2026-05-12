@@ -58,7 +58,9 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
                     # Pyramid zarr and remote zarr are served via /zarr, not pygeoapi.
-                    "pygeoapi_path": None if (is_pyramid_zarr or is_remote_zarr) else f"/ogcapi/collections/{collection_id}",
+                    "pygeoapi_path": (
+                        None if (is_pyramid_zarr or is_remote_zarr) else f"/ogcapi/collections/{collection_id}"
+                    ),
                 }
             )
         }
