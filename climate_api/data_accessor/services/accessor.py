@@ -23,22 +23,28 @@ def get_data(
     bbox: list[float] | None = None,
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
+    from climate_api.providers.remote_zarr import is_remote_source, open_remote_dataset
+
     logger.info("Opening dataset")
-    zarr_path = get_zarr_path(dataset)
-    if zarr_path:
-        logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = open_zarr_dataset(str(zarr_path))
+    if is_remote_source(dataset):
+        logger.info("Opening remote zarr store for dataset '%s'", dataset["id"])
+        ds = open_remote_dataset(dataset["store"])
     else:
-        logger.warning(
-            f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
-        )
-        files = get_cache_files(dataset)
-        ds = xr.open_mfdataset(
-            files,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+        zarr_path = get_zarr_path(dataset)
+        if zarr_path:
+            logger.info(f"Using optimized zarr file: {zarr_path}")
+            ds = open_zarr_dataset(str(zarr_path))
+        else:
+            logger.warning(
+                f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
+            )
+            files = get_cache_files(dataset)
+            ds = xr.open_mfdataset(
+                files,
+                data_vars="minimal",
+                coords="minimal",  # pyright: ignore[reportArgumentType]
+                compat="override",
+            )
 
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")

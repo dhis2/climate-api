@@ -145,6 +145,88 @@ def get_latest_artifact_for_dataset_or_404(dataset_id: str) -> ArtifactRecord:
     return max(artifacts, key=lambda artifact: artifact.created_at)
 
 
+def _register_remote_zarr_artifact(
+    *,
+    dataset: dict[str, object],
+    publish: bool,
+) -> ArtifactRecord:
+    """Register a remote Zarr/Icechunk store as an artifact without downloading anything."""
+    from climate_api.data_accessor.services.accessor import _coverage_from_dataset
+    from climate_api.providers.remote_zarr import open_remote_dataset
+
+    source = dataset["store"]
+    if not isinstance(source, dict):
+        raise HTTPException(status_code=500, detail=f"Dataset '{dataset['id']}' has invalid store block")
+    store_url = str(source["store_url"])
+
+    logger.info("Opening remote zarr store for dataset '%s': %s", dataset["id"], store_url)
+    ds = open_remote_dataset(source)
+    try:
+        native_crs = api_config.get_crs() or "EPSG:4326"
+        coverage_data = _coverage_from_dataset(
+            ds=ds,
+            period_type=str(dataset["period_type"]),
+            native_crs=native_crs,
+        )
+    finally:
+        ds.close()
+
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Remote zarr store contains no data")
+
+    raw_coverage = coverage_data["coverage"]
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**raw_coverage["temporal"]),
+        spatial=CoverageSpatial(**raw_coverage["spatial"]),
+        spatial_wgs84=CoverageSpatial(**raw_coverage["spatial_wgs84"]) if raw_coverage.get("spatial_wgs84") else None,
+    )
+    request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=str(dataset["id"]),
+        dataset_name=str(dataset["name"]),
+        variable=str(dataset["variable"]),
+        format=ArtifactFormat.REMOTE_ZARR,
+        path=store_url,
+        asset_paths=[store_url],
+        variables=[str(dataset["variable"])],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+
+    stored_record = _upsert_remote_zarr_record(record, publish=publish)
+    logger.info(
+        "Registered remote zarr artifact '%s' for dataset '%s': coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
+
+
+def _upsert_remote_zarr_record(record: ArtifactRecord, *, publish: bool) -> ArtifactRecord:
+    """Replace any existing remote zarr record for the same dataset, or insert a new one."""
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for index, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.format == ArtifactFormat.REMOTE_ZARR:
+                replacement = record.model_copy(
+                    update={"artifact_id": existing.artifact_id, "publication": existing.publication}
+                )
+                records[index] = replacement
+                return replacement
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
 def create_artifact(
     *,
     dataset: dict[str, object],
@@ -159,6 +241,11 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
+    from climate_api.providers.remote_zarr import is_remote_source
+
+    if is_remote_source(dataset):
+        return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
+
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
@@ -444,8 +531,11 @@ def plan_sync_dataset(
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     """Return a public Zarr store listing for a managed dataset."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
-    store_root = _get_zarr_root_or_409(artifact)
 
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        return _remote_zarr_store_info(dataset_id, artifact)
+
+    store_root = _get_zarr_root_or_409(artifact)
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
     store_attrs = _read_zarr_attrs(store_root)
     store_crs = store_attrs.get("proj:code") if store_attrs else None
@@ -459,6 +549,33 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
         "proj4": _crs_to_proj4(crs),
         "bounds": _read_zarr_bounds(store_attrs),
         "entries": entries,
+    }
+
+
+def _remote_zarr_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str, object]:
+    """Return store metadata for a remote zarr artifact."""
+    source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
+    raw_store = source_dataset.get("store", {})
+    store: dict[str, object] = raw_store if isinstance(raw_store, dict) else {}
+    crs = "EPSG:4326"
+    coverage = artifact.coverage
+    return {
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
+        "format": artifact.format,
+        "path": ".",
+        "crs": crs,
+        "proj4": _crs_to_proj4(crs),
+        "bounds": [
+            coverage.spatial.xmin,
+            coverage.spatial.ymin,
+            coverage.spatial.xmax,
+            coverage.spatial.ymax,
+        ],
+        "remote_url": artifact.path,
+        "provider": store.get("provider"),
+        "catalog_id": store.get("catalog_id"),
+        "entries": [],
     }
 
 
@@ -513,6 +630,14 @@ def get_dataset_zarr_store_file_or_404(
 ) -> FileResponse | Response | dict[str, object]:
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"Direct file access for remote zarr dataset '{dataset_id}' is not supported. "
+                f"Access the store directly at: {artifact.path}"
+            ),
+        )
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -792,7 +917,9 @@ def _materialized_records(records: list[ArtifactRecord]) -> list[ArtifactRecord]
 
 
 def _artifact_storage_exists(record: ArtifactRecord) -> bool:
-    """Return whether an artifact's on-disk backing files are still present."""
+    """Return whether an artifact's backing storage is still accessible."""
+    if record.format == ArtifactFormat.REMOTE_ZARR:
+        return True
     paths: list[str] = []
     if record.path is not None:
         paths.append(record.path)

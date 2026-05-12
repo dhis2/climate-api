@@ -75,6 +75,20 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
+
+    if sync_kind == SyncKind.REMOTE:
+        return SyncDetail(
+            source_dataset_id=latest_artifact.dataset_id,
+            sync_kind=sync_kind,
+            action=SyncAction.REMATERIALIZE,
+            reason="remote_store_refresh",
+            message=("Remote zarr store is always live. Sync will re-register the store to refresh coverage metadata."),
+            current_start=current_start,
+            current_end=current_end,
+            target_end=None,
+            target_end_source="remote",
+        )
+
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
@@ -214,6 +228,26 @@ def run_sync(
             status="not_syncable",
             message="Managed dataset is not syncable under its configured sync policy.",
             dataset=get_dataset_fn(dataset_id),
+            sync_detail=sync_detail,
+        )
+
+    # Remote datasets re-register through create_artifact; start/end are ignored.
+    if sync_detail.sync_kind == SyncKind.REMOTE:
+        artifact = create_artifact_fn(
+            dataset=source_dataset,
+            start=latest_artifact.coverage.temporal.start,
+            end=latest_artifact.coverage.temporal.end,
+            bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
+            country_code=country_code,
+            overwrite=True,
+            prefer_zarr=prefer_zarr,
+            publish=publish,
+        )
+        return SyncResponse(
+            sync_id=artifact.artifact_id,
+            status="completed",
+            message="Remote zarr store coverage metadata has been refreshed.",
+            dataset=get_dataset_fn(managed_dataset_id_for(artifact)),
             sync_detail=sync_detail,
         )
 

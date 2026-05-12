@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # When set, only this directory is loaded (no built-ins, no config override).
 CONFIGS_DIR: Path | None = None
 
-SUPPORTED_SYNC_KINDS = {"temporal", "release", "static"}
+SUPPORTED_SYNC_KINDS = {"temporal", "release", "static", "remote"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
 
@@ -149,16 +149,30 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
                 f"'{sync_execution}'. Supported values: {supported}"
             )
 
-    ingestion = dataset.get("ingestion")
-    if not isinstance(ingestion, dict):
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an 'ingestion' block")
-    function = ingestion.get("function")
-    if not isinstance(function, str) or not function:
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.function")
+    store_block = dataset.get("store")
+    is_remote_zarr = isinstance(store_block, dict) and store_block.get("kind") == "remote_zarr"
+
+    if is_remote_zarr:
+        _validate_remote_zarr_source(store_block, dataset_id=dataset_id, source=source)
+    else:
+        ingestion = dataset.get("ingestion")
+        if not isinstance(ingestion, dict):
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an 'ingestion' block")
+        function = ingestion.get("function")
+        if not isinstance(function, str) or not function:
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.function")
 
     sync_availability = sync_block.get("availability") if isinstance(sync_block, dict) else None
     if sync_availability is not None:
         _validate_sync_availability(sync_availability, dataset_id=dataset_id, source=source)
+
+
+def _validate_remote_zarr_source(source_block: object, *, dataset_id: str, source: str) -> None:
+    """Validate a remote_zarr source block."""
+    if not isinstance(source_block, dict):
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid source block")
+    if not source_block.get("store_url"):
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define source.store_url")
 
 
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:
