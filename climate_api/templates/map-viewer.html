@@ -286,15 +286,22 @@
       function generateDateRange(start, end, step) {
         const inc = parseDuration(step);
         if (!inc) return [start];
-        const steps = [];
-        let cur = new Date(start);
-        const endDate = new Date(end);
-        // Guard against accidentally generating tens of thousands of steps.
-        while (cur <= endDate && steps.length < 5000) {
-          steps.push(cur.toISOString().slice(0, 10));
-          cur = new Date(cur.getTime() + inc);
-        }
-        return steps;
+        const startMs = new Date(start).getTime();
+        const endMs = new Date(end).getTime();
+        if (isNaN(startMs) || isNaN(endMs)) return [start];
+        const count = Math.max(1, Math.floor((endMs - startMs) / inc) + 1);
+        return { lazy: true, start, inc, count };
+      }
+
+      function timeStepCount() {
+        return Array.isArray(timeSteps) ? timeSteps.length : timeSteps.count;
+      }
+
+      function timeStepAt(i) {
+        if (Array.isArray(timeSteps)) return timeSteps[i];
+        return new Date(new Date(timeSteps.start).getTime() + i * timeSteps.inc)
+          .toISOString()
+          .slice(0, 10);
       }
 
       // Minimal ISO 8601 duration parser for common climate period types.
@@ -392,6 +399,7 @@
 
       async function loadDataset(href) {
         setStatus("Loading...");
+        clearTimeout(_selectorDebounce);
         if (activeLayer) {
           try {
             map.removeLayer("zarr-layer");
@@ -458,7 +466,7 @@
           cm = buildColormap(colormapName);
           const zarrVersion = zarr["zarr:zarr_format"] ?? null;
           const selector =
-            timeSteps.length > 0 ? { [timeDimKey]: 0 } : {};
+            timeStepCount() > 0 ? { [timeDimKey]: 0 } : {};
           activeLayer = new ZarrLayer({
             id: "zarr-layer",
             source: zarr.href,
@@ -485,11 +493,11 @@
 
 
         // Time slider.
-        if (timeSteps.length > 1) {
-          timeSlider.max = timeSteps.length - 1;
+        if (timeStepCount() > 1) {
+          timeSlider.max = timeStepCount() - 1;
           timeSlider.value = 0;
-          timeValueEl.textContent = timeSteps[0];
-          timeCountEl.textContent = `1 / ${timeSteps.length}`;
+          timeValueEl.textContent = timeStepAt(0);
+          timeCountEl.textContent = `1 / ${timeStepCount()}`;
           timeSection.classList.remove("hidden");
         }
 
@@ -518,11 +526,17 @@
         if (e.target.value) loadDataset(e.target.value);
       });
 
+      let _selectorDebounce = null;
       timeSlider.addEventListener("input", (e) => {
         const i = parseInt(e.target.value, 10);
-        timeValueEl.textContent = timeSteps[i] ?? "—";
-        timeCountEl.textContent = `${i + 1} / ${timeSteps.length}`;
-        activeLayer?.setSelector({ [timeDimKey]: i });
+        timeValueEl.textContent = timeStepAt(i) ?? "—";
+        timeCountEl.textContent = `${i + 1} / ${timeStepCount()}`;
+        const layer = activeLayer;
+        const dimKey = timeDimKey;
+        clearTimeout(_selectorDebounce);
+        _selectorDebounce = setTimeout(() => {
+          layer?.setSelector({ [dimKey]: i });
+        }, 150);
       });
 
       map.on("load", () => {
