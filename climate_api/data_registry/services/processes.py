@@ -25,9 +25,11 @@ def _normalize_process_definition(process: dict[str, Any]) -> dict[str, Any]:
     execution = normalized.get("execution")
     if not isinstance(execution, dict):
         execution = {}
+    else:
+        execution = dict(execution)
     normalized["execution"] = execution
 
-    if "expose" not in normalized:
+    if "expose" not in normalized or normalized["expose"] is None:
         normalized["expose"] = True
 
     if "jobControlOptions" not in normalized or normalized["jobControlOptions"] is None:
@@ -136,6 +138,10 @@ def _validate_process(process: object, *, source: str) -> None:
     if not isinstance(title, str) or not title:
         raise ValueError(f"Process '{process_id}' in {source} must define title")
 
+    description = process.get("description")
+    if description is not None and not isinstance(description, str):
+        raise ValueError(f"Process '{process_id}' in {source} has invalid description")
+
     execution = process.get("execution")
     if isinstance(execution, dict):
         execution_function = execution.get("function")
@@ -150,7 +156,9 @@ def _validate_process(process: object, *, source: str) -> None:
 
     job_control_options = process.get("jobControlOptions")
     if job_control_options is not None and (
-        not isinstance(job_control_options, list) or not all(isinstance(item, str) for item in job_control_options)
+        not isinstance(job_control_options, list)
+        or not job_control_options
+        or not all(isinstance(item, str) for item in job_control_options)
     ):
         raise ValueError(f"Process '{process_id}' in {source} has invalid jobControlOptions")
 

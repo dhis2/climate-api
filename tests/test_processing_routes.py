@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -59,6 +60,7 @@ def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
     assert payload["jobControlOptions"] == ["sync-execute"]
     assert "execution_function" not in payload
     assert payload["inputs"]["source_dataset_id"]["required"] is True
+    assert payload["inputs"]["publish"]["default"] is True
     assert payload["outputs"]["artifact_id"]["type"] == "string"
 
 
@@ -114,6 +116,36 @@ def test_get_internal_process_detail_returns_404(client: TestClient, monkeypatch
     response = client.get("/processes/internal_process")
 
     assert response.status_code == 404
+
+
+def test_expose_false_yaml_fixture_is_hidden_from_catalog_and_routes(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "internal.yaml").write_text(
+        """
+- id: internal_process
+  title: Internal process
+  expose: false
+  execution:
+    function: mypackage.internal.execute
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("climate_api.data_registry.services.processes.CONFIGS_DIR", processes_subdir)
+
+    catalog_response = client.get("/processes")
+    assert catalog_response.status_code == 200
+    assert catalog_response.json()["processes"] == []
+
+    detail_response = client.get("/processes/internal_process")
+    assert detail_response.status_code == 404
+
+    execution_response = client.post("/processes/internal_process/execution", json={})
+    assert execution_response.status_code == 404
 
 
 def test_post_resample_execution_returns_completed_response(
@@ -269,3 +301,32 @@ def test_post_process_execution_returns_500_for_invalid_execution_function(
 
     assert response.status_code == 500
     assert "Failed to load execution.function" in response.json()["detail"]
+
+
+def test_post_process_execution_returns_400_for_execution_value_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Broken process",
+            "execution": {"function": "mypackage.broken.execute"},
+            "expose": True,
+            "jobControlOptions": ["sync-execute"],
+        },
+    )
+
+    def _raise_value_error(full_path: str) -> object:
+        def _func(**_: object) -> object:
+            raise ValueError("Bad execution input")
+
+        return _func
+
+    monkeypatch.setattr("climate_api.processing.routes.process_registry._get_dynamic_function", _raise_value_error)
+
+    response = client.post("/processes/broken_process/execution", json={})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Bad execution input"

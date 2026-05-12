@@ -31,7 +31,7 @@ def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch
     assert process_registry.get_process("does_not_exist") is None
 
 
-def test_process_registry_rejects_missing_title_and_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_process_registry_rejects_missing_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
     (processes_subdir / "no_name.yaml").write_text(
@@ -207,3 +207,41 @@ def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.
 
     process = process_registry.list_processes()[0]
     assert process["jobControlOptions"] == ["sync-execute"]
+
+
+def test_process_registry_defaults_null_expose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "null_expose.yaml").write_text(
+        """
+- id: null_expose
+  title: Null expose
+  expose:
+  execution:
+    function: mypackage.execute.run
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    process = process_registry.list_processes()[0]
+    assert process["expose"] is True
+
+
+def test_process_registry_rejects_empty_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "empty_job_control_options.yaml").write_text(
+        """
+- id: empty_job_control_options
+  title: Empty job control options
+  jobControlOptions: []
+  execution:
+    function: mypackage.execute.run
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    with pytest.raises(ValueError, match="invalid jobControlOptions"):
+        process_registry.list_processes()

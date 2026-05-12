@@ -35,6 +35,7 @@ def _field_map(raw: object) -> dict[str, ProcessField]:
                 required=value.get("required") if isinstance(value.get("required"), bool) else None,
                 description=value.get("description") if isinstance(value.get("description"), str) else None,
                 enum=[item for item in raw_enum if isinstance(item, str)] if isinstance(raw_enum, list) else None,
+                default=value.get("default"),
             )
         else:
             result[key] = ProcessField()
@@ -42,16 +43,16 @@ def _field_map(raw: object) -> dict[str, ProcessField]:
 
 
 def _public_process_summary(process: dict[str, Any]) -> ProcessSummary:
-    process_id = str(process["id"])
+    process_id = process["id"]
     keywords = process.get("keywords")
     job_control_options = process.get("jobControlOptions")
     return ProcessSummary(
         id=process_id,
-        title=str(process["title"]),
-        description=str(process["description"]) if isinstance(process.get("description"), str) else None,
-        version=str(process["version"]) if isinstance(process.get("version"), str) else None,
+        title=process["title"],
+        description=process.get("description") if isinstance(process.get("description"), str) else None,
+        version=process.get("version") if isinstance(process.get("version"), str) else None,
         keywords=[k for k in keywords if isinstance(k, str)] if isinstance(keywords, list) else [],
-        jobControlOptions=[value for value in job_control_options if isinstance(value, str)]
+        job_control_options=[value for value in job_control_options if isinstance(value, str)]
         if isinstance(job_control_options, list)
         else [],
         links=_process_links(process_id),
@@ -75,7 +76,7 @@ def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
 
 
 @router.get("", response_model=ProcessListResponse)
-def list_processes() -> ProcessListResponse:
+def get_processes_catalog() -> ProcessListResponse:
     """Return the registered native process catalog."""
     visible = [process for process in process_registry.list_processes() if process["expose"]]
     return ProcessListResponse(
@@ -100,11 +101,15 @@ def run_process_execution(
     process = _get_public_process_or_404(process_id)
     try:
         func = process_registry._get_dynamic_function(process["execution"]["function"])
-        return func(**request)
     except (ImportError, AttributeError, ValueError) as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to load execution.function for process '{process_id}': {exc}",
         ) from exc
+
+    try:
+        return func(**request)
     except TypeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

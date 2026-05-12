@@ -42,6 +42,7 @@
     publish:
       type: boolean
       required: false
+      default: true
       description: Publish the resulting artifact after materialization.
   outputs:
     artifact_id:

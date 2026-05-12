@@ -1,6 +1,8 @@
 """Pydantic schemas for native process discovery endpoints."""
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProcessLink(BaseModel):
@@ -18,17 +20,24 @@ class ProcessField(BaseModel):
     required: bool | None = None
     description: str | None = None
     enum: list[str] | None = None
+    default: Any | None = None
 
 
 class ProcessSummary(BaseModel):
     """Public summary view of one registered process."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str
     title: str
     description: str | None = None
     version: str | None = None
     keywords: list[str] = Field(default_factory=list)
-    jobControlOptions: list[str] = Field(default_factory=list)
+    job_control_options: list[str] = Field(
+        default_factory=list,
+        validation_alias="jobControlOptions",
+        serialization_alias="jobControlOptions",
+    )
     links: list[ProcessLink] = Field(default_factory=list)
 
 
