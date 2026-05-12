@@ -199,6 +199,8 @@ NULL check combined with comparison:
 
 OGC API - Processes exposes server-side processing tasks. Each process defines typed inputs and outputs and can be executed synchronously or asynchronously via `POST`.
 
+For Climate API, the canonical process surface is now the native [`/processes`](processes.md) API. The `/ogcapi/processes` paths below describe the older pygeoapi-centered process surface and should not be treated as the primary entrypoint for current native process work.
+
 ### Available processes
 
 | Process                   | ID                       | Description                                                                                                |

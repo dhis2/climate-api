@@ -8,7 +8,7 @@ class ProcessLink(BaseModel):
 
     href: str
     rel: str
-    title: str
+    title: str | None = None
 
 
 class ProcessField(BaseModel):

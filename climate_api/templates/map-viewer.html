@@ -381,7 +381,7 @@
       }
 
       async function fitToExtent() {
-        if (!map) return;
+        if (!map || mapUnavailable) return;
         try {
           const res = await fetch("{{ base }}/extent");
           if (!res.ok) return;

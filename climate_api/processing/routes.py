@@ -67,10 +67,17 @@ def _public_process_detail(process: dict[str, Any]) -> ProcessDetail:
     )
 
 
+def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
+    process = process_registry.get_process(process_id)
+    if process is None or not process["expose"]:
+        raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+    return process
+
+
 @router.get("", response_model=ProcessListResponse)
 def list_processes() -> ProcessListResponse:
     """Return the registered native process catalog."""
-    visible = [process for process in process_registry.list_processes() if process.get("expose", True) is not False]
+    visible = [process for process in process_registry.list_processes() if process["expose"]]
     return ProcessListResponse(
         processes=[_public_process_summary(process) for process in visible],
         links=_catalog_links(),
@@ -80,9 +87,7 @@ def list_processes() -> ProcessListResponse:
 @router.get("/{process_id}", response_model=ProcessDetail)
 def get_process(process_id: str) -> ProcessDetail:
     """Return one registered process description."""
-    process = process_registry.get_process(process_id)
-    if process is None:
-        raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+    process = _get_public_process_or_404(process_id)
     return _public_process_detail(process)
 
 
@@ -92,11 +97,14 @@ def run_process_execution(
     request: dict[str, Any] = Body(...),
 ) -> Any:
     """Dispatch to a registered process execution function by process id."""
-    process = process_registry.get_process(process_id)
-    if process is None:
-        raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
-    func = process_registry._get_dynamic_function(process["execution"]["function"])
+    process = _get_public_process_or_404(process_id)
     try:
+        func = process_registry._get_dynamic_function(process["execution"]["function"])
         return func(**request)
+    except (ImportError, AttributeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load execution.function for process '{process_id}': {exc}",
+        ) from exc
     except TypeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

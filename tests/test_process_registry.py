@@ -90,7 +90,7 @@ def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyP
     assert processes["resample"]["execution"]["function"] == "mypackage.resample.execute"
 
 
-def test_process_registry_rejects_legacy_name_and_execution_function(
+def test_process_registry_rejects_legacy_name_without_title(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     processes_subdir = tmp_path / "processes"

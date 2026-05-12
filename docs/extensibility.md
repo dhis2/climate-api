@@ -135,8 +135,6 @@ def execute(*, source_dataset_id: str, factor: float, **_ignored: Any) -> dict[s
 
 Invalid or missing arguments raise `TypeError`, which the route dispatcher catches and returns as HTTP 400.
 
-Longer term, process execution is expected to converge on an `inputs + context` contract; this page documents the current repository behavior.
-
 For the built-in `resample` process and usage examples, see [Processes](processes.md).
 
 ---

@@ -99,6 +99,23 @@ def test_get_unknown_process_detail_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_get_internal_process_detail_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Internal process",
+            "execution": {"function": "mypackage.internal.execute"},
+            "expose": False,
+            "jobControlOptions": ["sync-execute"],
+        },
+    )
+
+    response = client.get("/processes/internal_process")
+
+    assert response.status_code == 404
+
+
 def test_post_resample_execution_returns_completed_response(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -126,6 +143,23 @@ def test_post_resample_execution_returns_completed_response(
     assert payload["artifact_id"] == "artifact-123"
     assert payload["status"] == "completed"
     assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_daily_w_mon_sum"
+
+
+def test_post_internal_process_execution_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Internal process",
+            "execution": {"function": "mypackage.internal.execute"},
+            "expose": False,
+            "jobControlOptions": ["sync-execute"],
+        },
+    )
+
+    response = client.post("/processes/internal_process/execution", json={})
+
+    assert response.status_code == 404
 
 
 def test_post_resample_execution_passes_params_to_service(
@@ -209,3 +243,29 @@ def test_post_unknown_process_id_returns_404(
         },
     )
     assert response.status_code == 404
+
+
+def test_post_process_execution_returns_500_for_invalid_execution_function(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Broken process",
+            "execution": {"function": "mypackage.broken.execute"},
+            "expose": True,
+            "jobControlOptions": ["sync-execute"],
+        },
+    )
+
+    def _raise_import_error(full_path: str) -> object:
+        raise ModuleNotFoundError(f"No module named for {full_path}")
+
+    monkeypatch.setattr("climate_api.processing.routes.process_registry._get_dynamic_function", _raise_import_error)
+
+    response = client.post("/processes/broken_process/execution", json={})
+
+    assert response.status_code == 500
+    assert "Failed to load execution.function" in response.json()["detail"]
