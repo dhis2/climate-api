@@ -7,6 +7,7 @@ import xarray as xr
 # Module-level caches keyed by store_url so each remote store is opened once.
 _store_cache: dict[str, Any] = {}
 _store_size_cache: dict[tuple[str, str], int] = {}
+_dataset_cache: dict[str, xr.Dataset] = {}
 
 
 def is_remote_source(dataset: dict[str, Any]) -> bool:
@@ -20,11 +21,17 @@ def open_remote_dataset(source: dict[str, Any]) -> xr.Dataset:
 
     Dispatches on source.store_format: 'icechunk' uses the icechunk library;
     anything else falls back to xr.open_zarr with fsspec.
+
+    The opened dataset is cached per store_url so coordinates and metadata are
+    read from S3 only once per process.
     """
+    store_url: str = source.get("store_url", "")
+    if store_url in _dataset_cache:
+        return _dataset_cache[store_url]
     store_format = source.get("store_format", "zarr")
-    if store_format == "icechunk":
-        return _open_icechunk(source)
-    return _open_zarr_url(source)
+    ds = _open_icechunk(source) if store_format == "icechunk" else _open_zarr_url(source)
+    _dataset_cache[store_url] = ds
+    return ds
 
 
 def open_icechunk_store(source: dict[str, Any]) -> Any:
@@ -67,6 +74,23 @@ async def get_icechunk_key_size(store: Any, key: str, store_url: str) -> int:
     size: int = await store.getsize(key)
     _store_size_cache[cache_key] = size
     return size
+
+
+def warmup_remote_store(source: dict[str, Any]) -> None:
+    """Open and cache the store and dataset for a remote source block.
+
+    Intended to be called at server startup (in a background thread) so the
+    first real request hits warm caches instead of cold S3 connections.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    store_url: str = source.get("store_url", "")
+    try:
+        open_remote_dataset(source)
+        logger.info("Warmed up remote zarr store: %s", store_url)
+    except Exception as exc:
+        logger.warning("Failed to warm up remote zarr store '%s': %s", store_url, exc)
 
 
 def _open_icechunk(source: dict[str, Any]) -> xr.Dataset:

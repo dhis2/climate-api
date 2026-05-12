@@ -659,7 +659,7 @@ async def _proxy_remote_zarr_file(
     from zarr.abc.store import RangeByteRequest, SuffixByteRequest
     from zarr.core.buffer import default_buffer_prototype
 
-    from climate_api.providers.remote_zarr import get_icechunk_key_size, open_icechunk_store
+    from climate_api.providers.remote_zarr import _store_cache, get_icechunk_key_size, open_icechunk_store
 
     source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
     store_config = source_dataset.get("store")
@@ -671,8 +671,9 @@ async def _proxy_remote_zarr_file(
         )
     store_url: str = store_config.get("store_url", "")
     try:
-        # open_icechunk_store is cached after the first call — fast dict lookup after warmup.
-        store = await asyncio.to_thread(open_icechunk_store, store_config)
+        # Fast path: store already cached — just a dict lookup, no thread needed.
+        # Cold path: open_icechunk_store makes blocking S3 calls, so run in a thread.
+        store = _store_cache.get(store_url) or await asyncio.to_thread(open_icechunk_store, store_config)
     except Exception as exc:
         logger.warning("Failed to open remote store for '%s': %s", artifact.dataset_id, exc)
         raise HTTPException(
