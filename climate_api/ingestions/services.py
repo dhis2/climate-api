@@ -9,12 +9,7 @@ import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 from uuid import uuid4
-
-if TYPE_CHECKING:
-    import pandas as pd
-    import xarray as xr
 
 import portalocker
 import pyproj
@@ -255,110 +250,59 @@ def _is_derived_source(dataset: dict[str, object]) -> bool:
     return isinstance(sync, dict) and sync.get("kind") == "derived"
 
 
-def _most_recent_complete_init(ds_raw: xr.Dataset, *, variable: str) -> pd.Timestamp:
-    """Return the most recent init_time that has a complete forecast.
-
-    The latest run is often still being distributed and has NaN placeholders
-    at the longer lead_times.  Walk backwards through the last 5 init_times
-    and return the first one whose final lead_time is non-NaN.
-    """
-    import numpy as np
-    import pandas as pd
-
-    init_times = sorted(ds_raw.init_time.values, reverse=True)
-    for candidate in init_times[:5]:
-        t = pd.Timestamp(candidate)
-        sel_kwargs: dict[str, object] = {"init_time": t, "lead_time": ds_raw.lead_time.values[-1]}
-        if "ensemble_member" in ds_raw[variable].dims:
-            sel_kwargs["ensemble_member"] = ds_raw.ensemble_member.values[0]
-        test_val = ds_raw[variable].sel(sel_kwargs).isel(latitude=0, longitude=0).values
-        if not np.isnan(float(test_val)):
-            return t
-    return pd.Timestamp(init_times[0])
-
-
-def _derive_gefs_artifact(
+def _derive_artifact(
     *,
     dataset: dict[str, object],
     publish: bool,
 ) -> ArtifactRecord:
-    """Derive a local zarr artifact from the latest GEFS remote store run.
+    """Derive a local zarr artifact by calling the template's ingestion.function.
 
-    Selects the most recent init_time, averages over ensemble members (if
-    present), maps lead_time → valid_time, subsets to the configured instance
-    extent, resamples 6-hourly steps to daily mean, and writes a standard
-    flat zarr.  The result is registered as a normal ZARR artifact so all
-    existing serving infrastructure (ZarrLayer, pygeoapi, time slider) works
-    without special-casing.
+    The function is resolved from the dotted path in ``ingestion.function`` and
+    called with a standard keyword-only contract:
+
+        derive_fn(
+            *,
+            store_config: dict,       # the template's ``store`` block
+            output_path: Path,        # where to write the zarr
+            extent: dict | None,      # configured instance spatial extent
+            variable: str,            # primary variable name
+            period_type: str,         # e.g. "daily"
+        ) -> None
+
+    After the function returns, the service reads back the zarr to compute
+    coverage and registers the artifact.  The built-in implementation for GEFS
+    is ``climate_api.processing.gefs.derive_dataset``.
     """
-    import pandas as pd
+    from climate_api.data_manager.services.downloader import _get_dynamic_function
 
+    ingestion = dataset.get("ingestion")
+    if not isinstance(ingestion, dict) or not ingestion.get("function"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset '{dataset['id']}' derived template must define ingestion.function",
+        )
     source_store = dataset.get("store")
     if not isinstance(source_store, dict):
         raise HTTPException(
             status_code=500,
-            detail=f"Dataset '{dataset['id']}' is missing a store block",
+            detail=f"Dataset '{dataset['id']}' derived template must define a store block",
         )
-
-    from climate_api.providers.remote_zarr import open_remote_dataset
 
     variable = str(dataset["variable"])
+    output_path = ARTIFACTS_DIR / f"{dataset['id']}.zarr"
 
-    logger.info("Deriving forecast artifact for '%s'", dataset["id"])
+    derive_fn = _get_dynamic_function(str(ingestion["function"]))
+    logger.info("Deriving artifact for '%s' via %s", dataset["id"], ingestion["function"])
+    derive_fn(
+        store_config=source_store,
+        output_path=output_path,
+        extent=get_extent(),
+        variable=variable,
+        period_type=str(dataset["period_type"]),
+    )
 
-    ds_raw = open_remote_dataset(source_store)
-    try:
-        latest_init = _most_recent_complete_init(ds_raw, variable=variable)
-        logger.info("Selected init_time %s for '%s'", latest_init.date(), dataset["id"])
-        ds_run = ds_raw[[variable]].sel(init_time=latest_init)
-
-        if "ensemble_member" in ds_run.dims:
-            ds_run = ds_run.mean(dim="ensemble_member")
-
-        valid_times = latest_init + pd.to_timedelta(ds_run.lead_time.values)
-        ds_run = (
-            ds_run.assign_coords(time=("lead_time", valid_times.values))
-            .swap_dims({"lead_time": "time"})
-            .drop_vars("lead_time", errors="ignore")
-        )
-        # Drop 2-D auxiliary coords (e.g. valid_time indexed by init_time×lead_time)
-        # that become meaningless after selecting a single init_time.
-        aux = [c for c in ds_run.coords if c not in ds_run.dims and c != variable]
-        if aux:
-            ds_run = ds_run.drop_vars(aux, errors="ignore")
-
-        extent = get_extent()
-        if extent is not None:
-            xmin, ymin, xmax, ymax = extent["bbox"]
-            lat = ds_run.latitude
-            if float(lat.values[0]) > float(lat.values[-1]):
-                ds_run = ds_run.sel(latitude=slice(ymax, ymin), longitude=slice(xmin, xmax))
-            else:
-                ds_run = ds_run.sel(latitude=slice(ymin, ymax), longitude=slice(xmin, xmax))
-
-        ds_daily = ds_run.resample(time="1D").mean()
-
-        # Drop trailing time steps that are entirely NaN — these are unpublished
-        # lead_times that exist as placeholders in the icechunk store but have no
-        # actual forecast data yet (the run is still being distributed).
-        valid_mask: xr.DataArray = ds_daily[variable].isnull().all(dim=["latitude", "longitude"]).compute()
-        first_all_nan = int(valid_mask.argmax().item()) if bool(valid_mask.any().item()) else len(valid_mask)  # type: ignore[union-attr]
-        if first_all_nan < len(valid_mask):
-            ds_daily = ds_daily.isel(time=slice(None, first_all_nan))
-
-        output_path = ARTIFACTS_DIR / f"{dataset['id']}.zarr"
-        output_path_str = str(output_path.resolve())
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info("Writing derived forecast zarr to '%s'", output_path_str)
-        # Ensure ascending lat/lon order (GEFS raw store is lat-descending).
-        ds_daily = ds_daily.sortby(["latitude", "longitude"])
-        # Resampling produces irregular dask chunks; rechunk to uniform before writing.
-        ds_daily = ds_daily.chunk({"time": 10, "latitude": -1, "longitude": -1})
-        ds_daily.to_zarr(output_path, mode="w", consolidated=True)
-    finally:
-        ds_raw.close()
-
-    # Derived GEFS data is always in WGS84 — use EPSG:4326 explicitly so the
+    output_path_str = str(output_path.resolve())
+    # Derived forecast data is WGS84-native — pass native_crs explicitly so the
     # instance CRS (e.g. UTM) is not applied, which would corrupt spatial_wgs84.
     from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
 
@@ -444,7 +388,7 @@ def create_artifact(
     from climate_api.providers.remote_zarr import is_remote_source
 
     if _is_derived_source(dataset):
-        return _derive_gefs_artifact(dataset=dataset, publish=publish)
+        return _derive_artifact(dataset=dataset, publish=publish)
 
     if is_remote_source(dataset):
         return _register_remote_zarr_artifact(dataset=dataset, publish=publish)

@@ -401,3 +401,118 @@ def test_plan_sync_remote_always_rematerializes():
     assert detail.sync_kind == SyncKind.REMOTE
     assert detail.action == SyncAction.REMATERIALIZE
     assert detail.reason == "remote_store_refresh"
+
+
+# ---------------------------------------------------------------------------
+# processing.gefs — most_recent_complete_init
+# ---------------------------------------------------------------------------
+
+
+def test_most_recent_complete_init_skips_incomplete_run() -> None:
+    """Returns the most recent init_time whose last lead_time is non-NaN."""
+    from climate_api.processing.gefs import most_recent_complete_init
+
+    lead_times = pd.to_timedelta([0, 6, 12], unit="h")
+    # First init_time: all lead_times valid. Second (latest): last lead_time is NaN.
+    data = np.array(
+        [
+            [[1.0, 1.0], [1.0, 1.0]],  # init 0: lead 0 — valid
+            [[1.0, 1.0], [1.0, 1.0]],  # init 0: lead 1 — valid
+            [[1.0, 1.0], [1.0, 1.0]],  # init 0: lead 2 — valid
+            [[1.0, 1.0], [1.0, 1.0]],  # init 1: lead 0 — valid
+            [[1.0, 1.0], [1.0, 1.0]],  # init 1: lead 1 — valid
+            [[np.nan, np.nan], [np.nan, np.nan]],  # init 1: lead 2 — NaN (still distributing)
+        ],
+        dtype="float32",
+    ).reshape(2, 3, 2, 2)
+
+    init_times = pd.to_datetime(["2026-05-11", "2026-05-12"])
+    ds = xr.Dataset(
+        {"precipitation_surface": (["init_time", "lead_time", "latitude", "longitude"], data)},
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+            "latitude": [0.0, 1.0],
+            "longitude": [0.0, 1.0],
+        },
+    )
+
+    result = most_recent_complete_init(ds, variable="precipitation_surface")
+    assert result == pd.Timestamp("2026-05-11")
+
+
+def test_most_recent_complete_init_returns_latest_when_complete() -> None:
+    """Returns the latest init_time when its forecast is fully distributed."""
+    from climate_api.processing.gefs import most_recent_complete_init
+
+    lead_times = pd.to_timedelta([0, 6], unit="h")
+    data = np.ones((2, 2, 2, 2), dtype="float32")
+    init_times = pd.to_datetime(["2026-05-11", "2026-05-12"])
+    ds = xr.Dataset(
+        {"precipitation_surface": (["init_time", "lead_time", "latitude", "longitude"], data)},
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+            "latitude": [0.0, 1.0],
+            "longitude": [0.0, 1.0],
+        },
+    )
+
+    result = most_recent_complete_init(ds, variable="precipitation_surface")
+    assert result == pd.Timestamp("2026-05-12")
+
+
+# ---------------------------------------------------------------------------
+# ingestions.services — derived artifact routing
+# ---------------------------------------------------------------------------
+
+_DERIVED_DATASET: dict[str, Any] = {
+    "id": "gefs_precipitation_forecast",
+    "name": "Precipitation forecast (NOAA GEFS)",
+    "variable": "precipitation_surface",
+    "period_type": "daily",
+    "sync": {"kind": "derived"},
+    "ingestion": {"function": "climate_api.processing.gefs.derive_dataset"},
+    "store": _GEFS_STORE,
+}
+
+
+def test_create_artifact_routes_derived_to_derive_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """create_artifact calls the ingestion.function for sync.kind: derived."""
+    monkeypatch.setattr(services, "ARTIFACTS_DIR", tmp_path / "artifacts")
+    monkeypatch.setattr(services, "ARTIFACTS_INDEX_PATH", tmp_path / "artifacts" / "records.json")
+    monkeypatch.setattr(services, "get_extent", lambda: None)
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_derive(
+        *, store_config: object, output_path: Path, extent: object, variable: str, period_type: str
+    ) -> None:
+        calls.append({"store_config": store_config, "variable": variable, "period_type": period_type})
+        # Write a minimal zarr so coverage computation can proceed.
+        ds = xr.Dataset(
+            {"precipitation_surface": (["time", "latitude", "longitude"], np.ones((2, 3, 3), dtype="float32"))},
+            coords={
+                "time": pd.date_range("2026-05-11", periods=2, freq="D"),
+                "latitude": [0.0, 1.0, 2.0],
+                "longitude": [0.0, 1.0, 2.0],
+            },
+        )
+        ds.to_zarr(output_path, mode="w", consolidated=True)
+
+    with patch("climate_api.data_manager.services.downloader._get_dynamic_function", return_value=fake_derive):
+        record = services.create_artifact(
+            dataset=_DERIVED_DATASET,
+            start="2026-05-11",
+            end=None,
+            bbox=None,
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+    assert len(calls) == 1
+    assert calls[0]["variable"] == "precipitation_surface"
+    assert calls[0]["store_config"] == _GEFS_STORE
+    assert record.format == ArtifactFormat.ZARR

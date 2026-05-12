@@ -5,6 +5,8 @@
   period_type: daily
   sync:
     kind: derived
+  ingestion:
+    function: climate_api.processing.gefs.derive_dataset
   store:
     kind: remote_zarr
     provider: dynamical
@@ -30,6 +32,8 @@
   period_type: daily
   sync:
     kind: derived
+  ingestion:
+    function: climate_api.processing.gefs.derive_dataset
   store:
     kind: remote_zarr
     provider: dynamical
