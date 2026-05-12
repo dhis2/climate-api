@@ -310,6 +310,14 @@ def _derive_gefs_artifact(
 
         ds_daily = ds_run.resample(time="1D").mean()
 
+        # Drop trailing time steps that are entirely NaN — these are unpublished
+        # lead_times that exist as placeholders in the icechunk store but have no
+        # actual forecast data yet (the run is still being distributed).
+        valid_mask = ds_daily[variable].isnull().all(dim=["latitude", "longitude"]).compute()
+        first_all_nan = int(valid_mask.argmax().item()) if bool(valid_mask.any().item()) else len(valid_mask)
+        if first_all_nan < len(valid_mask):
+            ds_daily = ds_daily.isel(time=slice(None, first_all_nan))
+
         output_path = ARTIFACTS_DIR / f"{dataset['id']}.zarr"
         output_path_str = str(output_path.resolve())
         output_path.parent.mkdir(parents=True, exist_ok=True)

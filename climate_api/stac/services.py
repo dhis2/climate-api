@@ -173,7 +173,10 @@ def _build_collection_template(
     )
     from climate_api import config as api_config
 
-    native_crs = "EPSG:4326" if artifact.format == ArtifactFormat.REMOTE_ZARR else (api_config.get_crs() or "EPSG:4326")
+    # REMOTE_ZARR and WGS84-native local zarr (spatial_wgs84 is None → data IS WGS84) both use EPSG:4326.
+    # Local zarr reprojected to instance CRS has spatial_wgs84 set and uses the instance CRS.
+    is_wgs84_native = artifact.format == ArtifactFormat.REMOTE_ZARR or artifact.coverage.spatial_wgs84 is None
+    native_crs = "EPSG:4326" if is_wgs84_native else (api_config.get_crs() or "EPSG:4326")
     template.extra_fields["keywords"] = _keywords(artifact, source_dataset)
     template.extra_fields["proj:code"] = native_crs
     template.clear_links()
