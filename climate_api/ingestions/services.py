@@ -250,6 +250,28 @@ def _is_derived_source(dataset: dict[str, object]) -> bool:
     return isinstance(sync, dict) and sync.get("kind") == "derived"
 
 
+def _most_recent_complete_init(ds_raw: object, *, variable: str) -> object:
+    """Return the most recent init_time that has a complete forecast.
+
+    The latest run is often still being distributed and has NaN placeholders
+    at the longer lead_times.  Walk backwards through the last 5 init_times
+    and return the first one whose final lead_time is non-NaN.
+    """
+    import numpy as np
+    import pandas as pd
+
+    init_times = sorted(ds_raw.init_time.values, reverse=True)
+    for candidate in init_times[:5]:
+        t = pd.Timestamp(candidate)
+        sel_kwargs: dict[str, object] = {"init_time": t, "lead_time": ds_raw.lead_time.values[-1]}
+        if "ensemble_member" in ds_raw[variable].dims:
+            sel_kwargs["ensemble_member"] = ds_raw.ensemble_member.values[0]
+        test_val = ds_raw[variable].sel(sel_kwargs).isel(latitude=0, longitude=0).values
+        if not np.isnan(float(test_val)):
+            return t
+    return pd.Timestamp(init_times[0])
+
+
 def _derive_gefs_artifact(
     *,
     dataset: dict[str, object],
@@ -281,7 +303,8 @@ def _derive_gefs_artifact(
 
     ds_raw = open_remote_dataset(source_store)
     try:
-        latest_init = pd.Timestamp(ds_raw.init_time.max().item())
+        latest_init = _most_recent_complete_init(ds_raw, variable=variable)
+        logger.info("Selected init_time %s for '%s'", latest_init.date(), dataset["id"])
         ds_run = ds_raw[[variable]].sel(init_time=latest_init)
 
         if "ensemble_member" in ds_run.dims:
