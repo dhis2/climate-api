@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # When set, only this directory is loaded (no built-ins, no config override).
 CONFIGS_DIR: Path | None = None
 
-SUPPORTED_SYNC_KINDS = {"temporal", "release", "static", "remote"}
+SUPPORTED_SYNC_KINDS = {"temporal", "release", "static", "remote", "derived"}
 SUPPORTED_SYNC_EXECUTIONS = {"append", "rematerialize"}
 
 
@@ -151,9 +151,14 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
 
     store_block = dataset.get("store")
     is_remote_zarr = isinstance(store_block, dict) and store_block.get("kind") == "remote_zarr"
+    is_derived = sync_kind == "derived"
 
     if is_remote_zarr:
         _validate_remote_zarr_source(store_block, dataset_id=dataset_id, source=source)
+    elif is_derived:
+        sync_source = sync_block.get("source_dataset_id") if isinstance(sync_block, dict) else None
+        if not isinstance(sync_source, str) or not sync_source:
+            raise ValueError(f"Dataset template '{dataset_id}' in {source} must define sync.source_dataset_id")
     else:
         ingestion = dataset.get("ingestion")
         if not isinstance(ingestion, dict):
