@@ -294,7 +294,6 @@ def _build_remote_zarr_collection(
         cube_dims = _cube_dimensions_from_dataset(ds, x_dim=x_dim, y_dim=y_dim, time_dim=time_dim)
         cube_vars = _cube_variables_from_dataset(ds, artifact=artifact)
     except Exception as exc:
-        ds.close()
         logger.exception("Failed to build STAC metadata for remote artifact '%s'", artifact.artifact_id)
         raise HTTPException(
             status_code=503,

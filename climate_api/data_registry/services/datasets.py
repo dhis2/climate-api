@@ -169,11 +169,11 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
 
 
 def _validate_remote_zarr_source(source_block: object, *, dataset_id: str, source: str) -> None:
-    """Validate a remote_zarr source block."""
+    """Validate a remote_zarr store block."""
     if not isinstance(source_block, dict):
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid source block")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} has invalid store block")
     if not source_block.get("store_url"):
-        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define source.store_url")
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define store.store_url")
 
 
 def _validate_sync_availability(sync_availability: object, *, dataset_id: str, source: str) -> None:

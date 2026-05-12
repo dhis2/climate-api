@@ -887,6 +887,8 @@ async def _proxy_remote_zarr_file(
     if request.method == "HEAD":
         try:
             size = await get_icechunk_key_size(store, relative_path, store_url)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
         except Exception:
             size = 0
         return Response(
@@ -900,25 +902,28 @@ async def _proxy_remote_zarr_file(
     content_range: str | None = None
     range_header = request.headers.get("range", "")
     if range_header.startswith("bytes="):
-        spec = range_header[6:]
-        if spec.startswith("-"):
-            # Suffix form: bytes=-N  (last N bytes)
-            suffix = int(spec[1:])
-            byte_request = SuffixByteRequest(suffix=suffix)
-            total = await get_icechunk_key_size(store, relative_path, store_url)
-            content_range = f"bytes {total - suffix}-{total - 1}/{total}"
-        elif "-" in spec:
-            parts = spec.split("-", 1)
-            start = int(parts[0])
-            if parts[1]:
-                end_inc = int(parts[1])
-                byte_request = RangeByteRequest(start=start, end=end_inc + 1)
-                content_range = f"bytes {start}-{end_inc}/*"
-            else:
-                # Open-ended: bytes=start-
+        try:
+            spec = range_header[6:]
+            if spec.startswith("-"):
+                # Suffix form: bytes=-N  (last N bytes)
+                suffix = int(spec[1:])
+                byte_request = SuffixByteRequest(suffix=suffix)
                 total = await get_icechunk_key_size(store, relative_path, store_url)
-                byte_request = RangeByteRequest(start=start, end=total)
-                content_range = f"bytes {start}-{total - 1}/{total}"
+                content_range = f"bytes {total - suffix}-{total - 1}/{total}"
+            elif "-" in spec:
+                parts = spec.split("-", 1)
+                start = int(parts[0])
+                if parts[1]:
+                    end_inc = int(parts[1])
+                    byte_request = RangeByteRequest(start=start, end=end_inc + 1)
+                    content_range = f"bytes {start}-{end_inc}/*"
+                else:
+                    # Open-ended: bytes=start-
+                    total = await get_icechunk_key_size(store, relative_path, store_url)
+                    byte_request = RangeByteRequest(start=start, end=total)
+                    content_range = f"bytes {start}-{total - 1}/{total}"
+        except (ValueError, KeyError):
+            raise HTTPException(status_code=416, detail=f"Invalid or unsatisfiable Range header: '{range_header}'")
 
     try:
         buf = await store.get(relative_path, default_buffer_prototype(), byte_request)  # type: ignore[union-attr]

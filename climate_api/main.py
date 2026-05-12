@@ -40,7 +40,7 @@ def _append_vary_value(response: Response, value: str) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Run background warmup tasks on startup so first requests hit warm caches."""
-    asyncio.get_event_loop().run_in_executor(None, _warmup_remote_zarr_stores)
+    asyncio.get_running_loop().run_in_executor(None, _warmup_remote_zarr_stores)
     yield
 
 
