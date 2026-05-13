@@ -310,9 +310,8 @@ def _derive_artifact(
 
     output_path_str = str(output_path.resolve())
 
-    from geozarr_toolkit import create_geozarr_attrs
-
     import zarr as _zarr
+    from geozarr_toolkit import create_geozarr_attrs
 
     from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
     from climate_api.data_manager.services.downloader import _run_transforms
@@ -445,9 +444,11 @@ def create_artifact(
         return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
 
     if start is None:
+        sync = dataset.get("sync")
+        sync_kind = sync.get("kind") if isinstance(sync, dict) else None
         raise HTTPException(
             status_code=422,
-            detail=f"'start' is required for dataset '{dataset['id']}' (sync kind: {dataset.get('sync', {}).get('kind')})",
+            detail=f"'start' is required for dataset '{dataset['id']}' (sync kind: {sync_kind})",
         )
 
     period_type = str(dataset["period_type"])
