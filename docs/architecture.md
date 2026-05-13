@@ -10,7 +10,7 @@ The platform has four first-class concepts. Understanding the distinction betwee
 
 ### Dataset template
 
-A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_api/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-api.yaml`. It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
+A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_api/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-api.yaml`. It has no state — it describes what *could* be ingested, not what *has been* ingested.
 
 A template defines:
 
