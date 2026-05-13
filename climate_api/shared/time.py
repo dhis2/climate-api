@@ -7,48 +7,24 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-# Convenience defaults for well-known period type names.
-# Custom datasets that use a non-standard period_type can declare their own
-# ISO 8601 step directly in the template YAML via the `period_step` field —
-# no changes to core code are needed in that case.
-_PERIOD_TYPE_ISO_STEP: dict[str, str] = {
-    "hourly": "PT1H",
-    "daily": "P1D",
-    "dekadal": "P10D",
-    "weekly": "P7D",
-    "monthly": "P1M",
-    "yearly": "P1Y",
-}
-
 _ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 
 
-def period_type_to_iso_step(period_type: str) -> str | None:
-    """Return the ISO 8601 duration step for a known period type, or None if unrecognised."""
-    return _PERIOD_TYPE_ISO_STEP.get(period_type)
-
-
 def resolve_iso_step(dataset: dict[str, Any]) -> str | None:
-    """Return the ISO 8601 duration step for a dataset.
+    """Return the ISO 8601 duration step from ``extents.temporal.resolution``.
 
-    Resolution order:
-    1. ``extents.temporal.resolution`` — the authoritative field already present in
-       every template (e.g. ``P1D``, ``PT1H``).  Custom datasets with any period type
-       are fully supported here without touching core code.
-    2. Built-in lookup table — fallback for templates that pre-date the
-       ``extents.temporal.resolution`` field or omit it.
-
-    See issue #94: the long-term direction is to derive ``period_type`` itself from
-    ``extents.temporal.resolution`` and remove the duplication.
+    Dataset templates must declare ``extents.temporal.resolution`` as an ISO 8601
+    duration (e.g. ``P1D``, ``PT1H``, ``P14D``).  Returns None if the field is absent,
+    which triggers a warning at the call site.
     """
-    resolution = dataset.get("extents", {})
-    if isinstance(resolution, dict):
-        resolution = resolution.get("temporal", {})
-        if isinstance(resolution, dict):
-            resolution = resolution.get("resolution")
-    if resolution:
-        return str(resolution)
-    return period_type_to_iso_step(str(dataset.get("period_type", "")))
+    extents = dataset.get("extents")
+    if not isinstance(extents, dict):
+        return None
+    temporal = extents.get("temporal")
+    if not isinstance(temporal, dict):
+        return None
+    resolution = temporal.get("resolution")
+    return str(resolution) if resolution else None
 
 
 def _iso_step_to_approx_hours(step: str) -> float:
