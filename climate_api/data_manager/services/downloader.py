@@ -300,10 +300,9 @@ def _compute_time_space_chunks(
         chunks[dim] = time_chunk_for_iso_step(iso_step)
     else:
         logger.warning(
-            "No ISO 8601 step for dataset '%s' (period_type=%r); defaulting time chunk to 12. "
-            "Declare 'period_step' in the template to silence this warning.",
+            "No ISO 8601 step for dataset '%s'; defaulting time chunk to 12. "
+            "Declare 'extents.temporal.resolution' in the template to silence this warning.",
             dataset.get("id", "?"),
-            dataset.get("period_type"),
         )
         chunks[dim] = 12
 
