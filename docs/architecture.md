@@ -15,7 +15,7 @@ A **template** is a YAML blueprint that describes a data source. It lives in `da
 A template defines:
 - the dataset identifier and display metadata
 - the variable name, units, and period type
-- how to download or derive the data (`ingestion.function`)
+- how to download the data (`ingestion.function`)
 - what transforms to apply (`transforms`)
 - what sync strategy to use (`sync.kind`, `sync.execution`)
 
@@ -56,8 +56,9 @@ Template (YAML)
     │  POST /ingestions
     ▼
 Ingestion
-    │  download or derive data
+    │  download data
     │  apply transforms
+    │  reproject to instance CRS
     │  write GeoZarr store
     │  compute coverage (spatial + temporal extent of actual data)
     ▼
@@ -66,52 +67,60 @@ Artifact (internal record)
     │  publish=true
     ▼
 Managed dataset (public API)
-    ├── /datasets/{id}       — native metadata
-    ├── /zarr/{id}           — raw zarr store access
+    ├── /datasets/{id}         — native metadata
+    ├── /zarr/{id}             — raw zarr store access
     ├── /stac/collections/{id} — STAC discovery
     └── /ogcapi/collections/{id} — OGC API access
 ```
 
-The framework is responsible for everything from "write zarr" onward. A download function or derivation function only needs to produce a zarr file at `output_path`. The framework then:
+The framework is responsible for everything from "write zarr" onward. A download function only needs to write NetCDF files to a given directory. The framework then:
 
-1. applies transforms (unit conversion, etc.)
-2. writes GeoZarr root attributes (`spatial:bbox`, `proj:code`) so map clients can position tiles
-3. computes artifact coverage (spatial bounds + time range) from the written data
-4. stores the artifact record
-5. publishes the managed dataset through pygeoapi if `publish=true`
+1. reads and normalises the coordinate names
+2. applies transforms (unit conversion, etc.)
+3. reprojects to the instance CRS
+4. builds the zarr store with auto-computed chunking
+5. writes GeoZarr root attributes (`spatial:bbox`, `proj:code`) so map clients can position tiles
+6. computes artifact coverage (spatial bounds + time range) from the written data
+7. stores the artifact record
+8. publishes the managed dataset through pygeoapi if `publish=true`
 
-This division means that download functions and derivation functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data; the framework handles everything else.
+This division means that download functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data files; the framework handles everything else.
 
 ---
 
 ## Sync kinds
 
-The `sync.kind` field in a template determines how a managed dataset is kept current. Choosing the wrong kind is the most common source of confusion — the table below is the primary guide.
+The `sync.kind` field in a template determines how a managed dataset is kept current. Choosing the wrong kind is the most common source of confusion.
 
-| `sync.kind` | Data lives | On each sync | Use when |
-|-------------|-----------|--------------|----------|
-| `temporal` | Local zarr | Append new time steps (or rematerialize) | Historical record that grows over time (CHIRPS, ERA5-Land) |
-| `release` | Local zarr | Rematerialize if a newer release exists | Versioned releases (WorldPop yearly) |
-| `static` | Local zarr | Never synced | One-time fixed dataset |
-| `derived` | Local zarr, rebuilt from remote | Always rematerialise from remote store | Forecast data that needs transformation before it is usable (GEFS) |
-| `remote` | Remote store, no local copy | Re-register latest coverage | Datasets where direct store access is acceptable and transformation is not needed |
-
-### When to use `derived` vs `remote`
-
-`remote` is the simplest: the Climate API registers the remote store URL as the artifact path and proxies requests to it directly. Nothing is downloaded or transformed. The trade-off is that the raw store is served as-is — if it has five dimensions (`init_time`, `lead_time`, `ensemble_member`, `latitude`, `longitude`), the client sees five dimensions.
-
-`derived` performs a transformation step before the data is accessible. The derivation function reads the remote store, collapses it to a usable shape (e.g. ensemble mean, lead_time → calendar dates, daily resample), and writes a local zarr. The local zarr is what clients see. The trade-off is that a sync rewrites the entire artifact — there is no incremental append.
-
-**Rule of thumb:** use `remote` only if the remote store is already in a shape that map clients and downstream tools can consume directly. Use `derived` when the raw store requires transformation to be useful.
+| `sync.kind` | On each sync | Use when |
+|-------------|--------------|----------|
+| `temporal` | Append new time steps, or rematerialize | Historical record that grows over time (CHIRPS, ERA5-Land) |
+| `release` | Rematerialize if a newer release exists | Versioned releases where each year/version is discrete (WorldPop) |
+| `static` | Never synced | One-time fixed dataset with no updates |
 
 ### The sync execution modes
 
-Within `sync.kind: temporal`, two execution modes exist:
+Within `sync.kind: temporal`, two execution modes control what happens when new data is available:
 
 - `append` — downloads only the missing time range and appends it to the existing artifact
 - `rematerialize` — discards the existing artifact and rebuilds it from scratch
 
-`append` is efficient for large historical datasets (avoid re-downloading years of data on each sync). `rematerialize` is correct for forecasts and any dataset where old data may change retroactively. `derived` always rematerialises.
+`append` is efficient for large historical datasets (avoid re-downloading years of data on each sync). `rematerialize` is appropriate when old data may change retroactively (e.g. reanalysis products that are corrected after the fact).
+
+### Availability clamping
+
+Providers publish data on a delay. The `sync.availability` block in a template tells the sync engine how far back from today data is reliably available:
+
+```yaml
+sync:
+  kind: temporal
+  execution: append
+  availability:
+    latest_available_function: climate_api.providers.availability.lagged_latest_available
+    lag_hours: 120
+```
+
+Before executing a sync, the engine calls the availability function to clamp the target end date. This prevents requesting data that has not yet been published, which would leave temporal gaps.
 
 ---
 
@@ -119,93 +128,74 @@ Within `sync.kind: temporal`, two execution modes exist:
 
 The platform has four extension points. Each one has a narrow contract — the framework handles everything else automatically.
 
-### Download function (`sync.kind: temporal`, `release`, `static`)
+### Download function
 
 ```python
 def download(
     *,
-    start: str,
+    start: str,       # ISO 8601 date or datetime
     end: str,
-    dirname: Path,
-    prefix: str,
+    dirname: Path,    # write output files here
+    prefix: str,      # use as filename prefix, e.g. f"{prefix}_{year}.nc"
     overwrite: bool,
-    bbox: list[float],    # optional — only if needed
-    **kwargs,             # default_params from YAML
+    bbox: list[float],  # optional — only if the source needs a spatial filter
+    **kwargs,           # default_params from the YAML template
 ) -> None:
-    # Write NetCDF files to dirname using prefix as filename base.
+    # Write one or more NetCDF files to dirname.
 ```
 
-The function writes one or more NetCDF files. The framework reads them, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
-
-### Derivation function (`sync.kind: derived`)
-
-```python
-def derive_dataset(
-    *,
-    store_config: dict,   # the template's store block
-    output_path: Path,    # write a consolidated zarr here
-    extent: dict | None,  # instance spatial extent
-    variable: str,
-    period_type: str,
-) -> None:
-    # Read from remote store, transform, write zarr to output_path.
-    # Output must have dimensions (time, latitude, longitude) in ascending order.
-    # Do not write GeoZarr root attributes — the framework does this.
-```
-
-The framework calls the derivation function, then applies any declared transforms, writes GeoZarr root attributes, computes coverage, and registers the artifact.
-
-**Important:** the derivation function must not write GeoZarr root attributes (`spatial:bbox`, `proj:code`) itself. These are written by the framework after transforms run, using the actual coordinate bounds of the final written data. If the function writes them, the framework will overwrite them anyway; if they are wrong they will confuse map clients.
+The function writes NetCDF files. The framework reads them, normalises coordinate names, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
 
 ### Transform function
 
 ```python
 def my_transform(ds: xr.Dataset, dataset: dict) -> xr.Dataset:
-    # Modify ds[dataset["variable"]] and return the modified dataset.
-    # Preserve ds.attrs — the framework relies on them.
+    # Receive the dataset after download, return a modified dataset.
+    # Modify ds[dataset["variable"]] values and variable attributes.
+    # Do not modify dataset-level ds.attrs — the framework manages those.
 ```
 
-Transforms are applied in order after the download or derivation function returns. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They should not write to disk — the framework handles writing.
+Transforms are applied in order after the download function returns, before the zarr is written. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They do not write to disk.
 
 ### Process execution function
 
 ```python
 def execute(*, source_dataset_id: str, **kwargs) -> dict:
-    # Run a derived computation (e.g. temporal resampling).
-    # Return a JSON-serialisable dict.
+    # Run a named operation (e.g. temporal resampling).
+    # Return a JSON-serialisable result dict.
 ```
 
-Processes are named operations triggered via `POST /processes/{id}/execution`. They are broader than single-dataset transforms — they can read one dataset and produce another (e.g. daily → monthly aggregation).
+Processes are named operations triggered via `POST /processes/{id}/execution`. They are broader than single-dataset transforms — they can read one managed dataset and produce another (e.g. daily → monthly aggregation).
 
 ---
 
 ## The transform pipeline
 
-Transforms are applied in a consistent location in the lifecycle:
+Transforms are applied at a consistent point in the ingestion lifecycle:
 
-1. download function / derivation function writes raw data
-2. `_run_transforms(ds, dataset)` applies each transform in the declared order
-3. result is written to the zarr store
-4. framework writes GeoZarr root attributes
-5. framework computes coverage from the zarr
+1. download function writes raw NetCDF files to disk
+2. framework reads and normalises the data into an xarray Dataset
+3. `_run_transforms(ds, dataset)` applies each declared transform in order
+4. result is reprojected to instance CRS
+5. zarr store is written with auto-computed chunking
+6. framework writes GeoZarr root attributes
+7. framework computes coverage from the zarr
 
-This means transforms always see the raw output of the function, not the GeoZarr-attributed zarr. Transforms should only modify data values and variable attributes. They must not modify dataset-level `.attrs` — the framework manages those.
-
-The transform pipeline runs identically for downloaded data and derived data. A transform written for a regular dataset works unchanged on a derived dataset.
+Transforms see post-download, pre-reproject data. They should only modify data values and variable-level attributes. The framework writes dataset-level attributes (GeoZarr) after the transform pipeline completes.
 
 ---
 
 ## GeoZarr root attributes
 
-Every zarr artifact must have GeoZarr root attributes for map rendering to work correctly. These are stored in the `zarr.json` root metadata:
+Every zarr artifact must have GeoZarr root attributes for map rendering to work correctly. These are written into `zarr.json` at the store root:
 
 - `spatial:bbox` — `[xmin, ymin, xmax, ymax]` in the native CRS
-- `proj:code` — the CRS EPSG code (e.g. `EPSG:4326`)
+- `proj:code` — the CRS EPSG code (e.g. `EPSG:32633` for UTM, `EPSG:4326` for WGS84)
 - `zarr_conventions` — GeoZarr convention declaration
 
-The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map. Without them, the viewer falls back to the instance CRS and null bounds, which produces a white or misaligned map.
+The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map. Without them, the viewer falls back to null bounds, which produces a white or misaligned map.
 
-**The framework writes these attributes — plugins do not.** For downloaded datasets, they are written in `build_dataset_zarr`. For derived datasets, they are written in `_derive_artifact` after transforms are applied, using the actual coordinate bounds of the final data and the CRS declared in `store.crs` (default: `EPSG:4326`).
+**The framework writes these attributes — plugins do not.** They are written in `build_dataset_zarr` after transforms and reprojection, using the actual coordinate bounds of the final written data and the instance CRS.
 
 ---
 
@@ -220,11 +210,9 @@ extent:
   crs: EPSG:32633   # optional; defaults to EPSG:4326
 ```
 
-**Downloaded datasets** are reprojected from their source CRS (`source_crs` in the template, default `EPSG:4326`) to the instance CRS during ingestion. The stored zarr is in the instance CRS.
+Downloaded data is reprojected from the source CRS (`source_crs` in the template, default `EPSG:4326`) to the instance CRS during ingestion. The stored zarr is always in the instance CRS.
 
-**Derived datasets** are never reprojected. They are stored in their native CRS, declared via `store.crs` in the template (default `EPSG:4326`). If the remote store is in a projected CRS, set `store.crs` accordingly so STAC metadata reflects the correct projection.
-
-**Remote datasets** follow the same rule as derived: no reprojection, CRS from `store.crs`.
+If no `crs` is set in the config, data is stored in `EPSG:4326` (WGS84). This is the correct default for instances that do not need a metric CRS.
 
 ---
 
@@ -233,57 +221,53 @@ extent:
 When a new ingestion request arrives, the framework checks whether an existing artifact already covers the requested scope:
 
 - same `dataset_id`
-- same `bbox` (from the configured extent)
+- same bbox (from the configured extent)
 - overlapping time range
 
 If a match exists and `overwrite=false`, the existing artifact is returned without re-downloading. If `overwrite=true`, the existing artifact is replaced.
 
-For derived and remote datasets, the framework always upserts: it replaces the existing record while preserving the `artifact_id`, so publication state (pygeoapi config, STAC entries) is maintained without a re-publish step.
+The artifact store keeps the full history of records for sync deduplication and provenance. Old artifacts are not deleted automatically. For long-running instances, `records.json` grows over time. The long-term direction is a proper transactional store, but for the current scale (tens of artifacts per instance) a JSON file is adequate.
 
 ---
 
 ## What the framework guarantees
 
-Plugin code (download functions, derivation functions, transforms) can rely on the following being handled automatically:
+Plugin code (download functions, transforms, processes) can rely on the following being handled automatically by the framework:
 
 | Concern | Where handled |
 |---------|---------------|
-| Writing GeoZarr root attributes | `build_dataset_zarr` (download), `_derive_artifact` (derived) |
-| Computing artifact coverage | `_coverage_from_dataset` called after all writes |
-| Reprojecting to instance CRS | `reproject_to_instance_crs` (downloaded data only) |
-| Multiscale pyramid generation | `_needs_pyramid` check in `build_dataset_zarr` |
-| Zarr chunking | Auto-computed from `period_type` in `_compute_chunk_sizes` |
-| Artifact record persistence | `_upsert_derived_record` / `_upsert_remote_zarr_record` |
+| Coordinate name normalisation (`lat` → `y`, etc.) | `build_dataset_zarr` |
+| Reprojection to instance CRS | `reproject_to_instance_crs` |
+| Zarr chunking (auto-sized per `period_type`) | `_compute_chunk_sizes` |
+| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr` |
+| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr` |
+| Artifact coverage computation | `_coverage_from_dataset` |
+| Artifact record persistence | `_store_artifact` |
 | pygeoapi publication | `publish_artifact_record` if `publish=true` |
 | STAC collection generation | Dynamic from artifact record |
 
-Plugin code only needs to produce data at the right path. Everything else is the framework's responsibility.
+Plugin code only needs to produce data files. Everything else is the framework's responsibility.
 
 ---
 
 ## Consequences of design choices
 
-### Consequence: one extent per instance
+### Single extent per instance
 
-Each instance is configured for one place. This keeps the data model simple (no multi-extent artifact records) and the zarr stores small (no global downloads). The trade-off is that a national ministry with sub-national data needs runs multiple instances or a single instance at national extent.
+Each instance is configured for one place. This keeps the data model simple (no per-artifact extent tags) and the zarr stores small (country-scale downloads rather than global). The trade-off is that a national ministry with sub-national data needs either runs multiple instances or configures a single instance at national extent.
 
-### Consequence: artifacts are append-only in version terms
+### Temporal gaps are not allowed
 
-The artifact store keeps historical records (for sync history and deduplication). Old artifacts are not deleted automatically. For long-running instances, `records.json` will grow. The long-term direction is a proper transactional store, but for the current scale (dozens of artifacts per instance) a JSON file is adequate.
+The sync engine validates that new data connects to the end of the existing artifact before appending. If a gap exists, the sync fails rather than silently producing a dataset with a hole. This is a deliberate constraint: downstream consumers (DHIS2, CHAP) depend on continuous time series and should not receive data with silent gaps.
 
-### Consequence: derived datasets always rematerialise
+### The append execution mode avoids re-downloading history
 
-`sync.kind: derived` rewrites the full zarr on every sync. For a 35-day GEFS forecast at 0.25° resolution over a country, this is fast (seconds). For a global 1 km dataset with years of history, rematerialisation is impractical — use `temporal` with `append` instead.
+`append` downloads only the missing range and rebuilds the full zarr from all cached files. This means the local cache (NetCDF files in `data/downloads/`) is the source of truth for the full time series; the zarr is a derived view. If the cache is deleted, a rematerialize is required to recover.
 
-### Consequence: transforms run after the function writes
+### Transforms run after download, before reproject
 
-Transforms see the exact output of the download or derivation function, not raw upstream data. This means:
-- unit conversion transforms work on whatever unit the function wrote
-- if the function already converts units, a unit conversion transform would double-convert
-- the function and the template's `transforms` list must not both handle the same conversion
+Transforms see raw downloaded values in the source CRS and source units. The order is: download → transform → reproject → write zarr. This means:
 
-For GEFS: the raw store is in kg m⁻² s⁻¹. The derivation function (`gefs.py`) writes the raw values. The `flux_to_mm_per_day` transform in the template converts them. Neither the function nor the template does both steps.
-
-### Consequence: the plugin contract is stable but the framework internals are not
-
-The public plugin contract — function signatures, YAML field names, dotted-path resolution — is intended to be stable. Framework internals (`_derive_artifact`, `_run_transforms`, `build_dataset_zarr`) are not public API and may change. Plugins should depend only on the documented contracts, not on importing private framework functions.
+- a `kelvin_to_celsius` transform works on raw Kelvin values, not reprojected ones
+- a transform cannot undo reprojection — if you need the source coordinates, the transform must run before reproject (which is the current design)
+- if the download function already converts units, adding a unit conversion transform would double-convert
