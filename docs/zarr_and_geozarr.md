@@ -80,17 +80,15 @@ Both flat and pyramid stores are written in **Zarr v3** format.
 
 A plain Zarr store has no concept of spatial coordinates. A map viewer opening it has no way to know where to position tiles on a map. GeoZarr addresses this by writing a small set of attributes into `zarr.json` at the store root:
 
-| Attribute          | Example value                  | Purpose                        |
-| ------------------ | ------------------------------ | ------------------------------ |
-| `spatial:bbox`     | `[3.0, 57.0, 32.0, 72.5]`     | Bounding box in the native CRS |
-| `proj:code`        | `EPSG:4326`                    | CRS of the stored coordinates  |
-| `zarr_conventions` | `[{...}]`                      | Convention declarations        |
+| Attribute          | Example value             | Purpose                        |
+| ------------------ | ------------------------- | ------------------------------ |
+| `spatial:bbox`     | `[3.0, 57.0, 32.0, 72.5]` | Bounding box in the native CRS |
+| `proj:code`        | `EPSG:4326`               | CRS of the stored coordinates  |
+| `zarr_conventions` | `[{...}]`                 | Convention declarations        |
 
-These attributes are computed from the actual coordinate bounds of the written data and the instance CRS. They are always written by the framework after transforms and reprojection have run — never by download functions. This guarantees they always reflect the final stored data.
+These attributes are computed from the actual coordinate bounds of the written data and the instance CRS. They are always written by the framework after transforms and reprojection have run. This guarantees they always reflect the final stored data.
 
 `zarr_conventions` for a flat store contains the base GeoZarr convention declaration. For pyramid stores it also includes a multiscales entry that declares the level structure.
-
-**Without these attributes**, the map viewer falls back to null bounds and the instance CRS, producing a white or misaligned map.
 
 ---
 
@@ -126,23 +124,6 @@ This design means the zarr store is served by ordinary file serving — there is
 
 ---
 
-## How the map viewer reads Zarr
-
-The built-in map viewer at `/map` uses [ZarrLayer](https://github.com/carbonplan/zarr-layer) to render zarr tiles on a Leaflet map.
-
-On dataset selection the viewer:
-
-1. Fetches the STAC collection for the dataset (`/stac/collections/{dataset_id}`), which includes `proj:code`, `cube:dimensions`, and the zarr store href
-2. Reads `proj:code` to determine if reprojection is needed for rendering
-3. Reads `cube:dimensions` to discover the time axis and build the time slider
-4. Initialises ZarrLayer with the zarr store URL, the variable name, the colour map, and the CRS
-
-ZarrLayer then requests chunk files directly from `/zarr/{dataset_id}/` as tiles are needed, handling all chunked reads internally.
-
-For non-WGS84 instances (e.g. UTM), the viewer fetches a proj4 string from `epsg.io` and passes it to ZarrLayer so tiles can be reprojected to the Leaflet display CRS on the fly.
-
----
-
 ## Fill values and NaN handling
 
-When writing float data to Zarr, NetCDF sentinel fill values (e.g. `−999.99`) are removed from the encoding before the zarr write. This ensures missing pixels are stored as IEEE `NaN` in the zarr chunks. ZarrLayer uses the zarr `fill_value` attribute (which defaults to `NaN` for float arrays) to render missing pixels as transparent — no separate `fillValue` configuration is needed in the viewer.
+When writing float data to Zarr, missing data is stored as IEEE `NaN`. The map viewer uses the zarr `fill_value` attribute (which defaults to `NaN` for float arrays) to render missing pixels as transparent.
