@@ -59,7 +59,7 @@ levels = ceil(log2(max_dim / 512))   # clamped to [2, 8]
 
 Where 512 is the target tile size in pixels. Each level halves the resolution in both spatial dimensions using mean downsampling. Level `0/` is always the full resolution.
 
-Pyramids are written in **Zarr v3** format using the [topozarr](https://github.com/carbonplan/topozarr) library. Flat stores use Zarr v2 with `consolidated=True` (`.zmetadata` file).
+Both flat and pyramid stores are written in **Zarr v3** format. Pyramids use [topozarr](https://github.com/carbonplan/topozarr); flat stores pass `zarr_format=3` to `to_zarr`. Both include consolidated metadata — embedded in `zarr.json` under `consolidated_metadata` — so clients can open the store with a single metadata read.
 
 One implementation detail: ZarrLayer (the map client) looks for the `time` coordinate at the root of the store. For pyramid stores, the `time` coordinate from level `0/` is copied to the store root so clients can discover the time axis without knowing the pyramid structure.
 
