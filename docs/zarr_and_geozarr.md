@@ -46,13 +46,13 @@ Chunks are sized to match expected access patterns. The goal is that reading one
 
 Time chunk sizes are derived from the dataset's `extents.temporal.resolution` field, which every dataset template declares as an ISO 8601 duration (e.g. `P1D`, `PT1H`, `P1M`). The duration is converted to approximate hours and mapped to a natural analysis window:
 
-| Duration tier       | Approximate hours | Target window | Example                      |
-| ------------------- | ----------------- | ------------- | ---------------------------- |
-| Sub-daily           | < 24 h            | ~1 week       | `PT1H` (hourly) → 168 steps  |
-| Daily to sub-weekly | 24 h – 168 h      | ~1 month      | `P1D` (daily) → 30 steps     |
-| Weekly and coarser  | ≥ 168 h           | ~1 year       | `P1M` (monthly) → 12 steps   |
+| Duration tier       | Approximate hours | Target window | Example                     |
+| ------------------- | ----------------- | ------------- | --------------------------- |
+| Sub-daily           | < 24 h            | ~1 week       | `PT1H` (hourly) → 168 steps |
+| Daily to sub-weekly | 24 h – 168 h      | ~1 month      | `P1D` (daily) → 30 steps    |
+| Weekly and coarser  | ≥ 168 h           | ~1 year       | `P1M` (monthly) → 12 steps  |
 
-This calculation is fully data-driven: any dataset — including custom or plugin datasets — only needs to declare `extents.temporal.resolution` and the correct chunk size is computed automatically. No hardcoded lookup by period name is needed.
+This calculation is fully data-driven: any dataset — including custom or plugin datasets — only needs to declare `extents.temporal.resolution` and the correct chunk size is computed automatically.
 
 Spatial chunks are capped at 512 × 512 pixels — a pragmatic compromise between tile rendering (which benefits from smaller chunks) and analysis workloads (which benefit from larger ones). For small extents where the full spatial dimension is smaller than 512 pixels, the entire dimension fits in one chunk.
 
@@ -62,7 +62,7 @@ Dimension names are normalised to `(time, x, y)` before writing, regardless of t
 
 ## Multiscale pyramids
 
-For large spatial extents, a flat zarr would require the map viewer to download the entire spatial extent at full resolution on every tile request. The platform builds a multiscale pyramid when the spatial dimensions exceed **2048 × 2048 pixels**.
+For large spatial extents, a flat zarr would require a map viewer to download the entire spatial extent at full resolution on every tile request. The platform builds a multiscale pyramid when the spatial dimensions exceed **2048 × 2048 pixels**.
 
 Pyramid levels are computed as:
 
@@ -72,23 +72,19 @@ levels = ceil(log2(max_dim / 512))   # clamped to [2, 8]
 
 Where 512 is the target tile size in pixels. Each level halves the resolution in both spatial dimensions using mean downsampling. Level `0/` is always the full resolution.
 
-Both flat and pyramid stores are written in **Zarr v3** format. Pyramids use [topozarr](https://github.com/carbonplan/topozarr); flat stores pass `zarr_format=3` to `to_zarr`. Both include consolidated metadata — embedded in `zarr.json` under `consolidated_metadata` — so clients can open the store with a single metadata read.
-
-One implementation detail: ZarrLayer (the map client) looks for the `time` coordinate at the root of the store. For pyramid stores, the `time` coordinate from level `0/` is copied to the store root so clients can discover the time axis without knowing the pyramid structure.
+Both flat and pyramid stores are written in **Zarr v3** format.
 
 ---
 
 ## GeoZarr root attributes
 
-A plain Zarr store has no concept of spatial coordinates. A map viewer opening it has no way to know where to position tiles on a map — whether `x=0` means longitude 0°, easting 300000 m, or something else.
+A plain Zarr store has no concept of spatial coordinates. A map viewer opening it has no way to know where to position tiles on a map. GeoZarr addresses this by writing a small set of attributes into `zarr.json` at the store root:
 
-GeoZarr addresses this by writing a small set of attributes into `zarr.json` at the store root:
-
-| Attribute          | Example value                         | Purpose                        |
-| ------------------ | ------------------------------------- | ------------------------------ |
-| `spatial:bbox`     | `[270000, 6450000, 1120000, 7950000]` | Bounding box in the native CRS |
-| `proj:code`        | `EPSG:32633`                          | CRS of the stored coordinates  |
-| `zarr_conventions` | `[{...}]`                             | Convention declarations        |
+| Attribute          | Example value                  | Purpose                        |
+| ------------------ | ------------------------------ | ------------------------------ |
+| `spatial:bbox`     | `[3.0, 57.0, 32.0, 72.5]`     | Bounding box in the native CRS |
+| `proj:code`        | `EPSG:4326`                    | CRS of the stored coordinates  |
+| `zarr_conventions` | `[{...}]`                      | Convention declarations        |
 
 These attributes are computed from the actual coordinate bounds of the written data and the instance CRS. They are always written by the framework after transforms and reprojection have run — never by download functions. This guarantees they always reflect the final stored data.
 
