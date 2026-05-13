@@ -32,14 +32,15 @@ The flat vs. pyramid decision is made at build time based on spatial size (see [
 
 Chunks are sized in `_compute_time_space_chunks` to match expected access patterns. The goal is that reading one time step for the full spatial extent fits in one round-trip, and that full time series for a small area also fits in one round-trip.
 
-| `period_type` | Time chunk |
-|---------------|------------|
-| `hourly`      | 168 steps (1 week) |
-| `daily`       | 30 steps (1 month) |
-| `dekadal`     | 36 steps (1 year) |
-| `weekly`      | 52 steps (1 year) |
-| `monthly`     | 12 steps (1 year) |
-| `yearly`      | 1 step |
+Time chunk sizes are derived from the dataset's `extents.temporal.resolution` field, which every dataset template declares as an ISO 8601 duration (e.g. `P1D`, `PT1H`, `P1M`). The duration is converted to approximate hours and mapped to a natural analysis window:
+
+| Duration tier | Approximate hours | Target window | Example |
+|---------------|-------------------|---------------|---------|
+| Sub-daily     | < 24 h            | ~1 week       | `PT1H` → 168 steps |
+| Daily to sub-weekly | 24 h – 168 h | ~1 month  | `P1D` → 30 steps |
+| Weekly and coarser | ≥ 168 h      | ~1 year       | `P1M` → 12 steps |
+
+This calculation is fully data-driven: any dataset — including custom or plugin datasets — only needs to declare `extents.temporal.resolution` and the correct chunk size is computed automatically. No hardcoded lookup by period name is needed.
 
 Spatial chunks are capped at 512 × 512 pixels — a pragmatic compromise between tile rendering (which benefits from smaller chunks) and analysis workloads (which benefit from larger ones). For small extents where the full spatial dimension is smaller than 512 pixels, the entire dimension fits in one chunk.
 
@@ -69,7 +70,7 @@ One implementation detail: ZarrLayer (the map client) looks for the `time` coord
 
 A plain Zarr store has no concept of spatial coordinates. A map viewer opening it has no way to know where to position tiles on a map — whether `x=0` means longitude 0°, easting 300000 m, or something else.
 
-GeoZarr addresses this by writing a small set of attributes into `zarr.json` (or `.zattrs` for v2) at the store root:
+GeoZarr addresses this by writing a small set of attributes into `zarr.json` at the store root:
 
 | Attribute | Example value | Purpose |
 |-----------|--------------|---------|
@@ -111,7 +112,7 @@ GET /zarr/{dataset_id}/precip/0.0.0       → chunk at time=0, x=0, y=0
 GET /zarr/{dataset_id}/time/0             → time coordinate chunk
 ```
 
-Metadata files (`.zarray`, `.zattrs`, `.zgroup`, `zarr.json`) are returned as `application/json`. All other files — chunk data — are returned as `application/octet-stream`. Directory paths return a JSON listing of their contents.
+Metadata files (`zarr.json`) are returned as `application/json`. All other files — chunk data — are returned as `application/octet-stream`. Directory paths return a JSON listing of their contents.
 
 This design means the zarr store is served by ordinary file serving — there is no zarr-specific server middleware.
 
