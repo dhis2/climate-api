@@ -159,15 +159,15 @@ def _register_remote_zarr_artifact(
         raise HTTPException(status_code=500, detail=f"Dataset '{dataset['id']}' has invalid store block")
     store_url = str(source["store_url"])
 
+    # Use store.crs when declared; most public remote stores (dynamical.org, ARCO-ERA5) are WGS84.
+    native_crs: str = str(source.get("crs", "EPSG:4326")) or "EPSG:4326"
     logger.info("Opening remote zarr store for dataset '%s': %s", dataset["id"], store_url)
     ds = open_remote_dataset(source)
     try:
-        # Remote datasets carry their own CRS (always WGS84 for dynamical.org stores).
-        # Do not use the instance CRS here — that applies only to locally ingested data.
         coverage_data = _coverage_from_dataset(
             ds=ds,
             period_type=str(dataset["period_type"]),
-            native_crs="EPSG:4326",
+            native_crs=native_crs,
         )
 
         # Forecast datasets have a lead_time dimension — the actual data horizon extends
@@ -862,7 +862,7 @@ async def _proxy_remote_zarr_file(
     from zarr.abc.store import RangeByteRequest, SuffixByteRequest
     from zarr.core.buffer import default_buffer_prototype
 
-    from climate_api.providers.remote_zarr import _store_cache, get_icechunk_key_size, open_icechunk_store
+    from climate_api.providers.remote_zarr import get_icechunk_key_size, get_store_if_cached, open_icechunk_store
 
     source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
     store_config = source_dataset.get("store")
@@ -876,7 +876,7 @@ async def _proxy_remote_zarr_file(
     try:
         # Fast path: store already cached — just a dict lookup, no thread needed.
         # Cold path: open_icechunk_store makes blocking S3 calls, so run in a thread.
-        store = _store_cache.get(store_url) or await asyncio.to_thread(open_icechunk_store, store_config)
+        store = get_store_if_cached(store_url) or await asyncio.to_thread(open_icechunk_store, store_config)
     except Exception as exc:
         logger.warning("Failed to open remote store for '%s': %s", artifact.dataset_id, exc)
         raise HTTPException(
@@ -890,8 +890,12 @@ async def _proxy_remote_zarr_file(
             size = await get_icechunk_key_size(store, relative_path, store_url)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
-        except Exception:
-            size = 0
+        except Exception as exc:
+            logger.warning("Failed to get size for zarr key '%s' from remote store: %s", relative_path, exc)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+            ) from exc
         return Response(
             status_code=200,
             headers={"Content-Length": str(size), "Accept-Ranges": "bytes"},

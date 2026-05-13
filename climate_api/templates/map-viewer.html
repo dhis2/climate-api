@@ -456,32 +456,58 @@
         return String(val);
       }
 
+      function safeDimId(key) {
+        return String(key).replace(/[^A-Za-z0-9_-]/g, "_");
+      }
+
       function renderExtraDimSliders(dims) {
         const container = document.getElementById("extra-dims-container");
         container.innerHTML = "";
         for (const dim of dims) {
+          const safeId = safeDimId(dim.key);
           const section = document.createElement("div");
           section.className = "panel-section";
-          const label = formatDimLabel(dim.key);
-          const unitSuffix = dim["climate_api:unit"] ? ` (${dim["climate_api:unit"]})` : "";
-          section.innerHTML = `
-            <div class="time-header">
-              <label style="margin-bottom:0">${label}${unitSuffix}</label>
-              <span id="dim-count-${dim.key}" class="time-count">1 / ${dim._count}</span>
-            </div>
-            <div style="margin-bottom:0.4rem">
-              <span id="dim-val-${dim.key}" class="time-value">${formatDimValue(dim, 0)}</span>
-            </div>
-            <input type="range" id="dim-slider-${dim.key}" data-dim="${dim.key}" min="0" max="${dim._count - 1}" step="1" value="0" />
-          `;
-          container.appendChild(section);
-          section.querySelector(`#dim-slider-${dim.key}`).addEventListener("input", (e) => {
+
+          const header = document.createElement("div");
+          header.className = "time-header";
+          const labelEl = document.createElement("label");
+          labelEl.style.marginBottom = "0";
+          labelEl.textContent = formatDimLabel(dim.key) + (dim["climate_api:unit"] ? ` (${dim["climate_api:unit"]})` : "");
+          const countEl = document.createElement("span");
+          countEl.id = `dim-count-${safeId}`;
+          countEl.className = "time-count";
+          countEl.textContent = `1 / ${dim._count}`;
+          header.appendChild(labelEl);
+          header.appendChild(countEl);
+
+          const valDiv = document.createElement("div");
+          valDiv.style.marginBottom = "0.4rem";
+          const valEl = document.createElement("span");
+          valEl.id = `dim-val-${safeId}`;
+          valEl.className = "time-value";
+          valEl.textContent = formatDimValue(dim, 0);
+          valDiv.appendChild(valEl);
+
+          const slider = document.createElement("input");
+          slider.type = "range";
+          slider.id = `dim-slider-${safeId}`;
+          slider.dataset.dim = dim.key;
+          slider.min = "0";
+          slider.max = String(dim._count - 1);
+          slider.step = "1";
+          slider.value = "0";
+          slider.addEventListener("input", (e) => {
             const i = parseInt(e.target.value, 10);
-            document.getElementById(`dim-val-${dim.key}`).textContent = formatDimValue(dim, i);
-            document.getElementById(`dim-count-${dim.key}`).textContent = `${i + 1} / ${dim._count}`;
+            valEl.textContent = formatDimValue(dim, i);
+            countEl.textContent = `${i + 1} / ${dim._count}`;
             clearTimeout(_selectorDebounce);
             _selectorDebounce = setTimeout(() => updateSelector(), 150);
           });
+
+          section.appendChild(header);
+          section.appendChild(valDiv);
+          section.appendChild(slider);
+          container.appendChild(section);
         }
       }
 
@@ -489,7 +515,7 @@
         const selector = {};
         if (timeStepCount() > 0) selector[timeDimKey] = parseInt(timeSlider.value, 10);
         for (const dim of extraDims) {
-          const slider = document.getElementById(`dim-slider-${dim.key}`);
+          const slider = document.getElementById(`dim-slider-${safeDimId(dim.key)}`);
           if (slider) selector[dim.key] = parseInt(slider.value, 10);
         }
         return selector;

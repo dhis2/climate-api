@@ -72,6 +72,11 @@ async def get_icechunk_key_size(store: Any, key: str, store_url: str) -> int:
     return size
 
 
+def get_store_if_cached(store_url: str) -> Any | None:
+    """Return the cached raw store for store_url if it was already opened, else None."""
+    return _store_cache.get(store_url)
+
+
 def warmup_remote_store(source: dict[str, Any]) -> None:
     """Open and cache the store and dataset for a remote source block.
 
