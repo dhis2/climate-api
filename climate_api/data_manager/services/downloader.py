@@ -200,11 +200,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     else:
         logger.info("Building flat zarr (max dim %d pixels)", max(ds.sizes[x_dim], ds.sizes[y_dim]))
-        # determine optimal chunk sizes
-        ds_autochunk = ds.chunk("auto").unify_chunks()
-        uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
-        time_space_chunks = _compute_time_space_chunks(ds, dataset)
-        uniform_chunks.update(time_space_chunks)
+        uniform_chunks = _compute_time_space_chunks(ds, dataset)
         logger.info(f"--> {uniform_chunks}")
 
         ds.attrs.update(geozarr_attrs)
@@ -292,7 +288,7 @@ def _run_transforms(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
 def _compute_time_space_chunks(
     ds: xr.Dataset,
     dataset: dict[str, Any],
-    max_spatial_chunk: int = 256,
+    max_spatial_chunk: int = 512,
 ) -> dict[str, int]:
     """Compute chunk sizes tuned for common temporal access patterns."""
     chunks: dict[str, int] = {}
@@ -303,10 +299,21 @@ def _compute_time_space_chunks(
         chunks[dim] = 24 * 7
     elif period_type == "daily":
         chunks[dim] = 30
+    elif period_type == "dekadal":
+        chunks[dim] = 36
+    elif period_type == "weekly":
+        chunks[dim] = 52
     elif period_type == "monthly":
         chunks[dim] = 12
     elif period_type == "yearly":
         chunks[dim] = 1
+    else:
+        logger.warning(
+            "Unknown period_type '%s' for dataset '%s'; defaulting time chunk to 12",
+            period_type,
+            dataset.get("id", "?"),
+        )
+        chunks[dim] = 12
 
     x_dim, y_dim = get_x_y_dims(ds)
     chunks[x_dim] = min(ds.sizes[x_dim], max_spatial_chunk)

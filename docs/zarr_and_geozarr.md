@@ -36,10 +36,12 @@ Chunks are sized in `_compute_time_space_chunks` to match expected access patter
 |---------------|------------|
 | `hourly`      | 168 steps (1 week) |
 | `daily`       | 30 steps (1 month) |
+| `dekadal`     | 36 steps (1 year) |
+| `weekly`      | 52 steps (1 year) |
 | `monthly`     | 12 steps (1 year) |
 | `yearly`      | 1 step |
 
-Spatial chunks are capped at 256 × 256 pixels. For small extents where the full spatial dimension is smaller than 256 pixels, the entire dimension fits in one chunk.
+Spatial chunks are capped at 512 × 512 pixels — a pragmatic compromise between tile rendering (which benefits from smaller chunks) and analysis workloads (which benefit from larger ones). For small extents where the full spatial dimension is smaller than 512 pixels, the entire dimension fits in one chunk.
 
 Dimension names are normalised to `(time, x, y)` before writing, regardless of the source naming convention (`lat`/`lon`, `latitude`/`longitude`, etc.).
 
