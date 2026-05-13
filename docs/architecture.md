@@ -10,7 +10,7 @@ The platform has four first-class concepts. Understanding the distinction betwee
 
 ### Dataset template
 
-A **template** is a YAML blueprint that describes a data source. It lives in `data/datasets/` (built-ins) or in a `plugins_dir/datasets/` directory (custom). It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
+A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_api/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-api.yaml`. It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
 
 A template defines:
 
@@ -34,7 +34,7 @@ An **artifact** is the internal record of a completed data ingestion. It is the 
 
 Multiple artifacts can exist for the same dataset template if data was ingested at different times (they form the version history). The most recent artifact for a given `dataset_id` is what the public API serves.
 
-Artifacts are stored in `data/artifacts/records.json`. This is an internal implementation detail — consumers should never depend on artifact IDs or artifact paths directly.
+Artifacts are stored in `{data_dir}/artifacts/records.json`, where `data_dir` is the path configured in `climate-api.yaml`. This is an internal implementation detail — consumers should never depend on artifact IDs or artifact paths directly.
 
 ### Managed dataset
 
