@@ -7,9 +7,10 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-# Single source of truth for the ISO 8601 duration step for each known period type.
-# Used for STAC cube:dimensions metadata and zarr time chunk sizing.
-# Add an entry here when a new period type is introduced — everything else derives from it.
+# Convenience defaults for well-known period type names.
+# Custom datasets that use a non-standard period_type can declare their own
+# ISO 8601 step directly in the template YAML via the `period_step` field —
+# no changes to core code are needed in that case.
 _PERIOD_TYPE_ISO_STEP: dict[str, str] = {
     "hourly": "PT1H",
     "daily": "P1D",
@@ -25,6 +26,19 @@ _ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?
 def period_type_to_iso_step(period_type: str) -> str | None:
     """Return the ISO 8601 duration step for a known period type, or None if unrecognised."""
     return _PERIOD_TYPE_ISO_STEP.get(period_type)
+
+
+def resolve_iso_step(dataset: dict[str, Any]) -> str | None:
+    """Return the ISO 8601 duration step for a dataset.
+
+    Reads `period_step` from the template first, so custom datasets can declare
+    any step (e.g. `period_step: P14D`) without touching core code.  Falls back
+    to the built-in lookup table for standard period type names.
+    """
+    explicit = dataset.get("period_step")
+    if explicit:
+        return str(explicit)
+    return period_type_to_iso_step(str(dataset.get("period_type", "")))
 
 
 def _iso_step_to_approx_hours(step: str) -> float:

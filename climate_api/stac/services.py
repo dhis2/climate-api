@@ -18,7 +18,7 @@ from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
-from climate_api.shared.time import parse_period_string_to_datetime, period_type_to_iso_step
+from climate_api.shared.time import parse_period_string_to_datetime, resolve_iso_step
 
 CATALOG_ID = "climate-api"
 CATALOG_TITLE = "DHIS2 Climate API"
@@ -118,7 +118,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     collection_payload["license"] = template.license
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
-    _override_time_step(collection_payload, period_type_to_iso_step(str(source_dataset.get("period_type", ""))))
+    _override_time_step(collection_payload, resolve_iso_step(source_dataset))
     _override_spatial_extent_from_artifact(collection_payload, artifact)
     _override_temporal_extent_from_artifact(collection_payload, artifact)
     _sanitize_variable_attrs(collection_payload)

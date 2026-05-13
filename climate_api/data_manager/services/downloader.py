@@ -17,7 +17,7 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
-from climate_api.shared.time import period_type_to_iso_step, time_chunk_for_iso_step
+from climate_api.shared.time import resolve_iso_step, time_chunk_for_iso_step
 from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_time_dim, get_x_y_dims
@@ -294,16 +294,16 @@ def _compute_time_space_chunks(
     """Compute chunk sizes tuned for common temporal access patterns."""
     chunks: dict[str, int] = {}
 
-    period_type = dataset["period_type"]
-    iso_step = period_type_to_iso_step(period_type)
+    iso_step = resolve_iso_step(dataset)
     dim = get_time_dim(ds)
     if iso_step is not None:
         chunks[dim] = time_chunk_for_iso_step(iso_step)
     else:
         logger.warning(
-            "Unknown period_type '%s' for dataset '%s'; defaulting time chunk to 12",
-            period_type,
+            "No ISO 8601 step for dataset '%s' (period_type=%r); defaulting time chunk to 12. "
+            "Declare 'period_step' in the template to silence this warning.",
             dataset.get("id", "?"),
+            dataset.get("period_type"),
         )
         chunks[dim] = 12
 
