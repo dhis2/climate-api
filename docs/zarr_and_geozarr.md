@@ -4,6 +4,22 @@ This document explains why the Climate API uses Zarr as its primary storage form
 
 ---
 
+## What is Zarr?
+
+[Zarr](https://zarr.dev) is an open storage format for chunked, compressed N-dimensional arrays. A Zarr store is a directory tree: array metadata lives in `zarr.json` files, and the data itself is split into independent chunk files. Each chunk is compressed independently and can be read in a single HTTP request.
+
+Zarr is designed to work natively in cloud object stores (S3, GCS, Azure Blob) as well as on local disk — the directory layout is the same in both cases. The [Zarr v3 specification](https://zarr-specs.readthedocs.io/en/latest/v3/core/v3.0.html) is the current standard; it consolidates metadata into a single `zarr.json` file and uses a `c/` prefix for chunk keys.
+
+---
+
+## What is GeoZarr?
+
+[GeoZarr](https://github.com/zarr-developers/geozarr-spec) is a draft convention that adds spatial context to Zarr stores. A plain Zarr array has no concept of geography — it is just numbers in a grid. GeoZarr defines a small set of root attributes (`spatial:bbox`, `proj:code`, `zarr_conventions`) that tell a client where the grid is located on Earth and in which coordinate reference system.
+
+The [geozarr-toolkit](https://github.com/zarr-developers/geozarr-toolkit) Python library is used to write these attributes.
+
+---
+
 ## Why Zarr
 
 Climate datasets are large, multi-dimensional arrays: a daily precipitation dataset covering a country at 5 km resolution for 10 years has roughly 3 600 time steps and hundreds of thousands of spatial pixels. Serving this efficiently from a REST API requires a format that supports:
