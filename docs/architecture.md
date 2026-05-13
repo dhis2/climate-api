@@ -8,11 +8,12 @@ This document explains how the Climate API is structured, why it is structured t
 
 The platform has four first-class concepts. Understanding the distinction between them is the foundation for understanding everything else.
 
-### Template
+### Dataset template
 
-A **template** is a YAML blueprint that describes a data source. It lives in `data/datasets/` (built-ins) or in a `plugins_dir/datasets/` directory (custom). It has no state — it describes what *could* be ingested, not what *has been* ingested.
+A **template** is a YAML blueprint that describes a data source. It lives in `data/datasets/` (built-ins) or in a `plugins_dir/datasets/` directory (custom). It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
 
 A template defines:
+
 - the dataset identifier and display metadata
 - the variable name, units, and period type
 - how to download the data (`ingestion.function`)
@@ -23,7 +24,8 @@ Templates are config, not code. If a template needs custom logic, the logic goes
 
 ### Artifact
 
-An **artifact** is the internal record of a completed ingestion. It is the persistence layer — not a public API concept. Each ingestion produces exactly one artifact, which records:
+An **artifact** is the internal record of a completed data ingestion. It is the persistence layer — not a public API concept. Each ingestion produces exactly one artifact, which records:
+
 - what dataset template it came from
 - the exact spatial extent and time range that was materialized
 - where the data lives on disk (path to the zarr store or netCDF files)
@@ -44,7 +46,7 @@ The relationship is: one template → many artifacts over time → one managed d
 
 The **extent** is the spatial bounding box configured for this Climate API instance. It is set once in `climate-api.yaml` and does not change at runtime. Every ingestion is automatically scoped to this extent — operators do not specify it per-request.
 
-This is a deliberate design constraint: each instance serves one place. A Norway instance serves Norway. A Sierra Leone instance serves Sierra Leone. Multi-country coverage requires multiple instances.
+This is a deliberate design constraint: each instance serves one place. A Sierra Leone instance serves Sierra Leone. Multi-country coverage requires multiple instances.
 
 ---
 
@@ -90,13 +92,13 @@ This division means that download functions do not need to know about zarr conve
 
 ## Sync kinds
 
-The `sync.kind` field in a template determines how a managed dataset is kept current. Choosing the wrong kind is the most common source of confusion.
+The `sync.kind` field in a template determines how a managed dataset is kept current.
 
-| `sync.kind` | On each sync | Use when |
-|-------------|--------------|----------|
-| `temporal` | Append new time steps, or rematerialize | Historical record that grows over time (CHIRPS, ERA5-Land) |
-| `release` | Rematerialize if a newer release exists | Versioned releases where each year/version is discrete (WorldPop) |
-| `static` | Never synced | One-time fixed dataset with no updates |
+| `sync.kind` | On each sync                            | Use when                                                          |
+| ----------- | --------------------------------------- | ----------------------------------------------------------------- |
+| `temporal`  | Append new time steps, or rematerialize | Historical record that grows over time (CHIRPS, ERA5-Land)        |
+| `release`   | Rematerialize if a newer release exists | Versioned releases where each year/version is discrete (WorldPop) |
+| `static`    | Never synced                            | One-time fixed dataset with no updates                            |
 
 ### The sync execution modes
 
@@ -193,7 +195,7 @@ Every zarr artifact must have GeoZarr root attributes for map rendering to work 
 - `proj:code` — the CRS EPSG code (e.g. `EPSG:32633` for UTM, `EPSG:4326` for WGS84)
 - `zarr_conventions` — GeoZarr convention declaration
 
-The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map. Without them, the viewer falls back to null bounds, which produces a white or misaligned map.
+The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map.
 
 **The framework writes these attributes — plugins do not.** They are written in `build_dataset_zarr` after transforms and reprojection, using the actual coordinate bounds of the final written data and the instance CRS.
 
@@ -207,7 +209,7 @@ The instance CRS is configured in `climate-api.yaml`:
 extent:
   name: Norway
   bbox: [3.0, 57.0, 32.0, 72.5]
-  crs: EPSG:32633   # optional; defaults to EPSG:4326
+  crs: EPSG:32633 # optional; defaults to EPSG:4326
 ```
 
 Downloaded data is reprojected from the source CRS (`source_crs` in the template, default `EPSG:4326`) to the instance CRS during ingestion. The stored zarr is always in the instance CRS.
@@ -234,17 +236,17 @@ The artifact store keeps the full history of records for sync deduplication and 
 
 Plugin code (download functions, transforms, processes) can rely on the following being handled automatically by the framework:
 
-| Concern | Where handled |
-|---------|---------------|
-| Coordinate name normalisation (`lat` → `y`, etc.) | `build_dataset_zarr` |
-| Reprojection to instance CRS | `reproject_to_instance_crs` |
-| Zarr chunking (auto-sized per `period_type`) | `_compute_chunk_sizes` |
-| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr` |
-| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr` |
-| Artifact coverage computation | `_coverage_from_dataset` |
-| Artifact record persistence | `_store_artifact` |
-| pygeoapi publication | `publish_artifact_record` if `publish=true` |
-| STAC collection generation | Dynamic from artifact record |
+| Concern                                               | Where handled                               |
+| ----------------------------------------------------- | ------------------------------------------- |
+| Coordinate name normalisation (`lat` → `y`, etc.)     | `build_dataset_zarr`                        |
+| Reprojection to instance CRS                          | `reproject_to_instance_crs`                 |
+| Zarr chunking (auto-sized per `period_type`)          | `_compute_chunk_sizes`                      |
+| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr`                        |
+| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr`                        |
+| Artifact coverage computation                         | `_coverage_from_dataset`                    |
+| Artifact record persistence                           | `_store_artifact`                           |
+| pygeoapi publication                                  | `publish_artifact_record` if `publish=true` |
+| STAC collection generation                            | Dynamic from artifact record                |
 
 Plugin code only needs to produce data files. Everything else is the framework's responsibility.
 
@@ -266,8 +268,4 @@ The sync engine validates that new data connects to the end of the existing arti
 
 ### Transforms run after download, before reproject
 
-Transforms see raw downloaded values in the source CRS and source units. The order is: download → transform → reproject → write zarr. This means:
-
-- a `kelvin_to_celsius` transform works on raw Kelvin values, not reprojected ones
-- a transform cannot undo reprojection — if you need the source coordinates, the transform must run before reproject (which is the current design)
-- if the download function already converts units, adding a unit conversion transform would double-convert
+Transforms see raw downloaded values in the source CRS and source units. The order is: download → transform → reproject → write zarr.
