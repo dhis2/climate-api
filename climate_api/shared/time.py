@@ -10,7 +10,7 @@ import pandas as pd
 _ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 
 
-def resolve_iso_step(dataset: dict[str, Any]) -> str | None:
+def resolve_iso_period_step(dataset: dict[str, Any]) -> str | None:
     """Return the ISO 8601 duration step from ``extents.temporal.resolution``.
 
     Dataset templates must declare ``extents.temporal.resolution`` as an ISO 8601
