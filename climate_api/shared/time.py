@@ -7,6 +7,56 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+# Single source of truth for the ISO 8601 duration step for each known period type.
+# Used for STAC cube:dimensions metadata and zarr time chunk sizing.
+# Add an entry here when a new period type is introduced — everything else derives from it.
+_PERIOD_TYPE_ISO_STEP: dict[str, str] = {
+    "hourly": "PT1H",
+    "daily": "P1D",
+    "dekadal": "P10D",
+    "weekly": "P7D",
+    "monthly": "P1M",
+    "yearly": "P1Y",
+}
+
+_ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
+
+
+def period_type_to_iso_step(period_type: str) -> str | None:
+    """Return the ISO 8601 duration step for a known period type, or None if unrecognised."""
+    return _PERIOD_TYPE_ISO_STEP.get(period_type)
+
+
+def _iso_step_to_approx_hours(step: str) -> float:
+    """Return the approximate duration in hours for an ISO 8601 duration string.
+
+    Months and years use calendar averages (30.4375 days/month, 365.25 days/year).
+    Raises ValueError for unrecognised formats.
+    """
+    m = _ISO_DURATION_RE.fullmatch(step)
+    if not m:
+        raise ValueError(f"Cannot parse ISO 8601 duration: '{step}'")
+    years, months, weeks, days, hours, minutes, seconds = (int(g or 0) for g in m.groups())
+    return (
+        years * 365.25 * 24 + months * 30.4375 * 24 + weeks * 7 * 24 + days * 24 + hours + minutes / 60 + seconds / 3600
+    )
+
+
+def time_chunk_for_iso_step(step: str) -> int:
+    """Return a suitable zarr time chunk size for a given ISO 8601 duration step.
+
+    Targets roughly one week of data for sub-daily steps, one month for daily/sub-weekly
+    steps, and one year for weekly and coarser steps.  This keeps individual chunk files
+    at a manageable size while covering a natural analysis window in one read.
+    """
+    hours = _iso_step_to_approx_hours(step)
+    if hours < 24:
+        return max(1, round(24 * 7 / hours))  # ~1 week
+    if hours < 24 * 7:
+        return max(1, round(24 * 30 / hours))  # ~1 month
+    return max(1, round(24 * 365.25 / hours))  # ~1 year
+
+
 _WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
 
 

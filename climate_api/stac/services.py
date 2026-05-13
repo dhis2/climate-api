@@ -18,7 +18,7 @@ from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
-from climate_api.shared.time import parse_period_string_to_datetime
+from climate_api.shared.time import parse_period_string_to_datetime, period_type_to_iso_step
 
 CATALOG_ID = "climate-api"
 CATALOG_TITLE = "DHIS2 Climate API"
@@ -118,7 +118,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     collection_payload["license"] = template.license
     _remove_helper_variables(collection_payload)
     _round_spatial_steps(collection_payload)
-    _override_time_step(collection_payload, _period_step(source_dataset.get("period_type")))
+    _override_time_step(collection_payload, period_type_to_iso_step(str(source_dataset.get("period_type", ""))))
     _override_spatial_extent_from_artifact(collection_payload, artifact)
     _override_temporal_extent_from_artifact(collection_payload, artifact)
     _sanitize_variable_attrs(collection_payload)
@@ -316,18 +316,6 @@ def _abs_url(request: Request, path: str) -> str:
     if base_url:
         return f"{base_url.rstrip('/')}{path}"
     return f"{str(request.base_url).rstrip('/')}{path}"
-
-
-def _period_step(period_type: object) -> str | None:
-    if period_type == "hourly":
-        return "PT1H"
-    if period_type == "daily":
-        return "P1D"
-    if period_type == "monthly":
-        return "P1M"
-    if period_type == "yearly":
-        return "P1Y"
-    return None
 
 
 def _override_time_step(collection: dict[str, Any], step: str | None) -> None:
