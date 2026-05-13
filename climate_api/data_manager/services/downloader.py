@@ -297,7 +297,15 @@ def _compute_time_space_chunks(
     iso_step = resolve_iso_period_step(dataset)
     dim = get_time_dim(ds)
     if iso_step is not None:
-        chunks[dim] = time_chunk_for_iso_step(iso_step)
+        try:
+            chunks[dim] = time_chunk_for_iso_step(iso_step)
+        except ValueError:
+            logger.warning(
+                "Invalid ISO 8601 step %r for dataset '%s'; defaulting time chunk to 12.",
+                iso_step,
+                dataset.get("id", "?"),
+            )
+            chunks[dim] = 12
     else:
         logger.warning(
             "No ISO 8601 step for dataset '%s'; defaulting time chunk to 12. "

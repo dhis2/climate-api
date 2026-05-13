@@ -108,8 +108,8 @@ The `/zarr/{dataset_id}/` endpoint serves individual files from the Zarr store d
 
 ```
 GET /zarr/{dataset_id}/zarr.json          → root metadata (JSON)
-GET /zarr/{dataset_id}/precip/0.0.0       → chunk at time=0, x=0, y=0
-GET /zarr/{dataset_id}/time/0             → time coordinate chunk
+GET /zarr/{dataset_id}/precip/c/0/0/0     → chunk at time=0, x=0, y=0
+GET /zarr/{dataset_id}/time/c/0           → time coordinate chunk
 ```
 
 Metadata files (`zarr.json`) are returned as `application/json`. All other files — chunk data — are returned as `application/octet-stream`. Directory paths return a JSON listing of their contents.

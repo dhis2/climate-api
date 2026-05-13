@@ -37,9 +37,12 @@ def _iso_step_to_approx_hours(step: str) -> float:
     if not m:
         raise ValueError(f"Cannot parse ISO 8601 duration: '{step}'")
     years, months, weeks, days, hours, minutes, seconds = (int(g or 0) for g in m.groups())
-    return (
+    result = (
         years * 365.25 * 24 + months * 30.4375 * 24 + weeks * 7 * 24 + days * 24 + hours + minutes / 60 + seconds / 3600
     )
+    if result <= 0:
+        raise ValueError(f"ISO 8601 duration '{step}' resolves to zero — cannot derive chunk size")
+    return result
 
 
 def time_chunk_for_iso_step(step: str) -> int:
