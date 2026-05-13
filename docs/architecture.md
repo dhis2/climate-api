@@ -55,10 +55,10 @@ This is a deliberate design constraint: each instance serves one place. A Sierra
 ```
 Template (YAML)
     │
-    │  POST /ingestions
+    │  POST /ingestions  (or  POST /sync)
     ▼
 Ingestion
-    │  download data
+    │  call ingestion function → NetCDF files on disk
     │  apply transforms
     │  reproject to instance CRS
     │  write GeoZarr store
@@ -75,7 +75,9 @@ Managed dataset (public API)
     └── /ogcapi/collections/{id} — OGC API access
 ```
 
-The framework is responsible for everything from "write zarr" onward. A download function only needs to write NetCDF files to a given directory. The framework then:
+The ingestion function is called identically by both `POST /ingestions` and `POST /sync` — the framework invokes it the same way regardless of the trigger. A correctly written ingestion function works for both without any changes.
+
+The framework is responsible for everything from "write zarr" onward. An ingestion function only needs to write NetCDF files to a given directory. The framework then:
 
 1. reads and normalises the coordinate names
 2. applies transforms (unit conversion, etc.)
@@ -86,7 +88,7 @@ The framework is responsible for everything from "write zarr" onward. A download
 7. stores the artifact record
 8. publishes the managed dataset through pygeoapi if `publish=true`
 
-This division means that download functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data files; the framework handles everything else.
+This division means that ingestion functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data files; the framework handles everything else.
 
 ---
 
@@ -130,7 +132,7 @@ Before executing a sync, the engine calls the availability function to clamp the
 
 The platform has four extension points. Each one has a narrow contract — the framework handles everything else automatically.
 
-### Download function
+### Ingestion function
 
 ```python
 def download(
@@ -148,6 +150,26 @@ def download(
 
 The function writes NetCDF files. The framework reads them, normalises coordinate names, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
 
+The ingestion function is called identically by `POST /ingestions` and `POST /sync`. The caller makes no difference to the function — it always receives the same parameters.
+
+**Reusing ingestion logic across templates**: multiple YAML templates can reference the same Python function and differentiate via `default_params`. This is the intended pattern for sources that have the same fetching logic but expose different variables:
+
+```yaml
+# era5land_temperature_hourly.yaml
+ingestion:
+  function: dhis2eo.data.era5_land.download
+  default_params:
+    variable: 2m_temperature
+
+# era5land_precipitation_hourly.yaml
+ingestion:
+  function: dhis2eo.data.era5_land.download
+  default_params:
+    variable: total_precipitation
+```
+
+No framework changes are needed to support a new variable from the same source.
+
 ### Transform function
 
 ```python
@@ -157,7 +179,7 @@ def my_transform(ds: xr.Dataset, dataset: dict) -> xr.Dataset:
     # Do not modify dataset-level ds.attrs — the framework manages those.
 ```
 
-Transforms are applied in order after the download function returns, before the zarr is written. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They do not write to disk.
+Transforms are applied in order after the ingestion function returns, before the zarr is written. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They do not write to disk.
 
 ### Process execution function
 
@@ -175,7 +197,7 @@ Processes are named operations triggered via `POST /processes/{id}/execution`. T
 
 Transforms are applied at a consistent point in the ingestion lifecycle:
 
-1. download function writes raw NetCDF files to disk
+1. ingestion function writes raw NetCDF files to disk
 2. framework reads and normalises the data into an xarray Dataset
 3. `_run_transforms(ds, dataset)` applies each declared transform in order
 4. result is reprojected to instance CRS
@@ -234,13 +256,13 @@ The artifact store keeps the full history of records for sync deduplication and 
 
 ## What the framework guarantees
 
-Plugin code (download functions, transforms, processes) can rely on the following being handled automatically by the framework:
+Plugin code (ingestion functions, transforms, processes) can rely on the following being handled automatically by the framework:
 
 | Concern                                               | Where handled                               |
 | ----------------------------------------------------- | ------------------------------------------- |
 | Coordinate name normalisation (`lat` → `y`, etc.)     | `build_dataset_zarr`                        |
 | Reprojection to instance CRS                          | `reproject_to_instance_crs`                 |
-| Zarr chunking (auto-sized per `period_type`)          | `_compute_chunk_sizes`                      |
+| Zarr chunking (auto-sized from `extents.temporal.resolution`) | `_compute_time_space_chunks`         |
 | Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr`                        |
 | GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr`                        |
 | Artifact coverage computation                         | `_coverage_from_dataset`                    |
