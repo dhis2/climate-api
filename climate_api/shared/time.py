@@ -31,13 +31,23 @@ def period_type_to_iso_step(period_type: str) -> str | None:
 def resolve_iso_step(dataset: dict[str, Any]) -> str | None:
     """Return the ISO 8601 duration step for a dataset.
 
-    Reads `period_step` from the template first, so custom datasets can declare
-    any step (e.g. `period_step: P14D`) without touching core code.  Falls back
-    to the built-in lookup table for standard period type names.
+    Resolution order:
+    1. ``extents.temporal.resolution`` — the authoritative field already present in
+       every template (e.g. ``P1D``, ``PT1H``).  Custom datasets with any period type
+       are fully supported here without touching core code.
+    2. Built-in lookup table — fallback for templates that pre-date the
+       ``extents.temporal.resolution`` field or omit it.
+
+    See issue #94: the long-term direction is to derive ``period_type`` itself from
+    ``extents.temporal.resolution`` and remove the duplication.
     """
-    explicit = dataset.get("period_step")
-    if explicit:
-        return str(explicit)
+    resolution = dataset.get("extents", {})
+    if isinstance(resolution, dict):
+        resolution = resolution.get("temporal", {})
+        if isinstance(resolution, dict):
+            resolution = resolution.get("resolution")
+    if resolution:
+        return str(resolution)
     return period_type_to_iso_step(str(dataset.get("period_type", "")))
 
 
