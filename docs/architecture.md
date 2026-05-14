@@ -146,7 +146,7 @@ Before executing a sync, the engine calls the availability function to clamp the
 
 The platform has five extension points. Each one has a narrow contract — the framework handles everything else automatically.
 
-### Download function (`sync.kind: temporal`, `release`, `static`)
+### Ingestion function (`sync.kind: temporal`, `release`, `static`)
 
 ```python
 def download(
@@ -164,7 +164,7 @@ def download(
 
 The function writes NetCDF files. The framework reads them, normalises coordinate names, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
 
-The download function is called identically by `POST /ingestions` and `POST /sync`. The caller makes no difference to the function — it always receives the same parameters.
+The ingestion function is called identically by `POST /ingestions` and `POST /sync`. The caller makes no difference to the function — it always receives the same parameters.
 
 **Reusing ingestion logic across templates**: multiple YAML templates can reference the same Python function and differentiate via `default_params`. This is the intended pattern for sources that have the same fetching logic but expose different variables:
 
@@ -325,7 +325,7 @@ The artifact store keeps the full history of records for sync deduplication and 
 
 ## What the framework guarantees
 
-Plugin code (download functions, derivation functions, transforms, processes) can rely on the following being handled automatically:
+Plugin code (ingestion functions, derivation functions, transforms, processes) can rely on the following being handled automatically:
 
 | Concern                                               | Where handled                                                     |
 | ----------------------------------------------------- | ----------------------------------------------------------------- |
