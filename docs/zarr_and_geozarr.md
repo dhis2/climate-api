@@ -25,6 +25,7 @@ Climate datasets are large, multi-dimensional arrays: a daily precipitation data
 - **Chunk-level random access** — a client requesting one time step should not have to read the entire file. Zarr stores data in independent, addressable chunks; a request for a single date reads only the relevant chunk.
 - **HTTP-native serving** — each chunk is a separate file on disk. A standard `GET /zarr/{dataset_id}/{chunk_path}` serves it with a regular `FileResponse`. No specialised server software is needed.
 - **Cloud compatibility** — the same directory layout works on local disk and cloud storage without code changes.
+- **Multiscale pyramids** — GeoZarr defines a multiscales convention that allows a store to contain multiple resolution levels. Map clients request only the level that matches their current zoom, avoiding full-resolution downloads.
 
 ---
 
@@ -40,11 +41,7 @@ The two halves of the term map directly onto the choices described in this docum
 - All datasets in an instance share a single coordinate reference system.
 - Units are standardised by the transform pipeline (e.g. Kelvin → Celsius).
 
-**Cloud-optimized** means the data can be accessed efficiently over HTTP without downloading the whole file:
-
-- Each chunk is an independent file readable in a single range request.
-- Multiscale pyramids allow map clients to fetch only the resolution level they need.
-- The store layout is identical on local disk and cloud object storage.
+**Cloud-optimized** means the data can be accessed efficiently over HTTP without downloading the whole file. The Zarr and GeoZarr formats provide all the necessary properties — chunk-level access, HTTP-native serving, multiscale pyramids, and cloud compatibility.
 
 The Climate API targets the same access pattern at country scale for arbitrary source datasets.
 
