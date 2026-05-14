@@ -10,7 +10,7 @@ The platform has four first-class concepts. Understanding the distinction betwee
 
 ### Dataset template
 
-A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_api/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-api.yaml`. It has no state — it describes what *could* be ingested, not what *has been* ingested.
+A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_api/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-api.yaml`. It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
 
 A template defines:
 
@@ -46,7 +46,7 @@ The relationship is: one template → many artifacts over time → one managed d
 
 The **extent** is the spatial bounding box configured for this Climate API instance. It is set once in `climate-api.yaml` and does not change at runtime. Every ingestion is automatically scoped to this extent — operators do not specify it per-request.
 
-This is a deliberate design constraint: each instance serves one place. A Norway instance serves Norway. A Sierra Leone instance serves Sierra Leone. Multi-country coverage requires multiple instances.
+This is a deliberate design constraint: each instance serves one place. A Sierra Leone instance serves Sierra Leone. Multi-country coverage requires multiple instances.
 
 ---
 
@@ -98,15 +98,15 @@ This division means that download and derivation functions do not need to know a
 
 ## Sync kinds
 
-The `sync.kind` field in a template determines how a managed dataset is kept current. Choosing the wrong kind is the most common source of confusion.
+The `sync.kind` field in a template determines how a managed dataset is kept current.
 
-| `sync.kind` | Data lives | On each sync | Use when |
-|-------------|-----------|--------------|----------|
-| `temporal` | Local zarr | Append new time steps, or rematerialize | Historical record that grows over time (CHIRPS, ERA5-Land) |
-| `release` | Local zarr | Rematerialize if a newer release exists | Versioned releases where each year/version is discrete (WorldPop) |
-| `static` | Local zarr | Never synced | One-time fixed dataset with no updates |
-| `derived` | Local zarr, rebuilt from remote | Always rematerialize from remote store | Forecast or model data that requires transformation before it is usable (GEFS) |
-| `remote` | Remote store, no local copy | Re-register latest coverage | Datasets where direct store access is acceptable and no local transformation is needed |
+| `sync.kind` | Data lives                      | On each sync                            | Use when                                                                              |
+| ----------- | ------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `temporal`  | Local zarr                      | Append new time steps, or rematerialize | Historical record that grows over time (CHIRPS, ERA5-Land)                            |
+| `release`   | Local zarr                      | Rematerialize if a newer release exists | Versioned releases where each year/version is discrete (WorldPop)                     |
+| `static`    | Local zarr                      | Never synced                            | One-time fixed dataset with no updates                                                |
+| `derived`   | Local zarr, rebuilt from remote | Always rematerialize from remote store  | Forecast or model data that requires transformation before it is usable (GEFS)        |
+| `remote`    | Remote store, no local copy     | Re-register latest coverage             | Datasets where direct store access is acceptable and no local transformation is needed |
 
 ### When to use `derived` vs `remote`
 
@@ -282,7 +282,7 @@ Every zarr artifact must have GeoZarr root attributes for map rendering to work 
 - `proj:code` — the CRS EPSG code (e.g. `EPSG:32633` for UTM, `EPSG:4326` for WGS84)
 - `zarr_conventions` — GeoZarr convention declaration
 
-The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map. Without them, the viewer falls back to null bounds and the instance CRS, which produces a white or misaligned map.
+The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map.
 
 **The framework writes these attributes — plugins do not.** For downloaded datasets, they are written in `build_dataset_zarr` after transforms and reprojection. For derived datasets, they are written in `_derive_artifact` after transforms run, using the actual coordinate bounds of the final written data and the CRS from `store.crs`.
 
@@ -296,7 +296,7 @@ The instance CRS is configured in `climate-api.yaml`:
 extent:
   name: Norway
   bbox: [3.0, 57.0, 32.0, 72.5]
-  crs: EPSG:32633   # optional; defaults to EPSG:4326
+  crs: EPSG:32633 # optional; defaults to EPSG:4326
 ```
 
 **Downloaded datasets** are reprojected from their source CRS (`source_crs` in the template, default `EPSG:4326`) to the instance CRS during ingestion. The stored zarr is in the instance CRS.
@@ -327,17 +327,17 @@ The artifact store keeps the full history of records for sync deduplication and 
 
 Plugin code (download functions, derivation functions, transforms, processes) can rely on the following being handled automatically:
 
-| Concern | Where handled |
-|---------|---------------|
-| Coordinate name normalisation (`lat` → `y`, etc.) | `build_dataset_zarr` (downloaded data) |
-| Reprojection to instance CRS | `reproject_to_instance_crs` (downloaded data only) |
-| Zarr chunking (auto-sized from `extents.temporal.resolution`) | `_compute_time_space_chunks` |
-| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr` |
-| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr` (downloaded), `_derive_artifact` (derived) |
-| Artifact coverage computation | `_coverage_from_dataset` |
-| Artifact record persistence | `_store_artifact` / `_upsert_derived_record` |
-| pygeoapi publication | `publish_artifact_record` if `publish=true` |
-| STAC collection generation | Dynamic from artifact record |
+| Concern                                               | Where handled                                                     |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| Coordinate name normalisation (`lat` → `y`, etc.)     | `build_dataset_zarr` (downloaded data)                            |
+| Reprojection to instance CRS                          | `reproject_to_instance_crs` (downloaded data only)                |
+| Zarr chunking (auto-sized from `extents.temporal.resolution`) | `_compute_time_space_chunks`                              |
+| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr`                                              |
+| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr` (downloaded), `_derive_artifact` (derived)   |
+| Artifact coverage computation                         | `_coverage_from_dataset`                                          |
+| Artifact record persistence                           | `_store_artifact` / `_upsert_derived_record`                      |
+| pygeoapi publication                                  | `publish_artifact_record` if `publish=true`                       |
+| STAC collection generation                            | Dynamic from artifact record                                      |
 
 Plugin code only needs to produce data. Everything else is the framework's responsibility.
 
