@@ -18,6 +18,27 @@ Zarr is designed to work natively in cloud object stores as well as on local dis
 
 ---
 
+## ARCO: Analysis-Ready, Cloud-Optimized
+
+The stores produced by the Climate API are an instance of the **ARCO** pattern — a term from the climate science community describing datasets that are simultaneously ready for analysis and optimised for cloud access. [ARCO-ERA5](https://github.com/google-research/arco-era5) (Google Research, 2023) is the canonical large-scale example: the full ERA5 reanalysis converted to Zarr and served directly from Google Cloud Storage.
+
+The two halves of the term map directly onto the choices described in this document:
+
+**Analysis-ready** means a consumer can open the data and start computing without preprocessing:
+- Dimension names are normalised to `(time, x, y)` regardless of the source convention.
+- All datasets in an instance share a single coordinate reference system.
+- Units are standardised by the transform pipeline (e.g. Kelvin → Celsius).
+- Temporal coverage and spatial extent are recorded in the artifact and exposed via STAC and OGC API.
+
+**Cloud-optimized** means the data can be accessed efficiently over HTTP without downloading the whole file:
+- Each chunk is an independent file readable in a single range request.
+- Multiscale pyramids allow map clients to fetch only the resolution level they need.
+- The store layout is identical on local disk and cloud object storage — no code changes are required to move between the two.
+
+The Climate API targets the same access pattern as ARCO-ERA5 but at country scale and for arbitrary source datasets, not just ERA5.
+
+---
+
 ## Why Zarr
 
 Climate datasets are large, multi-dimensional arrays: a daily precipitation dataset covering a country at 5 km resolution for 10 years has roughly 3 600 time steps and hundreds of thousands of spatial pixels. Serving this efficiently from a REST API requires a format that supports:
