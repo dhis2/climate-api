@@ -66,6 +66,7 @@ nav:
   - Home: index.md
   - Get started: setup_guide.md
   - Concepts:
+      - Climate Services: climate_services.md
       - Project overview: project_description.md
       - Implementation status: implementation-status.md
       - OGC API: ogcapi.md
