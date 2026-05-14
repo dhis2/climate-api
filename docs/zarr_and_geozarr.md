@@ -18,6 +18,16 @@ Zarr is designed to work natively in cloud object stores as well as on local dis
 
 ---
 
+## Why Zarr
+
+Climate datasets are large, multi-dimensional arrays: a daily precipitation dataset covering a country at 5 km resolution for 10 years has roughly 3 600 time steps and hundreds of thousands of spatial pixels. Serving this efficiently from a REST API requires a format that supports:
+
+- **Chunk-level random access** — a client requesting one time step should not have to read the entire file. Zarr stores data in independent, addressable chunks; a request for a single date reads only the relevant chunk.
+- **HTTP-native serving** — each chunk is a separate file on disk. A standard `GET /zarr/{dataset_id}/{chunk_path}` serves it with a regular `FileResponse`. No specialised server software is needed.
+- **Cloud compatibility** — the same directory layout works on local disk and cloud storage without code changes.
+
+---
+
 ## ARCO: Analysis-Ready, Cloud-Optimized
 
 The stores produced by the Climate API are an instance of the **ARCO** pattern — a term from the climate science community describing datasets that are simultaneously ready for analysis and optimised for cloud access.
@@ -37,17 +47,6 @@ The two halves of the term map directly onto the choices described in this docum
 - The store layout is identical on local disk and cloud object storage.
 
 The Climate API targets the same access pattern at country scale for arbitrary source datasets.
-
----
-
-## Why Zarr
-
-Climate datasets are large, multi-dimensional arrays: a daily precipitation dataset covering a country at 5 km resolution for 10 years has roughly 3 600 time steps and hundreds of thousands of spatial pixels. Serving this efficiently from a REST API requires a format that supports:
-
-- **Chunk-level random access** — a client requesting one time step should not have to read the entire file. Zarr stores data in independent, addressable chunks; a request for a single date reads only the relevant chunk.
-- **HTTP-native serving** — each chunk is a separate file on disk. A standard `GET /zarr/{dataset_id}/{chunk_path}` serves it with a regular `FileResponse`. No specialised server software is needed.
-- **Cloud compatibility** — the same directory layout works on local disk and cloud storage without code changes.
-- **xarray integration** — `xr.open_zarr()` opens a Zarr store lazily as an xarray dataset, making it trivial to subset, resample, and transform data in the API layer.
 
 ---
 
