@@ -62,7 +62,7 @@ The flat vs. pyramid decision is made at build time based on spatial size (see [
 
 Chunks are sized to match expected access patterns. The goal is that reading one time step for the full spatial extent fits in one round-trip, and that full time series for a small area also fits in one round-trip.
 
-Time chunk sizes are derived from the dataset's `extents.temporal.resolution` field, which every dataset template declares as an ISO 8601 duration (e.g. `P1D`, `PT1H`, `P1M`). The duration is converted to approximate hours and mapped to a natural analysis window:
+Time chunk sizes are derived from the dataset's `extents.temporal.resolution` field, an ISO 8601 duration (e.g. `P1D`, `PT1H`, `P1M`). When present and valid, the duration is converted to approximate hours and mapped to a natural analysis window:
 
 | Duration tier       | Approximate hours | Target window | Example                     |
 | ------------------- | ----------------- | ------------- | --------------------------- |
@@ -70,7 +70,7 @@ Time chunk sizes are derived from the dataset's `extents.temporal.resolution` fi
 | Daily to sub-weekly | 24 h – 168 h      | ~1 month      | `P1D` (daily) → 30 steps    |
 | Weekly and coarser  | ≥ 168 h           | ~1 year       | `P1M` (monthly) → 12 steps  |
 
-This calculation is fully data-driven: any dataset — including custom or plugin datasets — only needs to declare `extents.temporal.resolution` and the correct chunk size is computed automatically.
+This calculation is fully data-driven: any dataset — including custom or plugin datasets — only needs to declare `extents.temporal.resolution` and the correct chunk size is computed automatically. If the field is absent or not a valid ISO 8601 duration, a warning is logged and the time chunk falls back to the dataset's `period_type`.
 
 Spatial chunks are capped at 512 × 512 pixels — a pragmatic compromise between tile rendering (which benefits from smaller chunks) and analysis workloads (which benefit from larger ones). For small extents where the full spatial dimension is smaller than 512 pixels, the entire dimension fits in one chunk.
 

@@ -1,8 +1,11 @@
 """Time helpers shared across Climate API modules."""
 
+import logging
 import re
 from datetime import UTC, date, datetime
 from typing import Any, cast
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
@@ -13,9 +16,8 @@ _ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?
 def resolve_iso_period_step(dataset: dict[str, Any]) -> str | None:
     """Return the ISO 8601 duration step from ``extents.temporal.resolution``.
 
-    Dataset templates must declare ``extents.temporal.resolution`` as an ISO 8601
-    duration (e.g. ``P1D``, ``PT1H``, ``P14D``).  Returns None if the field is absent,
-    which triggers a warning at the call site.
+    Returns None if the field is absent or not a valid ISO 8601 duration, logging
+    a warning in the latter case.
     """
     extents = dataset.get("extents")
     if not isinstance(extents, dict):
@@ -24,7 +26,15 @@ def resolve_iso_period_step(dataset: dict[str, Any]) -> str | None:
     if not isinstance(temporal, dict):
         return None
     resolution = temporal.get("resolution")
-    return str(resolution) if resolution else None
+    if not resolution:
+        return None
+    resolution_str = str(resolution)
+    try:
+        _iso_step_to_approx_hours(resolution_str)
+    except ValueError:
+        logger.warning("Invalid ISO 8601 duration in extents.temporal.resolution: %r", resolution_str)
+        return None
+    return resolution_str
 
 
 def _iso_step_to_approx_hours(step: str) -> float:
