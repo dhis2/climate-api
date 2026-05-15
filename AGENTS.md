@@ -1,19 +1,22 @@
-# CLAUDE.md
+# DHIS2 Climate API
+
+Agent context for the `climate-api` repository. Provider-agnostic — intended to be readable by any AI coding assistant.
 
 ## Project overview
 
-The DHIS2 Climate API is a FastAPI-based REST API that downloads, processes, and serves Climate and Earth Observation data.
+The DHIS2 Climate API is a FastAPI-based REST API that downloads, processes, and serves climate and Earth Observation data as GeoZarr stores.
 
 Key concepts:
 
 - **Dataset templates** — YAML files in `data/datasets/` describing a data source (variable, period type, download function). These are blueprints.
 - **Artifacts / managed datasets** — ingested instances of a template for a specific spatial extent and time range. Exposed under `/datasets` and `/zarr/{dataset_id}`.
 - **Extent** — a single named spatial bounding box configured at instance setup time (`id`, `bbox`, optional `country_code`). Exposed at `GET /extent`.
+- **GeoZarr stores** — datasets are stored as chunked Zarr v3 archives with GeoZarr spatial attributes. Flat stores for small extents; multiscale pyramids for large ones. Served chunk-by-chunk over HTTP with no specialised server middleware.
 
 ## Repository layout
 
 ```
-src/climate_api/
+climate_api/
   data_manager/     # download and zarr build (downloader.py)
   data_accessor/    # open zarr / netcdf for read (accessor.py)
   data_registry/    # dataset template YAML loading
@@ -49,7 +52,9 @@ ingestion:
   default_params: {} # passed to the download function
 ```
 
-`build_dataset_zarr` automatically builds a multiscale Zarr pyramid when the spatial dimensions exceed 2048×2048 pixels. Otherwise it writes a flat chunked zarr with auto-computed chunk sizes tuned to the dataset's `period_type`.
+`build_dataset_zarr` in `data_manager/downloader.py` builds a multiscale Zarr pyramid when the spatial dimensions exceed 2048×2048 pixels; otherwise it writes a flat chunked zarr with chunk sizes derived from the dataset's temporal resolution.
+
+The ingestion interface is being redesigned as a plugin protocol (see GitHub issue #64) — the `ingestion.function` convention will be replaced by a three-method async plugin (`probe`, `periods`, `fetch_period`).
 
 ## pygeoapi
 
@@ -57,8 +62,14 @@ pygeoapi is mounted at `/ogcapi` as a sub-application. Its config is generated d
 
 The config is regenerated on each `publish_artifact` call and also at startup via `ensure_pygeoapi_base_config()`.
 
+## Active design work
+
+- **#64** — streaming ingest via Icechunk; per-period writes; no intermediate files
+- **#111** — async job execution; OGC API Processes; progress reporting
+- **#137** — spatial aggregation to DHIS2 org units; multi-dataset grid alignment
+
 ## Commit conventions
 
 - Use conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`)
-- No Co-Authored-By or other attribution lines
-- Never use emojis anywhere — not in commits, code, comments, or responses
+- No attribution lines in commit messages
+- No emojis anywhere — not in commits, code, comments, or documentation
