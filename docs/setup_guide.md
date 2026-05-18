@@ -178,6 +178,8 @@ Set the correct permissions:
 chmod 600 ~/.netrc
 ```
 
+**Windows:** Python's `netrc` module looks for `_netrc` (underscore) instead of `.netrc`. Create the file as `%USERPROFILE%\_netrc` with the same content. The `chmod` step is not needed on Windows.
+
 ### 3. Ingest ERA5-Land data
 
 Once authenticated, ingest ERA5-Land temperature for Rwanda:
