@@ -128,7 +128,12 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "daily", "units": "mm", "source": "CHIRPS v3"},
+        lambda _: {
+            "period_type": "daily",
+            "units": "mm",
+            "source": "CHIRPS v3",
+            "extents": {"temporal": {"resolution": "P1D"}},
+        },
     )
     monkeypatch.setattr(
         stac_services,
@@ -250,7 +255,12 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
     monkeypatch.setattr(
         stac_services.registry_datasets,
         "get_dataset",
-        lambda _: {"period_type": "hourly", "source": "ERA5-Land", "short_name": "2m temperature"},
+        lambda _: {
+            "period_type": "hourly",
+            "source": "ERA5-Land",
+            "short_name": "2m temperature",
+            "extents": {"temporal": {"resolution": "PT1H"}},
+        },
     )
     monkeypatch.setattr(
         stac_services,
