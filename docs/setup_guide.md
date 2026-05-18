@@ -165,16 +165,20 @@ Create a free account at [earthdatahub.destine.eu](https://earthdatahub.destine.
 DestinE authentication uses a `.netrc` file in your home directory. Create or append to `~/.netrc`:
 
 ```
-machine earthdatahub.destine.eu
-login your@email.com
-password your-password
+machine data.earthdatahub.destine.eu
+login edh
+password <your-personal-access-token>
 ```
+
+The `login` is the literal string `edh`. The `password` is a personal access token, not your account password — generate one at `earthdatahub.destine.eu/account-settings` under "My Personal Access Tokens"
 
 Set the correct permissions:
 
 ```bash
 chmod 600 ~/.netrc
 ```
+
+**Windows:** Python's `netrc` module looks for `_netrc` (underscore) instead of `.netrc`. Create the file as `%USERPROFILE%\_netrc` with the same content. The `chmod` step is not needed on Windows.
 
 ### 3. Ingest ERA5-Land data
 

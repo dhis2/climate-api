@@ -13,6 +13,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock .python-version ./
 COPY climate_api/ climate_api/
+COPY README.md .
 
 RUN uv sync --frozen --no-dev
 
