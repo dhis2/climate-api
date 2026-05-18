@@ -1,11 +1,74 @@
 """Time helpers shared across Climate API modules."""
 
+import logging
 import re
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 import pandas as pd
+
+_ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
+
+
+def resolve_iso_period_step(dataset: dict[str, Any]) -> str | None:
+    """Return the ISO 8601 duration step from ``extents.temporal.resolution``.
+
+    Returns None if the field is absent or not a valid ISO 8601 duration, logging
+    a warning in the latter case.
+    """
+    extents = dataset.get("extents")
+    if not isinstance(extents, dict):
+        return None
+    temporal = extents.get("temporal")
+    if not isinstance(temporal, dict):
+        return None
+    resolution = temporal.get("resolution")
+    if not resolution:
+        return None
+    resolution_str = str(resolution)
+    try:
+        _iso_step_to_approx_hours(resolution_str)
+    except ValueError:
+        logger.warning("Invalid ISO 8601 duration in extents.temporal.resolution: %r", resolution_str)
+        return None
+    return resolution_str
+
+
+def _iso_step_to_approx_hours(step: str) -> float:
+    """Return the approximate duration in hours for an ISO 8601 duration string.
+
+    Months and years use calendar averages (30.4375 days/month, 365.25 days/year).
+    Raises ValueError for unrecognised formats.
+    """
+    m = _ISO_DURATION_RE.fullmatch(step)
+    if not m:
+        raise ValueError(f"Cannot parse ISO 8601 duration: '{step}'")
+    years, months, weeks, days, hours, minutes, seconds = (int(g or 0) for g in m.groups())
+    result = (
+        years * 365.25 * 24 + months * 30.4375 * 24 + weeks * 7 * 24 + days * 24 + hours + minutes / 60 + seconds / 3600
+    )
+    if result <= 0:
+        raise ValueError(f"ISO 8601 duration '{step}' resolves to zero — cannot derive chunk size")
+    return result
+
+
+def time_chunk_for_iso_step(step: str) -> int:
+    """Return a suitable zarr time chunk size for a given ISO 8601 duration step.
+
+    Targets roughly one week of data for sub-daily steps, one month for daily/sub-weekly
+    steps, and one year for weekly and coarser steps.  This keeps individual chunk files
+    at a manageable size while covering a natural analysis window in one read.
+    """
+    hours = _iso_step_to_approx_hours(step)
+    if hours < 24:
+        return max(1, round(24 * 7 / hours))  # ~1 week
+    if hours < 24 * 7:
+        return max(1, round(24 * 30 / hours))  # ~1 month
+    return max(1, round(24 * 365.25 / hours))  # ~1 year
+
 
 _WEEKLY_PERIOD_PATTERN = re.compile(r"^(?P<year>\d{4})-W(?P<week>\d{2})$")
 

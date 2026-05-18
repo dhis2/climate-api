@@ -17,6 +17,7 @@ from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
 from climate_api import config as api_config
+from climate_api.shared.time import resolve_iso_period_step, time_chunk_for_iso_step
 from climate_api.transforms.reproject import reproject_to_instance_crs
 
 from .utils import get_time_dim, get_x_y_dims
@@ -200,11 +201,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
 
     else:
         logger.info("Building flat zarr (max dim %d pixels)", max(ds.sizes[x_dim], ds.sizes[y_dim]))
-        # determine optimal chunk sizes
-        ds_autochunk = ds.chunk("auto").unify_chunks()
-        uniform_chunks: dict[str, Any] = {str(dim): ds_autochunk.chunks[dim][0] for dim in ds_autochunk.dims}
-        time_space_chunks = _compute_time_space_chunks(ds, dataset)
-        uniform_chunks.update(time_space_chunks)
+        uniform_chunks = _compute_time_space_chunks(ds, dataset)
         logger.info(f"--> {uniform_chunks}")
 
         ds.attrs.update(geozarr_attrs)
@@ -215,7 +212,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
         # render missing pixels as transparent — not a separately specified fillValue.
         for var in ds_chunked.data_vars:
             ds_chunked[var].encoding.pop("_FillValue", None)
-        ds_chunked.to_zarr(zarr_path, mode="w", consolidated=True)
+        ds_chunked.to_zarr(zarr_path, mode="w", zarr_format=3, consolidated=True)
         ds_chunked.close()
 
     ds.close()
@@ -292,21 +289,30 @@ def _run_transforms(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
 def _compute_time_space_chunks(
     ds: xr.Dataset,
     dataset: dict[str, Any],
-    max_spatial_chunk: int = 256,
+    max_spatial_chunk: int = 512,
 ) -> dict[str, int]:
     """Compute chunk sizes tuned for common temporal access patterns."""
     chunks: dict[str, int] = {}
 
+    iso_step = resolve_iso_period_step(dataset)
     dim = get_time_dim(ds)
-    period_type = dataset["period_type"]
-    if period_type == "hourly":
-        chunks[dim] = 24 * 7
-    elif period_type == "daily":
-        chunks[dim] = 30
-    elif period_type == "monthly":
+    if iso_step is not None:
+        try:
+            chunks[dim] = time_chunk_for_iso_step(iso_step)
+        except ValueError:
+            logger.warning(
+                "Invalid ISO 8601 step %r for dataset '%s'; defaulting time chunk to 12.",
+                iso_step,
+                dataset.get("id", "?"),
+            )
+            chunks[dim] = 12
+    else:
+        logger.warning(
+            "No ISO 8601 step for dataset '%s'; defaulting time chunk to 12. "
+            "Declare 'extents.temporal.resolution' in the template to silence this warning.",
+            dataset.get("id", "?"),
+        )
         chunks[dim] = 12
-    elif period_type == "yearly":
-        chunks[dim] = 1
 
     x_dim, y_dim = get_x_y_dims(ds)
     chunks[x_dim] = min(ds.sizes[x_dim], max_spatial_chunk)
