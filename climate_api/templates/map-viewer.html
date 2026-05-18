@@ -222,6 +222,8 @@
             <input type="range" id="time-slider" min="0" step="1" value="0" />
           </div>
 
+          <div id="extra-dims-container"></div>
+
           <dl id="dataset-meta" class="meta-grid hidden">
             <dt>Source</dt>
             <dd id="meta-source">—</dd>
@@ -323,6 +325,7 @@
       let activeLayer = null;
       let timeSteps = [];
       let timeDimKey = "time";
+      let extraDims = [];
 
       const selectEl = document.getElementById("dataset-select");
       const timeSection = document.getElementById("time-section");
@@ -428,6 +431,102 @@
         }
       }
 
+      // --- Extra dimension helpers ---
+
+      function getExtraDims(dimensions, primaryTimeDimKey) {
+        const result = [];
+        for (const [key, val] of Object.entries(dimensions ?? {})) {
+          if (val.type === "spatial") continue;
+          if (key === primaryTimeDimKey) continue;
+          const count = Array.isArray(val.values) ? val.values.length : 0;
+          if (count < 2) continue;
+          result.push({ key, ...val, _count: count });
+        }
+        return result;
+      }
+
+      function formatDimLabel(key) {
+        return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+
+      function formatDimValue(dim, i) {
+        if (!Array.isArray(dim.values)) return String(i);
+        const val = dim.values[i];
+        if (dim["climate_api:unit"] === "hours") return `${val}h`;
+        return String(val);
+      }
+
+      function safeDimId(key) {
+        return String(key).replace(/[^A-Za-z0-9_-]/g, "_");
+      }
+
+      function renderExtraDimSliders(dims) {
+        const container = document.getElementById("extra-dims-container");
+        container.innerHTML = "";
+        for (const dim of dims) {
+          const safeId = safeDimId(dim.key);
+          const section = document.createElement("div");
+          section.className = "panel-section";
+
+          const header = document.createElement("div");
+          header.className = "time-header";
+          const labelEl = document.createElement("label");
+          labelEl.style.marginBottom = "0";
+          labelEl.textContent = formatDimLabel(dim.key) + (dim["climate_api:unit"] ? ` (${dim["climate_api:unit"]})` : "");
+          const countEl = document.createElement("span");
+          countEl.id = `dim-count-${safeId}`;
+          countEl.className = "time-count";
+          countEl.textContent = `1 / ${dim._count}`;
+          header.appendChild(labelEl);
+          header.appendChild(countEl);
+
+          const valDiv = document.createElement("div");
+          valDiv.style.marginBottom = "0.4rem";
+          const valEl = document.createElement("span");
+          valEl.id = `dim-val-${safeId}`;
+          valEl.className = "time-value";
+          valEl.textContent = formatDimValue(dim, 0);
+          valDiv.appendChild(valEl);
+
+          const slider = document.createElement("input");
+          slider.type = "range";
+          slider.id = `dim-slider-${safeId}`;
+          slider.dataset.dim = dim.key;
+          slider.min = "0";
+          slider.max = String(dim._count - 1);
+          slider.step = "1";
+          slider.value = "0";
+          slider.addEventListener("input", (e) => {
+            const i = parseInt(e.target.value, 10);
+            valEl.textContent = formatDimValue(dim, i);
+            countEl.textContent = `${i + 1} / ${dim._count}`;
+            clearTimeout(_selectorDebounce);
+            _selectorDebounce = setTimeout(() => updateSelector(), 150);
+          });
+
+          section.appendChild(header);
+          section.appendChild(valDiv);
+          section.appendChild(slider);
+          container.appendChild(section);
+        }
+      }
+
+      function buildFullSelector() {
+        const selector = {};
+        if (timeStepCount() > 0) selector[timeDimKey] = parseInt(timeSlider.value, 10);
+        for (const dim of extraDims) {
+          const slider = document.getElementById(`dim-slider-${safeDimId(dim.key)}`);
+          if (slider) selector[dim.key] = parseInt(slider.value, 10);
+        }
+        return selector;
+      }
+
+      function updateSelector() {
+        activeLayer?.setSelector(buildFullSelector());
+      }
+
+      // --- Dataset loading ---
+
       async function loadDataset(href) {
         if (!map || mapUnavailable) {
           setStatus(MAP_UNAVAILABLE_MESSAGE, true);
@@ -441,6 +540,8 @@
           } catch {}
           activeLayer = null;
         }
+        extraDims = [];
+        document.getElementById("extra-dims-container").innerHTML = "";
         timeSection.classList.add("hidden");
         datasetMeta.classList.add("hidden");
         legendEl.classList.add("hidden");
@@ -473,6 +574,7 @@
         const dimensions = collection["cube:dimensions"] ?? {};
         timeDimKey = getTimeDimKey(dimensions);
         timeSteps = buildTimeSteps(dimensions);
+        extraDims = getExtraDims(dimensions, timeDimKey);
 
         // For projected-CRS stores, pass crs + proj4 string so ZarrLayer
         // reprojects natively instead of treating coordinates as WGS84 degrees.
@@ -500,8 +602,12 @@
         try {
           cm = buildColormap(colormapName);
           const zarrVersion = zarr["zarr:zarr_format"] ?? null;
-          const selector =
-            timeStepCount() > 0 ? { [timeDimKey]: 0 } : {};
+          const extraInitSel = {};
+          for (const dim of extraDims) extraInitSel[dim.key] = 0;
+          const selector = {
+            ...(timeStepCount() > 0 ? { [timeDimKey]: 0 } : {}),
+            ...extraInitSel,
+          };
           activeLayer = new ZarrLayer({
             id: "zarr-layer",
             source: zarr.href,
@@ -526,7 +632,6 @@
           return;
         }
 
-
         // Time slider.
         if (timeStepCount() > 1) {
           timeSlider.max = timeStepCount() - 1;
@@ -534,6 +639,11 @@
           timeValueEl.textContent = timeStepAt(0);
           timeCountEl.textContent = `1 / ${timeStepCount()}`;
           timeSection.classList.remove("hidden");
+        }
+
+        // Extra dimension sliders (ensemble_member, lead_time, etc.).
+        if (extraDims.length > 0) {
+          renderExtraDimSliders(extraDims);
         }
 
         // Metadata strip.
@@ -566,12 +676,8 @@
         const i = parseInt(e.target.value, 10);
         timeValueEl.textContent = timeStepAt(i) ?? "—";
         timeCountEl.textContent = `${i + 1} / ${timeStepCount()}`;
-        const layer = activeLayer;
-        const dimKey = timeDimKey;
         clearTimeout(_selectorDebounce);
-        _selectorDebounce = setTimeout(() => {
-          layer?.setSelector({ [dimKey]: i });
-        }, 150);
+        _selectorDebounce = setTimeout(() => updateSelector(), 150);
       });
 
       initMap();

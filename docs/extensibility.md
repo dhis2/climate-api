@@ -8,6 +8,7 @@ The same pattern applies at every extension point:
 | --------------- | ------------- | --------------- |
 | [Dataset templates](#dataset-templates) | YAML files | `plugins_dir/datasets/` |
 | [Ingestion functions](#ingestion-functions) | Python function, dotted path in YAML | any importable path |
+| [Derivation functions](#derivation-functions) | Python function, dotted path in YAML | any importable path |
 | [Transform functions](#transform-functions) | Python function, dotted path in YAML | any importable path |
 | [Processes](#processes) | YAML file + Python function | `plugins_dir/processes/` |
 
@@ -44,6 +45,48 @@ ingestion:
 ```
 
 The function must follow the download function contract (see [Adding custom datasets](adding_custom_datasets.md#step-1-write-the-download-function)). It can live anywhere that is importable — either an installed package or a module placed directly under `plugins_dir` (which is automatically added to `sys.path`).
+
+---
+
+## Derivation functions
+
+`sync.kind: derived` is for datasets that cannot be served directly from a remote store — they require a transformation step (e.g. ensemble mean, lead_time remapping, daily resampling) before they are useful. The derivation function is declared with `ingestion.function` and called with a standard contract:
+
+```python
+def derive_dataset(
+    *,
+    store_config: dict,    # the template's store block
+    output_path: Path,     # where to write the zarr
+    extent: dict | None,   # configured instance spatial extent
+    variable: str,
+    period_type: str,
+) -> None: ...
+```
+
+The built-in implementation for GEFS is `climate_api.processing.gefs.derive_dataset`. A plugin can reference it directly or replace it entirely:
+
+```yaml
+- id: ecmwf_ifs_temperature_forecast
+  variable: temperature_2m
+  period_type: daily
+  sync:
+    kind: derived
+  ingestion:
+    function: my_plugin.ecmwf.derive_dataset
+  transforms:
+    - climate_api.transforms.unit_conversion.flux_to_mm_per_day
+  store:
+    kind: remote_zarr
+    store_url: "s3://..."
+    store_format: icechunk
+    storage_options:
+      anon: true
+    crs: "EPSG:4326"   # optional, defaults to EPSG:4326
+```
+
+After the derivation function returns, any `transforms` declared in the template are applied to the written zarr before coverage is computed and the artifact is registered. This means all built-in and custom transforms work identically for derived datasets.
+
+See [Adding custom datasets — Derived datasets](adding_custom_datasets.md#derived-datasets) for the full field reference and a step-by-step example.
 
 ---
 

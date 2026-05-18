@@ -85,7 +85,12 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
     )
     template_links = [_link_to_dict(link) for link in template.links]
 
-    collection_payload = _build_collection_with_xstac(artifact=artifact, template=template)
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        collection_payload = _build_remote_zarr_collection(
+            artifact=artifact, template=template, source_dataset=source_dataset
+        )
+    else:
+        collection_payload = _build_collection_with_xstac(artifact=artifact, template=template)
     collection_payload["id"] = dataset_id
     collection_payload["type"] = "Collection"
     collection_payload["stac_version"] = STAC_VERSION
@@ -131,7 +136,7 @@ def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
         latest = max(artifacts, key=lambda artifact: artifact.created_at)
         if latest.publication.status != PublicationStatus.PUBLISHED:
             continue
-        if latest.format != ArtifactFormat.ZARR:
+        if latest.format not in (ArtifactFormat.ZARR, ArtifactFormat.REMOTE_ZARR):
             continue
         result[dataset_id] = latest
     return dict(sorted(result.items()))
@@ -168,7 +173,10 @@ def _build_collection_template(
     )
     from climate_api import config as api_config
 
-    native_crs = api_config.get_crs() or "EPSG:4326"
+    # REMOTE_ZARR and WGS84-native local zarr (spatial_wgs84 is None → data IS WGS84) both use EPSG:4326.
+    # Local zarr reprojected to instance CRS has spatial_wgs84 set and uses the instance CRS.
+    is_wgs84_native = artifact.format == ArtifactFormat.REMOTE_ZARR or artifact.coverage.spatial_wgs84 is None
+    native_crs = "EPSG:4326" if is_wgs84_native else (api_config.get_crs() or "EPSG:4326")
     template.extra_fields["keywords"] = _keywords(artifact, source_dataset)
     template.extra_fields["proj:code"] = native_crs
     template.clear_links()
@@ -251,6 +259,145 @@ def _clear_xstac_collection_cache() -> None:
     _xstac_collection_cache.clear()
 
 
+def _build_remote_zarr_collection(
+    *,
+    artifact: ArtifactRecord,
+    template: pystac.Collection,
+    source_dataset: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a STAC collection payload for a REMOTE_ZARR artifact by opening the remote store."""
+    cached = _xstac_collection_cache.get(artifact.artifact_id)
+    if cached is not None:
+        return deepcopy(cached)
+
+    from climate_api.providers.remote_zarr import open_remote_dataset
+
+    store = source_dataset.get("store")
+    if not isinstance(store, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Remote zarr artifact '{artifact.artifact_id}' has no store config",
+        )
+
+    try:
+        ds = open_remote_dataset(store)
+    except Exception as exc:
+        logger.exception("Failed to open remote zarr store for STAC collection '%s'", artifact.artifact_id)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for '{artifact.artifact_id}' is temporarily unavailable",
+        ) from exc
+
+    try:
+        x_dim, y_dim = get_x_y_dims(ds)
+        time_dim = get_time_dim(ds)
+        cube_dims = _cube_dimensions_from_dataset(ds, x_dim=x_dim, y_dim=y_dim, time_dim=time_dim)
+        cube_vars = _cube_variables_from_dataset(ds, artifact=artifact)
+    except Exception as exc:
+        logger.exception("Failed to build STAC metadata for remote artifact '%s'", artifact.artifact_id)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for '{artifact.artifact_id}' is temporarily unavailable",
+        ) from exc
+    finally:
+        ds.close()
+
+    template.clear_links()
+    payload: dict[str, Any] = template.to_dict(include_self_link=False)
+    payload["cube:dimensions"] = cube_dims
+    payload["cube:variables"] = cube_vars
+    _cache_xstac_collection_payload(artifact.artifact_id, payload)
+    return deepcopy(payload)
+
+
+def _cube_dimensions_from_dataset(
+    ds: Any,
+    *,
+    x_dim: str,
+    y_dim: str,
+    time_dim: str,
+) -> dict[str, Any]:
+    import numpy as np
+    import pandas as pd
+
+    dims: dict[str, Any] = {}
+    for name in ds.dims:
+        coord = ds.coords.get(name)
+        if coord is None:
+            continue
+        values = coord.values
+        if name == x_dim:
+            step = round(float(values[1] - values[0]), SPATIAL_STEP_DECIMALS) if len(values) > 1 else None
+            dims[name] = {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [float(values.min()), float(values.max())],
+                "step": step,
+                "reference_system": 4326,
+            }
+        elif name == y_dim:
+            step = round(abs(float(values[1] - values[0])), SPATIAL_STEP_DECIMALS) if len(values) > 1 else None
+            dims[name] = {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [float(values.min()), float(values.max())],
+                "step": step,
+                "reference_system": 4326,
+            }
+        elif name == time_dim or np.issubdtype(coord.dtype, np.datetime64):
+            start = _to_stac_datetime(values[0])
+            end = _to_stac_datetime(values[-1])
+            time_step: str | None = None
+            if len(values) > 1:
+                delta = pd.Timestamp(values[1]) - pd.Timestamp(values[0])
+                time_step = _timedelta_to_iso_duration(delta)
+            dims[name] = {"type": "temporal", "extent": [start, end], "step": time_step}
+        elif np.issubdtype(coord.dtype, np.timedelta64):
+            hours = [int(pd.Timedelta(v).total_seconds() // 3600) for v in values]
+            dims[name] = {"type": "ordinal", "values": hours, "climate_api:unit": "hours"}
+        else:
+            dims[name] = {"type": "ordinal", "values": values.tolist()}
+    return dims
+
+
+def _cube_variables_from_dataset(ds: Any, *, artifact: ArtifactRecord) -> dict[str, Any]:
+    variables: dict[str, Any] = {}
+    for var_name, data_var in ds.data_vars.items():
+        attrs = data_var.attrs or {}
+        entry: dict[str, Any] = {"type": "data", "dimensions": list(data_var.dims)}
+        long_name = attrs.get("long_name")
+        units = attrs.get("units")
+        if long_name:
+            entry["description"] = str(long_name)
+        if units:
+            entry["unit"] = str(units)
+            entry["attrs"] = {k: str(v) for k, v in attrs.items() if k in ("long_name", "units") and v}
+        variables[str(var_name)] = entry
+    return variables
+
+
+def _to_stac_datetime(value: Any) -> str:
+    import pandas as pd
+
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is None:
+        return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return ts.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _timedelta_to_iso_duration(delta: Any) -> str | None:
+    import pandas as pd
+
+    total_seconds = int(pd.Timedelta(delta).total_seconds())
+    if total_seconds <= 0:
+        return None
+    hours = total_seconds // 3600
+    days = hours // 24
+    if hours % 24 == 0 and days > 0:
+        return f"P{days}D"
+    return f"PT{hours}H"
+
+
 def _link_to_dict(link: pystac.Link) -> dict[str, Any]:
     target = link.target
     href = target if isinstance(target, str) else link.href
@@ -298,6 +445,9 @@ def _public_zarr_asset_href(
     artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
 ) -> str:
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        # Route through the API proxy — the icechunk store has no public zarr.json
+        return _abs_url(request, f"/zarr/{dataset_id}")
     artifact_path = _artifact_store_path(artifact)
     if _is_pyramid_zarr(artifact_path):
         return _abs_url(request, f"/zarr/{dataset_id}/0")
@@ -411,6 +561,10 @@ def _keywords(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> list[
 
 def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     metadata: dict[str, object] = {"zarr:node_type": "group"}
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        metadata["zarr:zarr_format"] = 3
+        metadata["zarr:consolidated"] = True
+        return metadata
     artifact_path = _artifact_store_path(artifact)
     consolidated = _zarr_consolidated_flag(artifact_path)
     if consolidated is not None:

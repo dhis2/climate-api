@@ -1,0 +1,55 @@
+- id: gefs_precipitation_forecast
+  name: Precipitation forecast — ensemble mean (NOAA GEFS)
+  short_name: Precipitation forecast
+  variable: precipitation_surface
+  period_type: daily
+  sync:
+    kind: derived
+  ingestion:
+    function: climate_api.processing.gefs.derive_dataset
+  transforms:
+    - function: climate_api.transforms.unit_conversion.flux_to_mm_per_day
+  store:
+    kind: remote_zarr
+    provider: dynamical
+    catalog_id: noaa-gefs-forecast-35-day
+    store_url: "s3://dynamical-noaa-gefs/noaa-gefs-forecast-35-day/v0.2.0.icechunk/"
+    store_format: icechunk
+    storage_options:
+      anon: true
+      client_kwargs:
+        region_name: us-west-2
+  units: "mm/day"
+  resolution: 25 km x 25 km (0.25°)
+  source: "NOAA GEFS (via dynamical.org)"
+  source_url: "https://dynamical.org/catalog/noaa-gefs-forecast-35-day/"
+  display:
+    colormap: blues
+    range: [0, 25]
+
+- id: gefs_temperature_2m_forecast
+  name: 2 metre temperature forecast — ensemble mean (NOAA GEFS)
+  short_name: Temperature forecast
+  variable: temperature_2m
+  period_type: daily
+  sync:
+    kind: derived
+  ingestion:
+    function: climate_api.processing.gefs.derive_dataset
+  store:
+    kind: remote_zarr
+    provider: dynamical
+    catalog_id: noaa-gefs-forecast-35-day
+    store_url: "s3://dynamical-noaa-gefs/noaa-gefs-forecast-35-day/v0.2.0.icechunk/"
+    store_format: icechunk
+    storage_options:
+      anon: true
+      client_kwargs:
+        region_name: us-west-2
+  units: "°C"
+  resolution: 25 km x 25 km (0.25°)
+  source: "NOAA GEFS (via dynamical.org)"
+  source_url: "https://dynamical.org/catalog/noaa-gefs-forecast-35-day/"
+  display:
+    colormap: rdbu_r
+    range: [-30.0, 30.0]

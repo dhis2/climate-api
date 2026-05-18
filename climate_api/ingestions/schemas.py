@@ -11,6 +11,7 @@ class ArtifactFormat(StrEnum):
 
     ZARR = "zarr"
     NETCDF = "netcdf"
+    REMOTE_ZARR = "remote_zarr"
 
 
 class PublicationStatus(StrEnum):
@@ -26,6 +27,8 @@ class SyncKind(StrEnum):
     TEMPORAL = "temporal"
     RELEASE = "release"
     STATIC = "static"
+    REMOTE = "remote"
+    DERIVED = "derived"
 
 
 class SyncAction(StrEnum):
@@ -109,7 +112,11 @@ class CreateIngestionRequest(BaseModel):
     """Request payload for creating or updating a managed dataset."""
 
     dataset_id: str = Field(description="Source dataset template id from the Climate API registry.")
-    start: str = Field(description="Start period to ingest.")
+    start: str | None = Field(
+        default=None,
+        description="Start period to ingest. Required for temporal/release datasets; "
+        "omit for derived and remote datasets.",
+    )
     end: str | None = Field(default=None, description="Optional end period to ingest.")
     overwrite: bool = Field(
         default=False,

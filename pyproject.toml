@@ -41,6 +41,12 @@ dependencies = [
     "dhis2eo>=1.2.1",
 ]
 
+[project.optional-dependencies]
+forecast = [
+    "icechunk>=0.1.0",
+    "s3fs>=2024.1",
+]
+
 [project.urls]
 Repository = "https://github.com/dhis2/climate-api"
 Documentation = "https://github.com/dhis2/climate-api/tree/main/docs"
@@ -89,7 +95,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
+module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac", "icechunk"]
 ignore_missing_imports = true
 
 [tool.pyright]

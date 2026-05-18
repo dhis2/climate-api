@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import portalocker
 import pyproj
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
@@ -145,10 +145,286 @@ def get_latest_artifact_for_dataset_or_404(dataset_id: str) -> ArtifactRecord:
     return max(artifacts, key=lambda artifact: artifact.created_at)
 
 
+def _register_remote_zarr_artifact(
+    *,
+    dataset: dict[str, object],
+    publish: bool,
+) -> ArtifactRecord:
+    """Register a remote Zarr/Icechunk store as an artifact without downloading anything."""
+    from climate_api.data_accessor.services.accessor import _coverage_from_dataset
+    from climate_api.providers.remote_zarr import open_remote_dataset
+
+    source = dataset["store"]
+    if not isinstance(source, dict):
+        raise HTTPException(status_code=500, detail=f"Dataset '{dataset['id']}' has invalid store block")
+    store_url = str(source["store_url"])
+
+    # Use store.crs when declared; most public remote stores (dynamical.org, ARCO-ERA5) are WGS84.
+    native_crs: str = str(source.get("crs", "EPSG:4326")) or "EPSG:4326"
+    logger.info("Opening remote zarr store for dataset '%s': %s", dataset["id"], store_url)
+    ds = open_remote_dataset(source)
+    try:
+        coverage_data = _coverage_from_dataset(
+            ds=ds,
+            period_type=str(dataset["period_type"]),
+            native_crs=native_crs,
+        )
+
+        # Forecast datasets have a lead_time dimension — the actual data horizon extends
+        # beyond the last init_time. Extend the temporal end by max lead_time so the
+        # coverage reflects when the latest forecast reaches, not when it was issued.
+        if coverage_data.get("has_data") and "lead_time" in ds.dims:
+            import pandas as pd
+
+            from climate_api.data_accessor.services.accessor import _period_string_scalar  # noqa: PLC0415
+            from climate_api.data_manager.services.utils import get_time_dim
+            from climate_api.shared.time import numpy_datetime_to_period_string
+
+            time_dim = get_time_dim(ds)
+            forecast_end = pd.Timestamp(ds[time_dim].max().item()) + pd.Timedelta(ds["lead_time"].max().item())
+            coverage_data["coverage"]["temporal"]["end"] = _period_string_scalar(
+                numpy_datetime_to_period_string(forecast_end.to_datetime64(), str(dataset["period_type"]))  # type: ignore[arg-type]
+            )
+    finally:
+        ds.close()
+
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Remote zarr store contains no data")
+
+    raw_coverage = coverage_data["coverage"]
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**raw_coverage["temporal"]),
+        spatial=CoverageSpatial(**raw_coverage["spatial"]),
+        spatial_wgs84=CoverageSpatial(**raw_coverage["spatial_wgs84"]) if raw_coverage.get("spatial_wgs84") else None,
+    )
+    request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=str(dataset["id"]),
+        dataset_name=str(dataset["name"]),
+        variable=str(dataset["variable"]),
+        format=ArtifactFormat.REMOTE_ZARR,
+        path=store_url,
+        asset_paths=[store_url],
+        variables=[str(dataset["variable"])],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+
+    stored_record = _upsert_remote_zarr_record(record, publish=publish)
+    logger.info(
+        "Registered remote zarr artifact '%s' for dataset '%s': coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
+
+
+def _upsert_remote_zarr_record(record: ArtifactRecord, *, publish: bool) -> ArtifactRecord:
+    """Replace any existing remote zarr record for the same dataset, or insert a new one."""
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for index, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.format == ArtifactFormat.REMOTE_ZARR:
+                replacement = record.model_copy(
+                    update={"artifact_id": existing.artifact_id, "publication": existing.publication}
+                )
+                records[index] = replacement
+                return replacement
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
+def _is_derived_source(dataset: dict[str, object]) -> bool:
+    """Return True when a dataset template declares a derived sync kind."""
+    sync = dataset.get("sync")
+    return isinstance(sync, dict) and sync.get("kind") == "derived"
+
+
+def _derive_artifact(
+    *,
+    dataset: dict[str, object],
+    publish: bool,
+) -> ArtifactRecord:
+    """Derive a local zarr artifact by calling the template's ingestion.function.
+
+    The function is resolved from the dotted path in ``ingestion.function`` and
+    called with a standard keyword-only contract:
+
+        derive_fn(
+            *,
+            store_config: dict,       # the template's ``store`` block
+            output_path: Path,        # where to write the zarr
+            extent: dict | None,      # configured instance spatial extent
+            variable: str,            # primary variable name
+            period_type: str,         # e.g. "daily"
+        ) -> None
+
+    After the function returns, the service applies any declared transforms,
+    writes GeoZarr root attributes (``spatial:bbox``, ``proj:code``) so map
+    clients can position tiles, computes coverage, and registers the artifact.
+    The built-in implementation for GEFS is
+    ``climate_api.processing.gefs.derive_dataset``.
+
+    CRS: ``store.crs`` in the template overrides the default of ``EPSG:4326``.
+    Most public remote stores (dynamical.org, ARCO-ERA5) are WGS84 so the
+    default is correct.  Set ``crs: "EPSG:32633"`` (or any EPSG code) for
+    stores in a projected coordinate system.
+    """
+    from climate_api.data_manager.services.downloader import _get_dynamic_function
+
+    ingestion = dataset.get("ingestion")
+    if not isinstance(ingestion, dict) or not ingestion.get("function"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset '{dataset['id']}' derived template must define ingestion.function",
+        )
+    source_store = dataset.get("store")
+    if not isinstance(source_store, dict):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset '{dataset['id']}' derived template must define a store block",
+        )
+
+    variable = str(dataset["variable"])
+    output_path = ARTIFACTS_DIR / f"{dataset['id']}.zarr"
+
+    derive_fn = _get_dynamic_function(str(ingestion["function"]))
+    logger.info("Deriving artifact for '%s' via %s", dataset["id"], ingestion["function"])
+    derive_fn(
+        store_config=source_store,
+        output_path=output_path,
+        extent=get_extent(),
+        variable=variable,
+        period_type=str(dataset["period_type"]),
+    )
+
+    output_path_str = str(output_path.resolve())
+
+    import zarr as _zarr
+    from geozarr_toolkit import create_geozarr_attrs
+
+    from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
+    from climate_api.data_manager.services.downloader import _run_transforms
+    from climate_api.data_manager.services.utils import get_x_y_dims
+
+    if dataset.get("transforms"):
+        ds_pre = open_zarr_dataset(output_path_str)
+        try:
+            ds_transformed = _run_transforms(ds_pre, dataset)
+            # Load into memory before closing — writing to the same path we are
+            # reading from while the store is still open would truncate the source
+            # and produce all-zero reads.
+            ds_transformed.load()
+        finally:
+            ds_pre.close()
+        ds_transformed.to_zarr(output_path, mode="w", consolidated=True)
+
+    # Use store.crs when declared; fall back to EPSG:4326 for the common case of
+    # WGS84 remote stores (dynamical.org, ARCO-ERA5, etc.).
+    native_crs: str = str(source_store.get("crs", "EPSG:4326")) or "EPSG:4326"
+    wgs84_codes = {"EPSG:4326", "OGC:CRS84", "CRS84"}
+    is_wgs84 = native_crs.upper() in {c.upper() for c in wgs84_codes}
+
+    ds_written = open_zarr_dataset(output_path_str)
+    try:
+        x_dim, y_dim = get_x_y_dims(ds_written)
+        bbox = [
+            float(ds_written[x_dim].min()),
+            float(ds_written[y_dim].min()),
+            float(ds_written[x_dim].max()),
+            float(ds_written[y_dim].max()),
+        ]
+        shape = (ds_written.sizes[x_dim], ds_written.sizes[y_dim])
+        geozarr_attrs = create_geozarr_attrs(
+            dimensions=[x_dim, y_dim],
+            crs=native_crs,
+            bbox=bbox,
+            shape=shape,
+        )
+        coverage_data = _coverage_from_dataset(
+            ds=ds_written,
+            period_type=str(dataset["period_type"]),
+            native_crs=native_crs,
+        )
+    finally:
+        ds_written.close()
+
+    # Write GeoZarr root attrs without touching data chunks, then re-consolidate.
+    # The map viewer reads spatial:bbox and proj:code from these attrs to position tiles.
+    root = _zarr.open_group(str(output_path), mode="r+")
+    root.attrs.update(geozarr_attrs)
+    _zarr.consolidate_metadata(str(output_path))
+
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Derived forecast artifact contains no data")
+
+    raw_cov = coverage_data["coverage"]
+    wgs84_cov = raw_cov.get("spatial_wgs84")
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**raw_cov["temporal"]),
+        spatial=CoverageSpatial(**raw_cov["spatial"]),
+        spatial_wgs84=CoverageSpatial(**wgs84_cov) if wgs84_cov and not is_wgs84 else None,
+    )
+    request_scope = ArtifactRequestScope(start=coverage.temporal.start, end=coverage.temporal.end)
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=str(dataset["id"]),
+        dataset_name=str(dataset["name"]),
+        variable=variable,
+        format=ArtifactFormat.ZARR,
+        path=output_path_str,
+        asset_paths=[output_path_str],
+        variables=[variable],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+    stored_record = _upsert_derived_record(record)
+    logger.info(
+        "Derived artifact '%s' for dataset '%s': coverage=%s..%s",
+        stored_record.artifact_id,
+        dataset["id"],
+        stored_record.coverage.temporal.start,
+        stored_record.coverage.temporal.end,
+    )
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
+
+
+def _upsert_derived_record(record: ArtifactRecord) -> ArtifactRecord:
+    """Replace any existing derived artifact for the same dataset, or insert a new one."""
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for index, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.format == ArtifactFormat.ZARR:
+                replacement = record.model_copy(
+                    update={"artifact_id": existing.artifact_id, "publication": existing.publication}
+                )
+                records[index] = replacement
+                return replacement
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
 def create_artifact(
     *,
     dataset: dict[str, object],
-    start: str,
+    start: str | None,
     end: str | None,
     bbox: list[float] | None,
     country_code: str | None,
@@ -159,6 +435,22 @@ def create_artifact(
     download_end: str | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
+    from climate_api.providers.remote_zarr import is_remote_source
+
+    if _is_derived_source(dataset):
+        return _derive_artifact(dataset=dataset, publish=publish)
+
+    if is_remote_source(dataset):
+        return _register_remote_zarr_artifact(dataset=dataset, publish=publish)
+
+    if start is None:
+        sync = dataset.get("sync")
+        sync_kind = sync.get("kind") if isinstance(sync, dict) else None
+        raise HTTPException(
+            status_code=422,
+            detail=f"'start' is required for dataset '{dataset['id']}' (sync kind: {sync_kind})",
+        )
+
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
@@ -444,8 +736,11 @@ def plan_sync_dataset(
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     """Return a public Zarr store listing for a managed dataset."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
-    store_root = _get_zarr_root_or_409(artifact)
 
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        return _remote_zarr_store_info(dataset_id, artifact)
+
+    store_root = _get_zarr_root_or_409(artifact)
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
     store_attrs = _read_zarr_attrs(store_root)
     store_crs = store_attrs.get("proj:code") if store_attrs else None
@@ -459,6 +754,33 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
         "proj4": _crs_to_proj4(crs),
         "bounds": _read_zarr_bounds(store_attrs),
         "entries": entries,
+    }
+
+
+def _remote_zarr_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str, object]:
+    """Return store metadata for a remote zarr artifact."""
+    source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
+    raw_store = source_dataset.get("store", {})
+    store: dict[str, object] = raw_store if isinstance(raw_store, dict) else {}
+    crs = "EPSG:4326"
+    coverage = artifact.coverage
+    return {
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
+        "format": artifact.format,
+        "path": ".",
+        "crs": crs,
+        "proj4": _crs_to_proj4(crs),
+        "bounds": [
+            coverage.spatial.xmin,
+            coverage.spatial.ymin,
+            coverage.spatial.xmax,
+            coverage.spatial.ymax,
+        ],
+        "remote_url": artifact.path,
+        "provider": store.get("provider"),
+        "catalog_id": store.get("catalog_id"),
+        "entries": [],
     }
 
 
@@ -508,11 +830,13 @@ def _read_zarr_bounds(store_attrs: dict[str, object] | None) -> list[float] | No
     return [xmin, ymin, xmax, ymax]
 
 
-def get_dataset_zarr_store_file_or_404(
-    dataset_id: str, relative_path: str
+async def get_dataset_zarr_store_file_or_404(
+    request: Request, dataset_id: str, relative_path: str
 ) -> FileResponse | Response | dict[str, object]:
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+    if artifact.format == ArtifactFormat.REMOTE_ZARR:
+        return await _proxy_remote_zarr_file(request, artifact, relative_path)
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -526,6 +850,113 @@ def get_dataset_zarr_store_file_or_404(
     if media_type is None:
         media_type = "application/octet-stream"
     return FileResponse(target, media_type=media_type, filename=target.name)
+
+
+async def _proxy_remote_zarr_file(
+    request: Request,
+    artifact: ArtifactRecord,
+    relative_path: str,
+) -> Response | JSONResponse:
+    """Proxy a zarr v3 key from the underlying icechunk store, with HTTP Range support."""
+    import asyncio
+
+    from zarr.abc.store import RangeByteRequest, SuffixByteRequest
+    from zarr.core.buffer import default_buffer_prototype
+
+    from climate_api.providers.remote_zarr import get_icechunk_key_size, get_store_if_cached, open_icechunk_store
+
+    source_dataset = registry_datasets.get_dataset(artifact.dataset_id) or {}
+    store_config = source_dataset.get("store")
+    if not isinstance(store_config, dict) or store_config.get("store_format") != "icechunk":
+        raise HTTPException(
+            status_code=501,
+            detail=f"Direct file access not supported for dataset '{artifact.dataset_id}'. "
+            f"Access the store at: {artifact.path}",
+        )
+    store_url: str = store_config.get("store_url", "")
+    try:
+        # Fast path: store already cached — just a dict lookup, no thread needed.
+        # Cold path: open_icechunk_store makes blocking S3 calls, so run in a thread.
+        store = get_store_if_cached(store_url) or await asyncio.to_thread(open_icechunk_store, store_config)
+    except Exception as exc:
+        logger.warning("Failed to open remote store for '%s': %s", artifact.dataset_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+        ) from exc
+
+    # HEAD: return object size without downloading content.
+    if request.method == "HEAD":
+        try:
+            size = await get_icechunk_key_size(store, relative_path, store_url)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
+        except Exception as exc:
+            logger.warning("Failed to get size for zarr key '%s' from remote store: %s", relative_path, exc)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+            ) from exc
+        return Response(
+            status_code=200,
+            headers={"Content-Length": str(size), "Accept-Ranges": "bytes"},
+            media_type="application/octet-stream",
+        )
+
+    # Parse HTTP Range header into a zarr ByteRequest.
+    byte_request: SuffixByteRequest | RangeByteRequest | None = None
+    content_range: str | None = None
+    range_header = request.headers.get("range", "")
+    if range_header.startswith("bytes="):
+        try:
+            spec = range_header[6:]
+            if spec.startswith("-"):
+                # Suffix form: bytes=-N  (last N bytes)
+                suffix = int(spec[1:])
+                byte_request = SuffixByteRequest(suffix=suffix)
+                total = await get_icechunk_key_size(store, relative_path, store_url)
+                content_range = f"bytes {total - suffix}-{total - 1}/{total}"
+            elif "-" in spec:
+                parts = spec.split("-", 1)
+                start = int(parts[0])
+                if parts[1]:
+                    end_inc = int(parts[1])
+                    byte_request = RangeByteRequest(start=start, end=end_inc + 1)
+                    content_range = f"bytes {start}-{end_inc}/*"
+                else:
+                    # Open-ended: bytes=start-
+                    total = await get_icechunk_key_size(store, relative_path, store_url)
+                    byte_request = RangeByteRequest(start=start, end=total)
+                    content_range = f"bytes {start}-{total - 1}/{total}"
+        except (ValueError, KeyError):
+            raise HTTPException(status_code=416, detail=f"Invalid or unsatisfiable Range header: '{range_header}'")
+
+    try:
+        buf = await store.get(relative_path, default_buffer_prototype(), byte_request)  # type: ignore[union-attr]
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
+    except Exception as exc:
+        logger.warning("Failed to proxy zarr key '%s' from remote store: %s", relative_path, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote zarr store for dataset '{artifact.dataset_id}' is temporarily unavailable",
+        ) from exc
+
+    if buf is None:
+        raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found in remote store")
+
+    data: bytes = bytes(buf.as_array_like())
+
+    if content_range:
+        return Response(
+            content=data,
+            status_code=206,
+            headers={"Accept-Ranges": "bytes", "Content-Range": content_range},
+            media_type="application/octet-stream",
+        )
+    if relative_path.endswith(".json"):
+        return JSONResponse(content=json.loads(data), headers={"Accept-Ranges": "bytes"})
+    return Response(content=data, media_type="application/octet-stream", headers={"Accept-Ranges": "bytes"})
 
 
 def _load_records() -> list[ArtifactRecord]:
@@ -792,7 +1223,9 @@ def _materialized_records(records: list[ArtifactRecord]) -> list[ArtifactRecord]
 
 
 def _artifact_storage_exists(record: ArtifactRecord) -> bool:
-    """Return whether an artifact's on-disk backing files are still present."""
+    """Return whether an artifact's backing storage is still accessible."""
+    if record.format == ArtifactFormat.REMOTE_ZARR:
+        return True
     paths: list[str] = []
     if record.path is not None:
         paths.append(record.path)
