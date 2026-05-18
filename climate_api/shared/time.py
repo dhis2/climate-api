@@ -5,10 +5,10 @@ import re
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
-
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 _ISO_DURATION_RE = re.compile(r"^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 
