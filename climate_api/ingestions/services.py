@@ -207,6 +207,7 @@ def create_artifact(
             bbox=bbox,
             request_scope=request_scope,
             publish=publish,
+            ingest_start=download_start,
         )
 
     logger.info(
@@ -337,8 +338,15 @@ def _create_icechunk_artifact(
     bbox: list[float] | None,
     request_scope: ArtifactRequestScope,
     publish: bool,
+    ingest_start: str | None = None,
 ) -> ArtifactRecord:
-    """Run per-period Icechunk ingest and register the resulting store as an artifact."""
+    """Run per-period Icechunk ingest and register the resulting store as an artifact.
+
+    `ingest_start` is the period from which the orchestrator begins its period scan.
+    For delta/append syncs this is the first missing period (delta_start), which avoids
+    enumerating the entire historical range just to discover that all prior periods are
+    already committed. When omitted the full artifact `start` is used.
+    """
     from climate_api.ingest.orchestrator import load_plugin, run_ingest_sync
     from climate_api.ingest.store import open_or_create_repo
 
@@ -356,12 +364,16 @@ def _create_icechunk_artifact(
 
     plugin = load_plugin(plugin_path, params)
 
-    logger.info("Running Icechunk ingest for '%s': %s..%s", dataset_id, start, end)
+    effective_start = ingest_start if ingest_start is not None else start
+    logger.info(
+        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s",
+        dataset_id, effective_start, end, start, end,
+    )
     run_ingest_sync(
         plugin=plugin,
         params=params,
         bbox=resolved_bbox,
-        start=start,
+        start=effective_start,
         end=end,
         store_path=store_path,
         period_type=period_type,
@@ -496,6 +508,10 @@ def sync_dataset(
     The service layer stays thin on purpose: it validates that the requested
     public dataset id resolves to a managed dataset plus a source template, then
     hands execution to `sync_engine.run_sync(...)`.
+
+    For Icechunk artifacts the authoritative `current_end` is read directly from
+    the store's committed period log rather than from the potentially-stale artifact
+    metadata record, so the sync plan reflects the true on-disk state.
     """
     latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
@@ -503,6 +519,21 @@ def sync_dataset(
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
     extent = get_extent()
     resolved_country_code = extent.get("country_code") if extent else None
+
+    committed_end: str | None = None
+    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.path:
+        from climate_api.ingest.store import read_committed_period_ids
+
+        period_type = str(source_dataset.get("period_type", ""))
+        committed = read_committed_period_ids(Path(latest_artifact.path), period_type)
+        committed_end = max(committed) if committed else None
+        logger.info(
+            "Icechunk store-based current_end for '%s': %s (artifact record had: %s)",
+            dataset_id,
+            committed_end,
+            latest_artifact.coverage.temporal.end,
+        )
+
     try:
         return run_sync(
             latest_artifact=latest_artifact,
@@ -513,6 +544,7 @@ def sync_dataset(
             publish=publish,
             create_artifact_fn=create_artifact,
             get_dataset_fn=get_dataset_or_404,
+            current_end=committed_end,
         )
     except SyncConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

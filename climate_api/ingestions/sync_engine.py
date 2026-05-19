@@ -42,6 +42,7 @@ def plan_sync(
     source_dataset: dict[str, Any],
     latest_artifact: ArtifactRecord,
     requested_end: str | None,
+    current_end: str | None = None,
 ) -> SyncDetail:
     """Return the sync decision for one managed dataset without changing local state.
 
@@ -54,6 +55,10 @@ def plan_sync(
     - release datasets compare the current materialized release against the requested end
     - static datasets are marked as not syncable
 
+    `current_end` overrides `latest_artifact.coverage.temporal.end` when provided.
+    Callers pass the store-authoritative value for formats (e.g. Icechunk) where the
+    artifact metadata record may lag behind what is actually committed on disk.
+
     This planner deliberately does not download data or persist artifacts.
     """
     sync_kind_value = source_dataset.get("sync", {}).get("kind")
@@ -61,7 +66,7 @@ def plan_sync(
         raise ValueError("source_dataset must define sync.kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     current_start = latest_artifact.request_scope.start
-    current_end = latest_artifact.coverage.temporal.end
+    current_end = current_end if current_end is not None else latest_artifact.coverage.temporal.end
 
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
@@ -168,6 +173,7 @@ def run_sync(
     publish: bool,
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
+    current_end: str | None = None,
 ) -> SyncResponse:
     """Plan and execute one sync operation for a managed dataset.
 
@@ -183,6 +189,7 @@ def run_sync(
         source_dataset=source_dataset,
         latest_artifact=latest_artifact,
         requested_end=requested_end,
+        current_end=current_end,
     )
     dataset_id = managed_dataset_id_for(latest_artifact)
     logger.info(
@@ -360,13 +367,27 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
 
 
 def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> bool:
-    """Return whether this template opts into V1 delta-download sync execution."""
-    from pathlib import Path
+    """Return whether this artifact supports incremental append sync execution.
+
+    Icechunk stores always support append: the orchestrator uses read_committed_period_ids
+    to determine exactly which periods are missing and commits only those. No YAML
+    sync.execution flag is required.
+
+    For all other formats the YAML must opt in with sync.execution: append, and
+    pyramid zarr stores (identified by a "0/" subdirectory) are excluded because
+    they must be rebuilt in full.
+    """
+    from climate_api.ingestions.schemas import ArtifactFormat
+
+    if latest_artifact.format == ArtifactFormat.ICECHUNK:
+        return True
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
+    from pathlib import Path
+
     artifact_path = latest_artifact.path
     if artifact_path and "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
         logger.warning(

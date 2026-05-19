@@ -860,3 +860,308 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
     services.sync_dataset(dataset_id=dataset_id, end="2021", prefer_zarr=True, publish=True)
 
     assert captured["country_code"] == "SLE"
+
+
+# ---------------------------------------------------------------------------
+# Icechunk store-based sync
+# ---------------------------------------------------------------------------
+
+
+def _icechunk_artifact(
+    *,
+    artifact_id: str,
+    source_dataset_id: str = "era5land_temperature_hourly",
+    managed_dataset_id: str = "era5land_temperature_hourly_nor",
+    end: str = "2024-01-01T03",
+    path: str = "/tmp/era5land_temperature_hourly.icechunk",
+) -> ArtifactRecord:
+    return ArtifactRecord(
+        artifact_id=artifact_id,
+        dataset_id=source_dataset_id,
+        dataset_name="2m temperature (ERA5-Land)",
+        variable="t2m",
+        format=ArtifactFormat.ICECHUNK,
+        path=path,
+        asset_paths=[path],
+        variables=["t2m"],
+        request_scope=ArtifactRequestScope(
+            start="2024-01-01T00",
+            end=end,
+            bbox=(4.0, 57.5, 31.5, 71.5),
+        ),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start="2024-01-01T00", end=end),
+            spatial=CoverageSpatial(xmin=4.0, ymin=57.5, xmax=31.5, ymax=71.5),
+        ),
+        created_at=datetime.fromisoformat("2024-01-01T04:00:00+00:00"),
+        publication=ArtifactPublication(status=PublicationStatus.PUBLISHED),
+    )
+
+
+def test_plan_sync_uses_current_end_override_instead_of_artifact_metadata() -> None:
+    """current_end parameter takes precedence over latest_artifact.coverage.temporal.end."""
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T06",
+        current_end="2024-01-01T05",
+    )
+
+    assert result.current_end == "2024-01-01T05"
+    assert result.delta_start == "2024-01-01T06"
+    assert result.delta_end == "2024-01-01T06"
+    assert result.target_end == "2024-01-01T06"
+
+
+def test_plan_sync_falls_back_to_artifact_end_when_no_override() -> None:
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T06",
+    )
+
+    assert result.current_end == "2024-01-01T03"
+    assert result.delta_start == "2024-01-01T04"
+
+
+def test_supports_append_returns_true_for_icechunk_format_without_yaml_execution_flag() -> None:
+    """ICECHUNK format always supports append — no sync.execution: append needed in YAML."""
+    artifact = _icechunk_artifact(artifact_id="a1")
+
+    result = sync_engine._supports_append(
+        source_dataset={"id": "era5land_temperature_hourly", "period_type": "hourly", "sync": {"kind": "temporal"}},
+        latest_artifact=artifact,
+    )
+
+    assert result is True
+
+
+def test_supports_append_requires_yaml_execution_flag_for_zarr_format() -> None:
+    zarr_artifact = _artifact(artifact_id="a1", end="2026-01-10")
+
+    without_flag = sync_engine._supports_append(
+        source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        latest_artifact=zarr_artifact,
+    )
+    with_flag = sync_engine._supports_append(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+        },
+        latest_artifact=zarr_artifact,
+    )
+
+    assert without_flag is False
+    assert with_flag is True
+
+
+def test_sync_dataset_reads_committed_end_from_icechunk_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """sync_dataset passes the store-authoritative current_end to run_sync for ICECHUNK artifacts."""
+    dataset_id = "era5land_temperature_hourly_nor"
+    latest = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
+    )
+
+    # Store has T00-T05; artifact record only knows about T03.
+    import climate_api.ingest.store as ingest_store
+
+    monkeypatch.setattr(
+        ingest_store,
+        "read_committed_period_ids",
+        lambda path, period_type: {"2024-01-01T00", "2024-01-01T01", "2024-01-01T02", "2024-01-01T03",
+                                    "2024-01-01T04", "2024-01-01T05"},
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_run_sync(**kwargs: object) -> SyncResponse:
+        captured.update(kwargs)
+        return SyncResponse(
+            sync_id=None,
+            status="up_to_date",
+            message="ok",
+            dataset=_dataset_detail(dataset_id),
+            sync_detail=SyncDetail(
+                source_dataset_id="era5land_temperature_hourly",
+                sync_kind=SyncKind.TEMPORAL,
+                action=SyncAction.NO_OP,
+                reason="no_new_period",
+                message="ok",
+                current_start="2024-01-01T00",
+                current_end="2024-01-01T05",
+                target_end="2024-01-01T05",
+                target_end_source="request",
+            ),
+        )
+
+    monkeypatch.setattr(services, "run_sync", fake_run_sync)
+
+    services.sync_dataset(dataset_id=dataset_id, end="2024-01-01T05", prefer_zarr=False, publish=False)
+
+    assert captured["current_end"] == "2024-01-01T05"
+
+
+def test_sync_dataset_icechunk_store_empty_uses_none_current_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the store has no committed periods yet, current_end is None (full ingest)."""
+    dataset_id = "era5land_temperature_hourly_nor"
+    latest = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "era5land_temperature_hourly", "period_type": "hourly", "sync": {"kind": "temporal"}},
+    )
+    import climate_api.ingest.store as ingest_store
+
+    monkeypatch.setattr(ingest_store, "read_committed_period_ids", lambda *_: set())
+
+    captured: dict[str, object] = {}
+
+    def fake_run_sync(**kwargs: object) -> SyncResponse:
+        captured.update(kwargs)
+        return SyncResponse(
+            sync_id="a2",
+            status="completed",
+            message="ok",
+            dataset=_dataset_detail(dataset_id),
+            sync_detail=SyncDetail(
+                source_dataset_id="era5land_temperature_hourly",
+                sync_kind=SyncKind.TEMPORAL,
+                action=SyncAction.REMATERIALIZE,
+                reason="new_periods_available",
+                message="ok",
+                current_start="2024-01-01T00",
+                current_end="2024-01-01T03",
+                target_end="2024-01-01T06",
+                target_end_source="request",
+            ),
+        )
+
+    monkeypatch.setattr(services, "run_sync", fake_run_sync)
+
+    services.sync_dataset(dataset_id=dataset_id, end="2024-01-01T06", prefer_zarr=False, publish=False)
+
+    assert captured["current_end"] is None
+
+
+def _patch_icechunk_artifact_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    captured: dict[str, object],
+) -> None:
+    """Patch all inline imports used by _create_icechunk_artifact."""
+    import climate_api.ingest.orchestrator as orchestrator_mod
+    import climate_api.ingest.store as store_mod
+    from climate_api.ingestions import services as svc
+    import xarray as xr
+    import numpy as np
+
+    def fake_run_ingest_sync(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(orchestrator_mod, "run_ingest_sync", fake_run_ingest_sync)
+    monkeypatch.setattr(orchestrator_mod, "load_plugin", lambda path, params: object())
+    monkeypatch.setattr(store_mod, "open_or_create_repo", lambda _: _FakeRepo())
+    monkeypatch.setattr(svc, "coverage_from_open_dataset", lambda ds, **_: {
+        "has_data": True,
+        "coverage": {
+            "temporal": {"start": "2024-01-01T00", "end": "2024-01-01T06"},
+            "spatial": {"xmin": 4.0, "ymin": 57.5, "xmax": 31.5, "ymax": 71.5},
+        },
+    })
+    monkeypatch.setattr(
+        xr, "open_zarr",
+        lambda *_a, **_k: xr.Dataset({"t2m": xr.DataArray(np.zeros((1,)), dims=["time"])}),
+    )
+    monkeypatch.setattr(svc, "get_extent", lambda: None)
+    monkeypatch.setattr(svc.downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(svc, "_store_artifact_record", lambda record, **_: record)
+
+
+class _FakeRepo:
+    def readonly_session(self, _: str) -> "_FakeSession":
+        return _FakeSession()
+
+
+class _FakeSession:
+    store = None
+
+
+def test_create_icechunk_artifact_uses_ingest_start_for_delta_efficiency(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """_create_icechunk_artifact passes ingest_start to run_ingest_sync to skip prior periods."""
+    from climate_api.ingestions import services as svc
+
+    captured: dict[str, object] = {}
+    _patch_icechunk_artifact_dependencies(monkeypatch, tmp_path, captured)
+
+    dataset = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "ingestion": {"plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin", "params": {"variable": "t2m"}},
+    }
+
+    svc._create_icechunk_artifact(
+        dataset=dataset,
+        start="2024-01-01T00",
+        end="2024-01-01T06",
+        bbox=None,
+        request_scope=ArtifactRequestScope(start="2024-01-01T00", end="2024-01-01T06", bbox=None),
+        publish=False,
+        ingest_start="2024-01-01T04",
+    )
+
+    assert captured["start"] == "2024-01-01T04"
+
+
+def test_create_icechunk_artifact_uses_full_start_when_no_ingest_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Without ingest_start, run_ingest_sync receives the artifact's full start."""
+    from climate_api.ingestions import services as svc
+
+    captured: dict[str, object] = {}
+    _patch_icechunk_artifact_dependencies(monkeypatch, tmp_path, captured)
+
+    dataset = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "ingestion": {"plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin", "params": {"variable": "t2m"}},
+    }
+
+    svc._create_icechunk_artifact(
+        dataset=dataset,
+        start="2024-01-01T00",
+        end="2024-01-01T06",
+        bbox=None,
+        request_scope=ArtifactRequestScope(start="2024-01-01T00", end="2024-01-01T06", bbox=None),
+        publish=False,
+    )
+
+    assert captured["start"] == "2024-01-01T00"
