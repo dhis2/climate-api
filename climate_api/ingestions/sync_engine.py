@@ -12,15 +12,12 @@ and keeps future scheduler-driven sync jobs on the same code path.
 from __future__ import annotations
 
 import asyncio
-import importlib
-import inspect
 import logging
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
-from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
 from climate_api.shared.time import (
     datetime_to_period_string,
@@ -338,17 +335,10 @@ def _default_target_end(*, period_type: str) -> str:
 
 
 def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str, current_end: str | None = None) -> str:
-    """Clamp requested sync end to the latest upstream state.
+    """Clamp requested sync end to the latest upstream state via the plugin's periods() method.
 
-    For plugin datasets (ingestion.plugin set) the plugin's own periods() method
-    is the authoritative availability source — no separate latest_available_function
-    is needed in the YAML. The lag cutoff lives in the plugin and is not duplicated.
-
-    For legacy ZARR datasets the existing sync.availability metadata (lag_days or
-    latest_available_function) is used unchanged.
-
-    current_end must be provided for the plugin path so the function can return it
-    when periods() reports nothing new (empty list → NOOP detected by caller).
+    current_end must be provided so the function can return it when periods() reports nothing
+    new (empty list → NOOP detected by caller).
     """
     period_type = source_dataset.get("period_type")
     if current_end is not None and isinstance(period_type, str):
@@ -364,25 +354,7 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str,
             if plugin_latest is not None:
                 return min(requested_end, plugin_latest)
 
-    # Legacy path: lag metadata or latest_available_function in sync.availability.
-    availability = source_dataset.get("sync", {}).get("availability")
-    if not isinstance(availability, dict):
-        return requested_end
-
-    provider_latest = _provider_latest_available_end(
-        source_dataset=source_dataset,
-        availability=availability,
-        requested_end=requested_end,
-    )
-    if provider_latest is not None:
-        return min(requested_end, provider_latest)
-    return min(
-        requested_end,
-        provider_availability.lagged_latest_available(
-            dataset=source_dataset,
-            requested_end=requested_end,
-        ),
-    )
+    return requested_end
 
 
 def _plugin_latest_available_period(
@@ -462,47 +434,3 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
         )
         return False
     return True
-
-
-def _provider_latest_available_end(
-    *,
-    source_dataset: dict[str, Any],
-    availability: dict[str, Any],
-    requested_end: str,
-) -> str | None:
-    """Call an optional provider-specific latest-availability function."""
-    function_path = availability.get("latest_available_function")
-    if not isinstance(function_path, str) or not function_path:
-        return None
-
-    try:
-        latest_available_fn = _get_dynamic_function(function_path)
-        params: dict[str, Any] = {}
-        signature = inspect.signature(latest_available_fn)
-        if "dataset" in signature.parameters:
-            params["dataset"] = source_dataset
-        if "requested_end" in signature.parameters:
-            params["requested_end"] = requested_end
-        result = latest_available_fn(**params)
-    except (AttributeError, ImportError, TypeError, ValueError) as exc:
-        raise SyncConfigurationError(f"Latest availability function '{function_path}' failed: {exc}") from exc
-    if not isinstance(result, str):
-        raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
-    try:
-        return normalize_period_string(result, period_type=str(source_dataset["period_type"]))
-    except (KeyError, TypeError, ValueError) as exc:
-        raise SyncConfigurationError(
-            f"Latest availability function '{function_path}' returned invalid period "
-            f"'{result}' for dataset period_type '{source_dataset.get('period_type')}'"
-        ) from exc
-
-
-def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
-    """Import and return a function given its dotted module path."""
-    parts = full_path.split(".")
-    if len(parts) < 2 or any(not part for part in parts):
-        raise ValueError(f"Invalid dotted function path '{full_path}'")
-    module_path = ".".join(parts[:-1])
-    function_name = parts[-1]
-    module = importlib.import_module(module_path)
-    return getattr(module, function_name)  # type: ignore[no-any-return]
