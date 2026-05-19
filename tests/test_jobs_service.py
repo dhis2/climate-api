@@ -218,10 +218,52 @@ def test_recover_pending_jobs_requeues_retrying_process(monkeypatch: pytest.Monk
         service.shutdown()
 
 
+def test_recover_pending_jobs_requeues_running_process_without_burning_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = JobService(max_workers=1)
+    try:
+        job_store.create_job_record(_job_record(status=JobStatus.RUNNING).model_copy(update={"attempt": 1}))
+
+        def fake_get_process(process_id: str) -> dict[str, object] | None:
+            if process_id != "recoverable-process":
+                return None
+            return {
+                "id": process_id,
+                "title": "Recoverable process",
+                "execution": {"function": "tests.fake.recoverable"},
+                "expose": True,
+                "jobControlOptions": ["sync-execute", "async-execute"],
+            }
+
+        monkeypatch.setattr("climate_api.jobs.service.process_registry.get_process", fake_get_process)
+        monkeypatch.setattr(
+            "climate_api.data_registry.services.processes._get_dynamic_function",
+            lambda path: lambda *, value: {"value": value * 5},
+        )
+
+        service.recover_pending_jobs()
+
+        for _ in range(100):
+            record = job_store.get_job_record("job-1")
+            if record is not None and record.status == JobStatus.SUCCESSFUL:
+                break
+            time.sleep(0.01)
+        else:
+            raise AssertionError("Recovered running job did not complete")
+
+        record = job_store.get_job_record("job-1")
+        assert record is not None
+        assert record.status == JobStatus.SUCCESSFUL
+        assert record.result == {"value": 10}
+        assert record.attempt == 1
+    finally:
+        service.shutdown()
+
+
 def test_retrying_job_exhausts_attempts_and_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     service = JobService(max_workers=1)
     try:
-        monkeypatch.setattr("climate_api.jobs.service.time.sleep", lambda _seconds: None)
 
         def fake_get_process(process_id: str) -> dict[str, object] | None:
             if process_id != "recoverable-process":
@@ -239,6 +281,7 @@ def test_retrying_job_exhausts_attempts_and_fails(monkeypatch: pytest.MonkeyPatc
             "climate_api.data_registry.services.processes._get_dynamic_function",
             lambda path: lambda *, value: (_ for _ in ()).throw(RuntimeError(f"boom:{value}")),
         )
+        monkeypatch.setattr(JobService, "_sleep_for_retry", lambda self, job_id, seconds: True)
 
         created = service.submit_process_job(process_id="recoverable-process", request={"value": 2}, max_attempts=2)
 
@@ -280,15 +323,14 @@ def test_retry_wait_honors_cancellation_request(monkeypatch: pytest.MonkeyPatch)
             "climate_api.data_registry.services.processes._get_dynamic_function",
             lambda path: lambda *, value: (_ for _ in ()).throw(RuntimeError(f"boom:{value}")),
         )
-
-        sleep_calls = {"count": 0}
-
-        def fake_sleep(_seconds: float) -> None:
-            sleep_calls["count"] += 1
-            if sleep_calls["count"] == 1:
-                service.request_cancellation(created.job_id)
-
-        monkeypatch.setattr("climate_api.jobs.service.time.sleep", fake_sleep)
+        monkeypatch.setattr(
+            JobService,
+            "_sleep_for_retry",
+            lambda self, job_id, seconds: (
+                service.request_cancellation(job_id),
+                False,
+            )[1],
+        )
 
         created = service.submit_process_job(process_id="recoverable-process", request={"value": 2}, max_attempts=2)
 

@@ -205,6 +205,20 @@ class JobService:
                     ),
                 )
                 continue
+            if record.status == JobStatus.RUNNING:
+                store.mutate_job_record(
+                    record.job_id,
+                    lambda current: current.model_copy(
+                        update={
+                            "status": JobStatus.ACCEPTED,
+                            "attempt": max(0, current.attempt - 1),
+                            "finished_at": None,
+                            "retry_after": None,
+                            "error": None,
+                            "progress": JobProgress(message="Requeued after restart during execution"),
+                        }
+                    ),
+                )
             self._enqueue_job(record.job_id)
 
     def update_progress(
