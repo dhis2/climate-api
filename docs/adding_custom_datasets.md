@@ -8,61 +8,10 @@ The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package da
 
 Adding a custom dataset involves two things:
 
-1. **An ingestion function or plugin** — either a download function that writes NetCDF files to disk, or an `IngestionPlugin` class that streams data directly into an Icechunk store.
-2. **A dataset template YAML** — a file that describes the dataset and tells the API which function or plugin to call.
+1. **An `IngestionPlugin` class** — streams data directly into an Icechunk store one period at a time.
+2. **A dataset template YAML** — a file that describes the dataset and tells the API which plugin to call.
 
-Use the **download function** approach for simple sources. Use the **IngestionPlugin** approach for sources that benefit from streaming (COG range requests, remote zarr, resumable long ingests with per-period commits). Both can coexist in the same template during migration.
-
-## Step 1: Write the download function
-
-The download function must be importable as a dotted Python path. The API calls it with keyword arguments and ignores the return value — the function is expected to write NetCDF files to `dirname` using `prefix` as the filename prefix.
-
-```python
-# mypackage/sources/enacts.py
-from pathlib import Path
-
-def download(
-    *,
-    start: str,         # ISO 8601 date or datetime
-    end: str,
-    dirname: Path,      # directory to write output files into
-    prefix: str,        # filename prefix (use e.g. f"{prefix}_{year}.nc")
-    overwrite: bool,
-    bbox: list[float],  # [xmin, ymin, xmax, ymax] — include only if your source needs it
-    **kwargs: object,   # absorbs default_params from the YAML template
-) -> None:
-    """Download ENACTS rainfall and write NetCDF files to dirname."""
-    ...
-```
-
-**Required parameters** — always passed by the API:
-
-| Parameter   | Type       | Description |
-| ----------- | ---------- | ----------- |
-| `start`     | `str`      | Start of the requested time range (ISO 8601) |
-| `end`       | `str`      | End of the requested time range (ISO 8601) |
-| `dirname`   | `Path`     | Directory to write output NetCDF files into |
-| `prefix`    | `str`      | Filename prefix for output files |
-| `overwrite` | `bool`     | Whether to overwrite existing cached files |
-
-**Optional parameters** — passed only when present in the function signature:
-
-| Parameter      | Type            | Description |
-| -------------- | --------------- | ----------- |
-| `bbox`         | `list[float]`   | Bounding box as `[xmin, ymin, xmax, ymax]` — include this if your source requires a spatial filter |
-| `country_code` | `str`           | ISO 3166-1 alpha-3 code — include this if your source (e.g. WorldPop) requires a country code |
-
-Any extra keyword arguments from `ingestion.default_params` in the YAML template are forwarded as additional kwargs.
-
-The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`latitude` → `y`, `lon`/`longitude` → `x`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
-
-Install your package in the same environment as the Climate API:
-
-```bash
-pip install ./mypackage
-```
-
-## Step 2: Create a dataset template YAML
+## Step 1: Create a dataset template YAML
 
 Create a directory for your custom templates and add a YAML file. Each file contains a list of templates (even if there is only one):
 
@@ -77,7 +26,9 @@ Create a directory for your custom templates and add a YAML file. Each file cont
     kind: temporal
     execution: append
   ingestion:
-    function: mypackage.sources.enacts.download
+    plugin: mypackage.sources.EnactsPlugin
+    params:
+      variable: rainfall
   units: mm
   resolution: 4 km x 4 km
   source: ENACTS
@@ -129,12 +80,8 @@ Omit `sync.availability` entirely for `static` datasets or when you always want 
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `ingestion.plugin` | One of `plugin` or `function` | Dotted path to an `IngestionPlugin` class — preferred for streaming sources |
+| `ingestion.plugin` | Yes | Dotted path to an `IngestionPlugin` class |
 | `ingestion.params` | No | Constructor keyword arguments forwarded to the plugin class |
-| `ingestion.function` | One of `plugin` or `function` | Dotted path to the download function — for simpler file-based sources |
-| `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
-
-Both keys can coexist in the same template. When `ingestion.plugin` is present it is used; `ingestion.function` serves as a fallback for legacy tooling.
 
 **Transforms** — applied after download, before writing to Zarr:
 
@@ -229,7 +176,7 @@ The smallest valid template for a static dataset with no sync:
   sync:
     kind: static
   ingestion:
-    function: mypackage.sources.my_source.download
+    plugin: mypackage.sources.my_plugin.MyPlugin
 ```
 
 ---

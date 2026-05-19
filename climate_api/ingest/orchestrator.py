@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import inspect
 import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -28,19 +29,34 @@ from climate_api.ingest.store import open_or_create_repo, read_committed_period_
 logger = logging.getLogger(__name__)
 
 
-def load_plugin(dotted_path: str, params: dict[str, Any]) -> IngestionPlugin:
+def load_plugin(
+    dotted_path: str,
+    params: dict[str, Any],
+    extra_params: dict[str, Any] | None = None,
+) -> IngestionPlugin:
     """Instantiate an IngestionPlugin from a dotted import path and YAML params.
 
     The class is imported from dotted_path and called with **params. Built-in
     plugins accept variable and other source-specific kwargs; custom plugins
     define their own __init__ signature.
+
+    extra_params are merged into params only for keys that the constructor
+    declares and that are not already present in params. This is used to inject
+    instance-level config (e.g. country_code from the extent) without requiring
+    every plugin to accept it.
     """
     module_path, _, class_name = dotted_path.rpartition(".")
     if not module_path:
         raise ValueError(f"Invalid plugin path '{dotted_path}': must be 'module.ClassName'")
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
-    plugin = cls(**params)
+    merged = dict(params)
+    if extra_params:
+        sig = inspect.signature(cls.__init__)
+        for key, value in extra_params.items():
+            if key not in merged and key in sig.parameters:
+                merged[key] = value
+    plugin = cls(**merged)
     if not isinstance(plugin, IngestionPlugin):
         raise TypeError(f"{dotted_path} does not implement IngestionPlugin")
     return plugin

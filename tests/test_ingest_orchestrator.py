@@ -474,8 +474,9 @@ def test_rechunk_store_changes_chunk_size(tmp_path: Path) -> None:
 def test_rechunk_store_skips_when_no_time_dimension(tmp_path: Path) -> None:
     """rechunk_store is a no-op when the store has no time dimension."""
     import icechunk
-    import xarray as xr
     import numpy as np
+    import xarray as xr
+
     from climate_api.ingest.store import rechunk_store
 
     store_path = tmp_path / "static.icechunk"

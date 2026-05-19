@@ -171,7 +171,7 @@ def test_plugins_dir_adds_root_to_sys_path_and_makes_modules_importable(
   sync:
     kind: static
   ingestion:
-    function: myplugin.source.download
+    plugin: myplugin.source.MyPlugin
 """,
         encoding="utf-8",
     )
@@ -205,7 +205,7 @@ def test_plugins_dir_in_config_adds_to_bundled(monkeypatch: pytest.MonkeyPatch, 
   sync:
     kind: static
   ingestion:
-    function: mypackage.sources.download
+    plugin: mypackage.sources.MyPlugin
 """,
         encoding="utf-8",
     )
@@ -238,7 +238,7 @@ def test_plugins_dir_resolved_relative_to_config_file(monkeypatch: pytest.Monkey
   sync:
     kind: static
   ingestion:
-    function: mypackage.sources.download
+    plugin: mypackage.sources.MyPlugin
 """,
         encoding="utf-8",
     )
@@ -264,7 +264,7 @@ def test_plugins_dir_in_config_overrides_bundled_by_id(monkeypatch: pytest.Monke
   sync:
     kind: static
   ingestion:
-    function: mypackage.sources.download
+    plugin: mypackage.sources.MyPlugin
 """,
         encoding="utf-8",
     )

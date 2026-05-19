@@ -1,8 +1,6 @@
-"""Dataset cache: download, store, and optimize raster data as local files."""
+"""Dataset cache: build and optimize raster data as local Zarr stores."""
 
-import datetime
 import importlib
-import inspect
 import logging
 import os
 import shutil
@@ -12,7 +10,6 @@ from typing import Any
 
 import xarray as xr
 import xproj  # noqa: F401  # type: ignore[import-untyped]  # pyright: ignore[reportUnusedImport]
-from fastapi import BackgroundTasks, HTTPException
 from geozarr_toolkit import MultiscalesConventionMetadata, create_geozarr_attrs
 from topozarr.coarsen import create_pyramid
 
@@ -35,80 +32,6 @@ def _resolve_download_dir() -> Path:
 
 DOWNLOAD_DIR = _resolve_download_dir()
 
-
-def download_dataset(
-    dataset: dict[str, Any],
-    start: str,
-    end: str | None,
-    bbox: list[float] | None,
-    country_code: str | None,
-    overwrite: bool,
-    background_tasks: BackgroundTasks | None,
-) -> list[Path]:
-    """Download dataset files and return the NetCDF paths created or modified by this run.
-
-    The download still happens primarily through side effects in the provider function.
-    This return value is used to identify the concrete files created for this invocation.
-    When running in the background-task path, the download is deferred and this function
-    returns an empty list because no files have been created yet.
-    """
-    _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
-    ingestion = dataset["ingestion"]
-    eo_download_func_path = ingestion["function"]
-    eo_download_func = _get_dynamic_function(eo_download_func_path)
-    before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
-
-    params = dict(ingestion.get("default_params", {}))
-    params.update(
-        {
-            "start": start,
-            "end": end or datetime.date.today().isoformat(),
-            "dirname": DOWNLOAD_DIR,
-            "prefix": _get_cache_prefix(dataset),
-            "overwrite": overwrite,
-        }
-    )
-
-    sig = inspect.signature(eo_download_func)
-    try:
-        if "bbox" in sig.parameters:
-            params["bbox"] = _resolve_bbox(bbox=bbox)
-        if "country_code" in sig.parameters:
-            resolved_country_code = country_code or os.getenv("COUNTRY_CODE")
-            if resolved_country_code:
-                params["country_code"] = resolved_country_code
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Downloading this dataset requires a country code. "
-                        "Provide it through the resolved extent configuration or set COUNTRY_CODE in the environment."
-                    ),
-                )
-    except HTTPException:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if background_tasks is not None:
-        background_tasks.add_task(eo_download_func, **params)
-        return []
-
-    try:
-        eo_download_func(**params)
-    except HTTPException:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        message = str(exc).strip() or "Unexpected error from upstream data provider"
-        raise HTTPException(status_code=502, detail=f"Upstream dataset download failed: {message}") from exc
-
-    after_files = [path.resolve() for path in get_cache_files(dataset)]
-    changed_files = [
-        path for path in after_files if path not in before_files or path.stat().st_mtime_ns != before_files[path]
-    ]
-    return changed_files
 
 
 def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end: str | None = None) -> None:
@@ -341,39 +264,6 @@ def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     return None
 
 
-def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:
-    """Raise HTTP 400 if the request bbox falls outside the dataset's declared extents."""
-    extents = dataset.get("extents")
-    if not extents or bbox is None:
-        return
-    spatial = extents.get("spatial")
-    if not spatial:
-        return
-    cov_bbox = spatial.get("bbox")
-    if not isinstance(cov_bbox, (list, tuple)) or len(cov_bbox) != 4:
-        return
-    cov_xmin, cov_ymin, cov_xmax, cov_ymax = cov_bbox
-    xmin, ymin, xmax, ymax = bbox
-    if ymin > cov_ymax or ymax < cov_ymin:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Dataset '{dataset['id']}' does not cover this extent. "
-                f"Latitude coverage: {cov_ymin}°–{cov_ymax}°, "
-                f"requested: {ymin}°–{ymax}°."
-            ),
-        )
-    if xmin > cov_xmax or xmax < cov_xmin:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Dataset '{dataset['id']}' does not cover this extent. "
-                f"Longitude coverage: {cov_xmin}°–{cov_xmax}°, "
-                f"requested: {xmin}°–{xmax}°."
-            ),
-        )
-
-
 def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     """Import and return a function given its dotted module path."""
     parts = full_path.split(".")
@@ -383,27 +273,3 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     return getattr(module, function_name)  # type: ignore[no-any-return]
 
 
-def _resolve_bbox(*, bbox: list[float] | None) -> list[float]:
-    """Resolve bbox from request or environment."""
-    if bbox is not None:
-        return bbox
-
-    env_bbox = _bbox_from_env()
-    if env_bbox is not None:
-        return env_bbox
-
-    raise ValueError(
-        "A bbox is required for this dataset. Provide it in the request or set DOWNLOAD_BBOX in the environment."
-    )
-
-
-def _bbox_from_env() -> list[float] | None:
-    """Parse a default bbox from environment if configured."""
-    raw_bbox = os.getenv("DOWNLOAD_BBOX") or os.getenv("DEFAULT_DOWNLOAD_BBOX")
-    if not raw_bbox:
-        return None
-
-    parts = [part.strip() for part in raw_bbox.split(",")]
-    if len(parts) != 4:
-        raise ValueError("DOWNLOAD_BBOX must contain four comma-separated numbers: xmin,ymin,xmax,ymax")
-    return [float(part) for part in parts]

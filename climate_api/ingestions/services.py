@@ -151,14 +151,13 @@ def create_artifact(
     start: str,
     end: str | None,
     bbox: list[float] | None,
-    country_code: str | None,
     overwrite: bool,
     prefer_zarr: bool,
     publish: bool,
     download_start: str | None = None,
     download_end: str | None = None,
 ) -> ArtifactRecord:
-    """Download a dataset, persist it locally, and store artifact metadata."""
+    """Ingest a dataset via its plugin, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
@@ -172,7 +171,6 @@ def create_artifact(
         download_start=download_start,
         download_end=download_end,
     )
-    requires_canonical_zarr = download_start is not None
     resolved_download_end = download_end if download_end is not None else end
     if resolved_download_end is None:
         resolved_download_end = _default_request_end(period_type)
@@ -184,7 +182,7 @@ def create_artifact(
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr or requires_canonical_zarr,
+        prefer_zarr=prefer_zarr,
     )
     if existing is not None and not overwrite:
         logger.info(
@@ -198,136 +196,15 @@ def create_artifact(
             return publish_artifact_record(existing.artifact_id)
         return existing
 
-    ingestion = dataset.get("ingestion") or {}
-    if isinstance(ingestion, dict) and ingestion.get("plugin"):
-        return _create_icechunk_artifact(
-            dataset=dataset,
-            start=start,
-            end=resolved_download_end,
-            bbox=bbox,
-            request_scope=request_scope,
-            publish=publish,
-            ingest_start=download_start,
-        )
-
-    logger.info(
-        "Downloading dataset '%s': request_scope=%s..%s download_scope=%s..%s prefer_zarr=%s publish=%s",
-        dataset["id"],
-        start,
-        end,
-        download_start or start,
-        resolved_download_end,
-        prefer_zarr,
-        publish,
-    )
-    downloaded_files = downloader.download_dataset(
-        dataset,
-        start=download_start or start,
+    return _create_icechunk_artifact(
+        dataset=dataset,
+        start=start,
         end=resolved_download_end,
         bbox=bbox,
-        country_code=country_code,
-        overwrite=overwrite,
-        background_tasks=None,
-    )
-    logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
-
-    if prefer_zarr or requires_canonical_zarr:
-        try:
-            logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
-            downloader.build_dataset_zarr(dataset, start=start, end=end)
-            logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
-        except Exception as exc:
-            if requires_canonical_zarr:
-                if isinstance(exc, ValueError):
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Append sync canonical Zarr rebuild failed for requested scope: {exc}",
-                    ) from exc
-                raise HTTPException(
-                    status_code=500,
-                    detail="Append sync canonical Zarr rebuild failed unexpectedly.",
-                ) from exc
-            # Fall back to NetCDF when Zarr materialization is not viable.
-            logger.warning(
-                "Zarr materialization failed for dataset '%s'; falling back to NetCDF",
-                dataset["id"],
-                exc_info=True,
-            )
-
-    zarr_path = downloader.get_zarr_path(dataset)
-    if requires_canonical_zarr and zarr_path is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Append sync requires a canonical Zarr artifact, but no Zarr store was produced.",
-        )
-    cache_files = (
-        downloader.get_cache_files(dataset)
-        if requires_canonical_zarr
-        else downloaded_files or downloader.get_cache_files(dataset)
-    )
-    primary_path: str | None
-
-    if zarr_path is not None:
-        artifact_format = ArtifactFormat.ZARR
-        primary_path = str(zarr_path.resolve())
-        asset_paths = [primary_path]
-    elif cache_files:
-        artifact_format = ArtifactFormat.NETCDF
-        asset_paths = [str(path.resolve()) for path in cache_files]
-        primary_path = asset_paths[0] if len(asset_paths) == 1 else None
-    else:
-        raise HTTPException(status_code=500, detail="Download finished without any saved artifact files")
-
-    coverage_data = get_data_coverage_for_paths(
-        dataset,
-        zarr_path=primary_path if artifact_format == ArtifactFormat.ZARR else None,
-        netcdf_paths=asset_paths if artifact_format == ArtifactFormat.NETCDF else None,
-    )
-    if not coverage_data.get("has_data", True):
-        raise HTTPException(status_code=409, detail="Downloaded artifact contains no data for the requested scope")
-    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
-    coverage = ArtifactCoverage(
-        temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
-        spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
-        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
-    )
-    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Materialized artifact coverage does not match the requested scope: "
-                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
-                f"request={request_scope.start}..{request_scope.end}"
-            ),
-        )
-
-    record = ArtifactRecord(
-        artifact_id=str(uuid4()),
-        dataset_id=str(dataset["id"]),
-        dataset_name=str(dataset["name"]),
-        variable=str(dataset["variable"]),
-        format=artifact_format,
-        path=primary_path,
-        asset_paths=asset_paths,
-        variables=[str(dataset["variable"])],
         request_scope=request_scope,
-        coverage=coverage,
-        created_at=datetime.now(UTC),
-        publication=ArtifactPublication(),
+        publish=publish,
+        ingest_start=download_start,
     )
-    stored_record = _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
-    logger.info(
-        "Stored artifact '%s' for dataset '%s': format=%s coverage=%s..%s",
-        stored_record.artifact_id,
-        dataset["id"],
-        stored_record.format,
-        stored_record.coverage.temporal.start,
-        stored_record.coverage.temporal.end,
-    )
-    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
-        logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
-        return publish_artifact_record(stored_record.artifact_id)
-    return stored_record
 
 
 def _create_icechunk_artifact(
@@ -362,7 +239,11 @@ def _create_icechunk_artifact(
     )
     store_path = downloader.DOWNLOAD_DIR / f"{dataset_id}.icechunk"
 
-    plugin = load_plugin(plugin_path, params)
+    extent_country_code = extent.get("country_code") if extent else None
+    extra_params: dict[str, object] = {}
+    if extent_country_code:
+        extra_params["country_code"] = extent_country_code
+    plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
 
     effective_start = ingest_start if ingest_start is not None else start
     # Rechunk after the initial ingest (when no delta start is provided) using the
@@ -522,9 +403,6 @@ def sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-    extent = get_extent()
-    resolved_country_code = extent.get("country_code") if extent else None
-
     committed_end: str | None = None
     if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.path:
         from climate_api.ingest.store import read_committed_period_ids
@@ -544,7 +422,6 @@ def sync_dataset(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
-            country_code=resolved_country_code,
             prefer_zarr=prefer_zarr,
             publish=publish,
             create_artifact_fn=create_artifact,

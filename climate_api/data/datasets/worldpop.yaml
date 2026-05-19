@@ -19,11 +19,7 @@
   ingestion:
     plugin: climate_api.ingest.plugins.worldpop.WorldPopPlugin
     params:
-      # country_code is required — set the ISO 3166-1 alpha-3 code for your deployment
-      # e.g. country_code: NOR
-      version: global2
-    function: dhis2eo.data.worldpop.pop_total.yearly.download
-    default_params:
+      # country_code is injected automatically from extent.country_code in climate-api.yaml
       version: global2
   units: people
   resolution: 100m x 100m

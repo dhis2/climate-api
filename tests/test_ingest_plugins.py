@@ -8,7 +8,6 @@ monkeypatching to replace the network/rioxarray layer with a minimal stub.
 from __future__ import annotations
 
 import asyncio
-import io
 from datetime import date
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -19,7 +18,6 @@ import pytest
 import xarray as xr
 
 from climate_api.ingest.protocol import GridSpec, IngestionPlugin
-
 
 # ---------------------------------------------------------------------------
 # WorldPopPlugin

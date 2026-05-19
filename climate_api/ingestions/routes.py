@@ -30,13 +30,11 @@ def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
     dataset = _get_dataset_or_404(request.dataset_id)
     extent = get_extent_or_404()
     resolved_bbox = list(extent["bbox"])
-    resolved_country_code = extent.get("country_code")
     artifact = services.create_artifact(
         dataset=dataset,
         start=request.start,
         end=request.end,
         bbox=resolved_bbox,
-        country_code=resolved_country_code,
         overwrite=request.overwrite,
         prefer_zarr=request.prefer_zarr,
         publish=request.publish,

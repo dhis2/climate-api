@@ -19,9 +19,6 @@
     plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
     params:
       variable: t2m
-    function: dhis2eo.data.destine.era5_land.hourly.download
-    default_params:
-      variables: ['t2m']
   transforms:
     - climate_api.transforms.kelvin_to_celsius
   units: degC
@@ -53,9 +50,6 @@
     plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
     params:
       variable: tp
-    function: dhis2eo.data.destine.era5_land.hourly.download
-    default_params:
-      variables: ['tp']
   transforms:
     - climate_api.transforms.metres_to_mm
   units: mm

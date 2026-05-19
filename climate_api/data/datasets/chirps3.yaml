@@ -19,7 +19,6 @@
     params:
       stage: final
       flavor: rnl
-    function: dhis2eo.data.chc.chirps3.daily.download
   units: mm
   resolution: 5 km x 5 km
   source: CHIRPS v3

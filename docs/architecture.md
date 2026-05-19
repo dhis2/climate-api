@@ -16,7 +16,7 @@ A template defines:
 
 - the dataset identifier and display metadata
 - the variable name, units, and period type
-- how to download the data (`ingestion.function`)
+- how to ingest the data (`ingestion.plugin`)
 - what transforms to apply (`transforms`)
 - what sync strategy to use (`sync.kind`, `sync.execution`)
 
@@ -52,34 +52,9 @@ This is a deliberate design constraint: each instance serves one place. A Sierra
 
 ## Data lifecycle
 
-The framework supports two ingestion paths depending on the template's `ingestion` block.
+All datasets are ingested through the plugin path (`ingestion.plugin`):
 
-**Function path** (`ingestion.function`) — for simpler file-based sources:
-
-```
-Template (YAML)
-    │
-    │  POST /ingestions  (or  POST /sync)
-    ▼
-Ingestion
-    │  call ingestion function → NetCDF files on disk
-    │  apply transforms
-    │  reproject to instance CRS
-    │  write GeoZarr store
-    │  compute coverage (spatial + temporal extent of actual data)
-    ▼
-Artifact (internal record)
-    │
-    │  publish=true
-    ▼
-Managed dataset (public API)
-    ├── /datasets/{id}           — native metadata
-    ├── /zarr/{id}               — raw zarr store access
-    ├── /stac/collections/{id}   — STAC discovery
-    └── /ogcapi/collections/{id} — OGC API access
-```
-
-**Plugin path** (`ingestion.plugin`) — for streaming and resumable ingests:
+**Plugin path** (`ingestion.plugin`) — streams data directly into an Icechunk store:
 
 ```
 Template (YAML)
@@ -102,9 +77,7 @@ Orchestrator
 Managed dataset (public API)  — same endpoints as above
 ```
 
-The plugin path writes directly to an Icechunk store — no intermediate files on disk. A crash leaves the store at the last committed period; restart resumes from there. The store is readable and serveable from the first committed period.
-
-Both paths produce the same public API surface. The `/zarr/{id}` and `/stac/collections/{id}` routes handle both `ZARR` and `ICECHUNK` artifact formats transparently.
+All ingest writes go directly to an Icechunk store — no intermediate files on disk. A crash leaves the store at the last committed period; restart resumes from there. The store is readable and serveable from the first committed period.
 
 ---
 
@@ -146,38 +119,9 @@ Before executing a sync, the engine calls the availability function to clamp the
 
 ## The plugin contract
 
-The platform has five extension points. Each one has a narrow contract — the framework handles everything else automatically.
-
-### Ingestion function
-
-```python
-def download(
-    *,
-    start: str,       # ISO 8601 date or datetime
-    end: str,
-    dirname: Path,    # write output files here
-    prefix: str,      # use as filename prefix, e.g. f"{prefix}_{year}.nc"
-    overwrite: bool,
-    bbox: list[float],  # optional — only if the source needs a spatial filter
-    **kwargs,           # default_params from the YAML template
-) -> None:
-    # Write one or more NetCDF files to dirname.
-```
-
-The function writes NetCDF files. The framework reads them, normalises coordinate names, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
-
-**Reusing ingestion logic across templates**: multiple YAML templates can reference the same Python function and differentiate via `default_params`:
-
-```yaml
-ingestion:
-  function: dhis2eo.data.era5_land.download
-  default_params:
-    variable: 2m_temperature
-```
+The platform has four extension points. Each one has a narrow contract — the framework handles everything else automatically.
 
 ### Ingestion plugin
-
-For sources that need streaming access, concurrent fetching, or resumable long ingests, use `ingestion.plugin` instead of a download function:
 
 ```python
 class MyPlugin:
@@ -210,7 +154,7 @@ def my_transform(ds: xr.Dataset, dataset: dict) -> xr.Dataset:
     # Do not modify dataset-level ds.attrs — the framework manages those.
 ```
 
-Transforms are applied in order after the ingestion function returns, before the zarr is written. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They do not write to disk.
+Transforms are applied in order after each period is fetched, before the data is written to the Icechunk store. They receive the full xarray Dataset and the template dict. They return a modified Dataset. They do not write to disk.
 
 ### Process execution function
 

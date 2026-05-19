@@ -7,7 +7,6 @@ The same pattern applies at every extension point:
 | Extension point | How to extend | Plugin location |
 | --------------- | ------------- | --------------- |
 | [Dataset templates](#dataset-templates) | YAML files | `plugins_dir/datasets/` |
-| [Ingestion functions](#ingestion-functions) | Python function, dotted path in YAML | any importable path |
 | [Ingestion plugins](#ingestion-plugins) | Python class implementing `IngestionPlugin` | any importable path |
 | [Transform functions](#transform-functions) | Python function, dotted path in YAML | any importable path |
 | [Processes](#processes) | YAML file + Python function | `plugins_dir/processes/` |
@@ -35,22 +34,9 @@ See [Adding custom datasets](adding_custom_datasets.md) for the full template fi
 
 ---
 
-## Ingestion functions
-
-The `ingestion.function` field in a dataset template is a dotted Python path to the download function that fetches data for that dataset.
-
-```yaml
-ingestion:
-  function: mypackage.sources.enacts.download
-```
-
-The function must follow the download function contract (see [Adding custom datasets](adding_custom_datasets.md#step-1-write-the-download-function)). It can live anywhere that is importable — either an installed package or a module placed directly under `plugins_dir` (which is automatically added to `sys.path`).
-
----
-
 ## Ingestion plugins
 
-For sources that require streaming, concurrent fetching, or direct-to-store writes without intermediate files, use `ingestion.plugin` instead of `ingestion.function`. The `plugin` field specifies a Python class implementing the `IngestionPlugin` protocol.
+The `ingestion.plugin` field in a dataset template is a dotted Python path to an `IngestionPlugin` class. The plugin streams data directly into the Icechunk store one period at a time — no intermediate files, resumable on restart.
 
 ```yaml
 ingestion:
@@ -59,8 +45,6 @@ ingestion:
     variable: rainfall
     stage: final
 ```
-
-Both `ingestion.function` and `ingestion.plugin` can coexist in the same template — the `plugin` path is used when present, the `function` path serves as a fallback for legacy tooling.
 
 ### Plugin protocol
 
@@ -111,13 +95,6 @@ Set `time_dim=False` for static (time-invariant) datasets — the orchestrator i
 5. Commits to the Icechunk store after every `commit_batch_size` periods.
 6. On restart, resumes from the last committed period — a crash loses at most one uncommitted batch.
 7. After all periods are written, runs a rechunk pass if the plugin declares `rechunk_time`, then expires intermediate Icechunk snapshots to prune history.
-
-### Choosing between function and plugin
-
-| Approach | When to use |
-| -------- | ----------- |
-| `ingestion.function` | Simple sources — write one or more NetCDF files to a directory |
-| `ingestion.plugin` | Streaming sources, COG range requests, remote zarr, resumable long ingests |
 
 See [Adding custom datasets](adding_custom_datasets.md#ingestion-plugin) for a worked example.
 
