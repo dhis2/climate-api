@@ -16,6 +16,9 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
+    plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
+    params:
+      variable: t2m
     function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['t2m']
@@ -47,6 +50,9 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
+    plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
+    params:
+      variable: tp
     function: dhis2eo.data.destine.era5_land.hourly.download
     default_params:
       variables: ['tp']

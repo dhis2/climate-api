@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
 
 from climate_api import config as api_config
-from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
+from climate_api.data_accessor.services.accessor import coverage_from_open_dataset, get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent
@@ -198,6 +198,17 @@ def create_artifact(
             return publish_artifact_record(existing.artifact_id)
         return existing
 
+    ingestion = dataset.get("ingestion") or {}
+    if isinstance(ingestion, dict) and ingestion.get("plugin"):
+        return _create_icechunk_artifact(
+            dataset=dataset,
+            start=start,
+            end=resolved_download_end,
+            bbox=bbox,
+            request_scope=request_scope,
+            publish=publish,
+        )
+
     logger.info(
         "Downloading dataset '%s': request_scope=%s..%s download_scope=%s..%s prefer_zarr=%s publish=%s",
         dataset["id"],
@@ -316,6 +327,92 @@ def create_artifact(
         logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
+
+
+def _create_icechunk_artifact(
+    *,
+    dataset: dict[str, object],
+    start: str,
+    end: str,
+    bbox: list[float] | None,
+    request_scope: ArtifactRequestScope,
+    publish: bool,
+) -> ArtifactRecord:
+    """Run per-period Icechunk ingest and register the resulting store as an artifact."""
+    from climate_api.ingest.orchestrator import load_plugin, run_ingest_sync
+    from climate_api.ingest.store import open_or_create_repo
+
+    dataset_id = str(dataset["id"])
+    period_type = str(dataset["period_type"])
+    ingestion = dict(dataset.get("ingestion") or {})  # type: ignore[arg-type]
+    plugin_path = str(ingestion["plugin"])
+    params = dict(ingestion.get("params") or {})
+
+    extent = get_extent()
+    resolved_bbox: list[float] = list(bbox) if bbox is not None else (
+        list(extent["bbox"]) if extent else [-180, -90, 180, 90]
+    )
+    store_path = downloader.DOWNLOAD_DIR / f"{dataset_id}.icechunk"
+
+    plugin = load_plugin(plugin_path, params)
+
+    logger.info("Running Icechunk ingest for '%s': %s..%s", dataset_id, start, end)
+    run_ingest_sync(
+        plugin=plugin,
+        params=params,
+        bbox=resolved_bbox,
+        start=start,
+        end=end,
+        store_path=store_path,
+        period_type=period_type,
+    )
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+    import xarray as xr
+
+    ds = xr.open_zarr(session.store)
+    from climate_api import config as api_config
+
+    native_crs = api_config.get_crs() or "EPSG:4326"
+    coverage_data = coverage_from_open_dataset(ds, period_type=period_type, native_crs=native_crs)
+    ds.close()
+
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Icechunk store contains no data for the requested scope")
+
+    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
+        spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
+        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
+    )
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=dataset_id,
+        dataset_name=str(dataset["name"]),
+        variable=str(dataset["variable"]),
+        format=ArtifactFormat.ICECHUNK,
+        path=str(store_path.resolve()),
+        asset_paths=[str(store_path.resolve())],
+        variables=[str(dataset["variable"])],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+    stored = _store_artifact_record(record, prefer_zarr=False, publish=publish)
+    logger.info(
+        "Stored Icechunk artifact '%s' for '%s': coverage=%s..%s",
+        stored.artifact_id,
+        dataset_id,
+        stored.coverage.temporal.start,
+        stored.coverage.temporal.end,
+    )
+    if publish and stored.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored.artifact_id)
+    return stored
 
 
 def publish_artifact_record(artifact_id: str) -> ArtifactRecord:

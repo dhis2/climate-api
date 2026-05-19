@@ -129,6 +129,15 @@ def _open_zarr(zarr_path: str) -> xr.Dataset:
     return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
 
 
+def coverage_from_open_dataset(ds: xr.Dataset, *, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
+    """Summarize temporal and spatial coverage for a caller-managed open dataset.
+
+    Unlike get_data_coverage_for_paths, this function does not close the dataset.
+    Use when the caller already holds a store handle (e.g. an Icechunk session store).
+    """
+    return _coverage_from_dataset(ds=ds, period_type=period_type, native_crs=native_crs)
+
+
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
     """Summarize temporal and spatial coverage for an already opened dataset."""
     if any(size == 0 for size in ds.sizes.values()):
