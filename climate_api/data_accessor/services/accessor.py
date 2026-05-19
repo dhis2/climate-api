@@ -3,6 +3,7 @@
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -122,6 +123,15 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
         ds.close()
         ds = level0
     return ds
+
+
+def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
+    """Open an Icechunk store as an xarray Dataset via a readonly MVCC session."""
+    from climate_api.ingest.store import open_or_create_repo
+
+    repo = open_or_create_repo(Path(store_path))
+    session = repo.readonly_session("main")
+    return xr.open_zarr(session.store)
 
 
 def _open_zarr(zarr_path: str) -> xr.Dataset:

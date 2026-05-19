@@ -13,7 +13,7 @@ import pystac
 from fastapi import HTTPException, Request
 from xstac import xarray_to_stac
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
@@ -131,7 +131,7 @@ def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
         latest = max(artifacts, key=lambda artifact: artifact.created_at)
         if latest.publication.status != PublicationStatus.PUBLISHED:
             continue
-        if latest.format != ArtifactFormat.ZARR:
+        if latest.format not in (ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK):
             continue
         result[dataset_id] = latest
     return dict(sorted(result.items()))
@@ -196,7 +196,11 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         return deepcopy(cached_payload)
 
     try:
-        ds = open_zarr_dataset(_artifact_store_path(artifact))
+        store_path = _artifact_store_path(artifact)
+        if artifact.format == ArtifactFormat.ICECHUNK:
+            ds = open_icechunk_dataset(store_path)
+        else:
+            ds = open_zarr_dataset(store_path)
     except HTTPException:
         raise
     except Exception as exc:

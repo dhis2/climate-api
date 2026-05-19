@@ -184,6 +184,91 @@ def test_materialize_resampled_artifact_returns_404_when_source_dataset_template
         )
 
 
+def test_materialize_resampled_artifact_returns_409_when_source_is_netcdf(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_artifact = _artifact(
+        artifact_id="source-netcdf",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=tmp_path / "source.nc",
+        start="2026-01-01",
+        end="2026-01-02",
+    )
+    source_artifact = source_artifact.model_copy(update={"format": ArtifactFormat.NETCDF})
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: {"id": dataset_id, "period_type": "daily"},
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    with pytest.raises(resample.HTTPException, match="Zarr or Icechunk"):
+        resample.materialize_resampled_artifact(
+            source_dataset_id="era5land_temperature_hourly",
+            frequency="1D",
+            method="mean",
+            start="2026-01-01",
+            end="2026-01-02",
+            overwrite=False,
+            publish=False,
+        )
+
+
+def test_materialize_resampled_artifact_reads_icechunk_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source.icechunk"
+    source_artifact = _artifact(
+        artifact_id="source-icechunk",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-02T23",
+    )
+    source_artifact = source_artifact.model_copy(update={"format": ArtifactFormat.ICECHUNK})
+
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(48)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(48, dtype=float).reshape(48, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: {"id": dataset_id, "period_type": "hourly"} if "hourly" in dataset_id else None,
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+    monkeypatch.setattr(resample, "open_icechunk_dataset", lambda _: ds)
+
+    artifact = resample.materialize_resampled_artifact(
+        source_dataset_id="era5land_temperature_hourly",
+        frequency="1D",
+        method="mean",
+        start="2026-01-01",
+        end="2026-01-02",
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.dataset_id == "era5land_temperature_hourly_1d_mean"
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-01-02"
+
+
 def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

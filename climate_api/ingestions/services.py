@@ -582,12 +582,61 @@ def plan_sync_dataset(
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     """Return a public Zarr store listing for a managed dataset."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return _icechunk_store_info(dataset_id, artifact)
+
     store_root = _get_zarr_root_or_409(artifact)
 
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
     store_attrs = _read_zarr_attrs(store_root)
     store_crs = store_attrs.get("proj:code") if store_attrs else None
     crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
+    return {
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
+        "format": artifact.format,
+        "path": ".",
+        "crs": crs,
+        "proj4": _crs_to_proj4(crs),
+        "bounds": _read_zarr_bounds(store_attrs),
+        "entries": entries,
+    }
+
+
+def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str, object]:
+    """Return a Zarr store listing for an Icechunk-backed artifact."""
+    import zarr
+
+    from climate_api.ingest.store import open_or_create_repo
+
+    store_path = Path(artifact.path or artifact.asset_paths[0])
+    if not store_path.exists():
+        raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+
+    store_attrs: dict[str, object] = {}
+    try:
+        root_meta = json.loads(bytes(session.store["zarr.json"]))  # type: ignore[index]
+        store_attrs = root_meta.get("attributes", {})  # type: ignore[assignment]
+    except Exception:
+        pass
+
+    store_crs = store_attrs.get("proj:code")
+    crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
+
+    root: zarr.Group = zarr.open_group(session.store, mode="r")  # type: ignore[assignment]
+    entries = [
+        {
+            "name": name,
+            "kind": "directory",
+            "href": f"/zarr/{dataset_id}/{name}",
+        }
+        for name in sorted(root.keys())
+    ]
+
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
@@ -651,6 +700,10 @@ def get_dataset_zarr_store_file_or_404(
 ) -> FileResponse | Response | dict[str, object]:
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return _serve_icechunk_key(dataset_id, artifact, relative_path)
+
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -664,6 +717,55 @@ def get_dataset_zarr_store_file_or_404(
     if media_type is None:
         media_type = "application/octet-stream"
     return FileResponse(target, media_type=media_type, filename=target.name)
+
+
+def _serve_icechunk_key(
+    dataset_id: str, artifact: ArtifactRecord, relative_path: str
+) -> Response | dict[str, object]:
+    """Serve a zarr v3 key from an Icechunk store via its session store."""
+    import zarr
+
+    from climate_api.ingest.store import open_or_create_repo
+
+    store_path = Path(artifact.path or artifact.asset_paths[0])
+    if not store_path.exists():
+        raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+    key = relative_path.lstrip("/")
+
+    # Directory-like paths: list child keys as a ZarrListing
+    if not key or key.endswith("/"):
+        root: zarr.Group = zarr.open_group(session.store, mode="r")  # type: ignore[assignment]
+        prefix = key.rstrip("/")
+        try:
+            node: zarr.Group = root[prefix] if prefix else root  # type: ignore[assignment]
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
+        entries = [
+            {
+                "name": name,
+                "kind": "directory",
+                "href": f"/zarr/{dataset_id}/{prefix}/{name}".replace("//", "/"),
+            }
+            for name in sorted(node.keys())
+        ]
+        return {
+            "kind": "ZarrListing",
+            "dataset_id": dataset_id,
+            "path": key or ".",
+            "entries": entries,
+        }
+
+    try:
+        data: bytes = bytes(session.store[key])  # type: ignore[index]
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
+
+    if key.endswith("zarr.json"):
+        return JSONResponse(content=json.loads(data))
+    return Response(content=data, media_type="application/octet-stream")
 
 
 def _load_records() -> list[ArtifactRecord]:
@@ -1010,7 +1112,8 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
-    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format == ArtifactFormat.ZARR:
+    zarr_formats = {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}
+    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format in zarr_formats:
         links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
     if latest.format == ArtifactFormat.NETCDF:
         links.append(

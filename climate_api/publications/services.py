@@ -12,7 +12,7 @@ from typing import Any, cast
 import xarray as xr
 import yaml
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
 
@@ -49,6 +49,7 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     collection_id = managed_dataset_id_for(record)
     data_path = record.path or record.asset_paths[0]
     is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
+    is_icechunk = record.format == ArtifactFormat.ICECHUNK
     published_record = record.model_copy(
         update={
             "publication": record.publication.model_copy(
@@ -56,8 +57,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "status": PublicationStatus.PUBLISHED,
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
-                    # Pyramid zarr stores are served via the /zarr endpoint, not pygeoapi.
-                    "pygeoapi_path": None if is_pyramid_zarr else f"/ogcapi/collections/{collection_id}",
+                    # Pyramid zarr and Icechunk stores are served via the /zarr endpoint, not pygeoapi.
+                    "pygeoapi_path": None if (is_pyramid_zarr or is_icechunk) else f"/ogcapi/collections/{collection_id}",
                 }
             )
         }
@@ -69,6 +70,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
         data_path = active.path or active.asset_paths[0]
+        if active.format == ArtifactFormat.ICECHUNK:
+            continue  # icechunk: not served via pygeoapi, use /zarr endpoint instead
         if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():
             continue  # pyramid zarr: not served via pygeoapi, use /zarr endpoint instead
         assert active.publication.collection_id is not None
@@ -160,7 +163,9 @@ def _provider_format(artifact_format: ArtifactFormat) -> dict[str, str]:
 def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
     """Inspect an artifact and return provider axis field names."""
     data_path = record.path or record.asset_paths[0]
-    if record.format == ArtifactFormat.ZARR:
+    if record.format == ArtifactFormat.ICECHUNK:
+        ds = open_icechunk_dataset(data_path)
+    elif record.format == ArtifactFormat.ZARR:
         ds = open_zarr_dataset(data_path)
     else:
         ds = xr.open_dataset(data_path)

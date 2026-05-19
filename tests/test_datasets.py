@@ -125,6 +125,15 @@ def test_dataset_links_include_stac_for_published_zarr() -> None:
     assert any(link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links)
 
 
+def test_dataset_links_include_stac_for_published_icechunk() -> None:
+    artifact = _artifact(artifact_id="a1")
+    artifact = artifact.model_copy(update={"format": ArtifactFormat.ICECHUNK})
+
+    links = services._dataset_links("chirps3_precipitation_daily", artifact)
+
+    assert any(link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links)
+
+
 def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
     unpublished = _artifact(artifact_id="a1")
     unpublished.publication.status = PublicationStatus.UNPUBLISHED
@@ -835,3 +844,100 @@ def test_create_artifact_delta_rejects_short_rebuilt_coverage(
     assert exc_info.value.status_code == 409
     assert "coverage=2026-02-01..2026-02-10" in str(exc_info.value.detail)
     assert "request=2026-01-01..2026-02-10" in str(exc_info.value.detail)
+
+
+def _icechunk_artifact(
+    *,
+    artifact_id: str = "ic1",
+    path: str = "/tmp/test.icechunk",
+) -> ArtifactRecord:
+    return ArtifactRecord(
+        artifact_id=artifact_id,
+        dataset_id="chirps3_precipitation_daily",
+        dataset_name="CHIRPS3 precipitation",
+        variable="precip",
+        format=ArtifactFormat.ICECHUNK,
+        path=path,
+        asset_paths=[path],
+        variables=["precip"],
+        request_scope=ArtifactRequestScope(
+            start="2026-01-01",
+            end="2026-01-10",
+            bbox=(1.0, 2.0, 3.0, 4.0),
+        ),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start="2026-01-01", end="2026-01-10"),
+            spatial=CoverageSpatial(xmin=1.0, ymin=2.0, xmax=3.0, ymax=4.0),
+        ),
+        created_at=datetime(2026, 1, 10, tzinfo=UTC),
+        publication=ArtifactPublication(status=PublicationStatus.PUBLISHED),
+    )
+
+
+def test_get_zarr_store_info_dispatches_to_icechunk_for_icechunk_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "test.icechunk"
+    store_path.mkdir()
+    artifact = _icechunk_artifact(path=str(store_path))
+
+    monkeypatch.setattr(
+        services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: artifact,
+    )
+
+    called_with: list[str] = []
+
+    def fake_icechunk_store_info(dataset_id: str, art: ArtifactRecord) -> dict:
+        called_with.append(dataset_id)
+        return {"kind": "ZarrListing", "dataset_id": dataset_id, "format": art.format, "entries": []}
+
+    monkeypatch.setattr(services, "_icechunk_store_info", fake_icechunk_store_info)
+
+    result = services.get_dataset_zarr_store_info_or_404("chirps3_precipitation_daily")
+
+    assert result["kind"] == "ZarrListing"
+    assert called_with == ["chirps3_precipitation_daily"]
+
+
+def test_get_zarr_store_file_dispatches_to_icechunk_for_icechunk_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "test.icechunk"
+    store_path.mkdir()
+    artifact = _icechunk_artifact(path=str(store_path))
+
+    monkeypatch.setattr(
+        services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: artifact,
+    )
+
+    served_keys: list[str] = []
+
+    from starlette.responses import Response
+
+    def fake_serve_icechunk_key(dataset_id: str, art: ArtifactRecord, relative_path: str) -> Response:
+        served_keys.append(relative_path)
+        return Response(content=b'{"zarr_format": 3}', media_type="application/json")
+
+    monkeypatch.setattr(services, "_serve_icechunk_key", fake_serve_icechunk_key)
+
+    services.get_dataset_zarr_store_file_or_404("chirps3_precipitation_daily", "t2m/zarr.json")
+
+    assert served_keys == ["t2m/zarr.json"]
+
+
+def test_get_zarr_store_info_raises_409_for_netcdf_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
+    netcdf = _artifact(artifact_id="a1")
+    netcdf = netcdf.model_copy(update={"format": ArtifactFormat.NETCDF})
+
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: netcdf)
+
+    with pytest.raises(services.HTTPException) as exc_info:
+        services.get_dataset_zarr_store_info_or_404("chirps3_precipitation_daily")
+
+    assert exc_info.value.status_code == 409
