@@ -139,7 +139,7 @@ def run_process_execution(
         return job
 
     try:
-        func = process_registry._get_dynamic_function(process["execution"]["function"])
+        func = process_registry.get_process_function(process_id)
     except (ImportError, AttributeError, ValueError) as exc:
         raise HTTPException(
             status_code=500,

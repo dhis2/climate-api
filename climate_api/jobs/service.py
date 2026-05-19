@@ -391,7 +391,7 @@ class JobService:
         process = process_registry.get_process(record.process_id)
         if process is None or not process["expose"]:
             raise ValueError(f"Unknown process '{record.process_id}'")
-        func = process_registry._get_dynamic_function(process["execution"]["function"])
+        func = process_registry.get_process_function(record.process_id)
         context = JobExecutionContext(self, record.job_id)
         kwargs = dict(record.request)
         if _supports_argument(func, "on_progress"):

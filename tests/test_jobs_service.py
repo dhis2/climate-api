@@ -98,6 +98,21 @@ def test_service_update_progress_persists_percent() -> None:
         service.shutdown()
 
 
+def test_list_jobs_orders_by_created_at_descending() -> None:
+    service = JobService()
+    try:
+        older = _job_record("job-older").model_copy(update={"created_at": datetime(2026, 5, 17, tzinfo=UTC)})
+        newer = _job_record("job-newer").model_copy(update={"created_at": datetime(2026, 5, 18, tzinfo=UTC)})
+        job_store.create_job_record(older)
+        job_store.create_job_record(newer)
+
+        response = service.list_jobs()
+
+        assert [job.job_id for job in response.jobs] == ["job-newer", "job-older"]
+    finally:
+        service.shutdown()
+
+
 def test_service_uses_executor_kind_on_created_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeExecutor:
         kind = "fake-thread"
@@ -134,6 +149,35 @@ def test_service_uses_executor_kind_on_created_jobs(monkeypatch: pytest.MonkeyPa
 
         created = service.submit_process_job(process_id="recoverable-process", request={"value": 2})
         assert created.executor_kind == "fake-thread"
+    finally:
+        service.shutdown()
+
+
+def test_enqueue_job_does_not_submit_duplicate_running_future() -> None:
+    class BlockingFuture:
+        def done(self) -> bool:
+            return False
+
+    class RecordingExecutor:
+        kind = "recording"
+
+        def __init__(self) -> None:
+            self.submissions = 0
+
+        def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> BlockingFuture:
+            self.submissions += 1
+            return BlockingFuture()
+
+        def shutdown(self) -> None:
+            return None
+
+    executor = RecordingExecutor()
+    service = JobService(executor=cast(ProcessExecutor, executor))
+    try:
+        service._enqueue_job("job-1")
+        service._enqueue_job("job-1")
+
+        assert executor.submissions == 1
     finally:
         service.shutdown()
 
