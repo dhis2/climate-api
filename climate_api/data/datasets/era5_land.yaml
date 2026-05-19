@@ -6,9 +6,6 @@
   sync:
     kind: temporal
     execution: append
-    availability:
-      latest_available_function: climate_api.providers.availability.lagged_latest_available
-      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -37,9 +34,6 @@
   sync:
     kind: temporal
     execution: append
-    availability:
-      latest_available_function: climate_api.providers.availability.lagged_latest_available
-      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]

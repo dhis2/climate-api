@@ -748,6 +748,229 @@ def test_latest_available_end_wraps_invalid_provider_function_path(monkeypatch: 
         )
 
 
+def test_latest_available_end_uses_plugin_periods_for_plugin_datasets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """For plugin datasets, _latest_available_end calls plugin.periods() instead of
+    latest_available_function."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: "2026-02-08",
+    )
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "daily",
+            "sync": {"kind": "temporal"},
+            "ingestion": {"plugin": "some.Plugin", "params": {}},
+        },
+        requested_end="2026-02-10",
+        current_end="2026-02-06",
+    )
+
+    assert result == "2026-02-08"
+
+
+def test_latest_available_end_plugin_returns_current_end_when_no_new_periods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When plugin.periods() returns an empty list, _latest_available_end returns current_end
+    so the NOOP check fires correctly."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: current_end,
+    )
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "daily",
+            "sync": {"kind": "temporal"},
+            "ingestion": {"plugin": "some.Plugin", "params": {}},
+        },
+        requested_end="2026-02-10",
+        current_end="2026-02-06",
+    )
+
+    assert result == "2026-02-06"
+
+
+def test_latest_available_end_falls_back_to_legacy_when_plugin_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When _plugin_latest_available_period returns None (e.g. plugin needs extra_params),
+    the legacy latest_available_function path is used."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda **_kw: None,
+    )
+    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-02-05")
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "worldpop_population_yearly",
+            "period_type": "daily",
+            "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
+            "ingestion": {"plugin": "some.Plugin", "params": {}},
+        },
+        requested_end="2026-02-10",
+        current_end="2026-02-06",
+    )
+
+    assert result == "2026-02-05"
+
+
+def test_plugin_latest_available_period_returns_last_period() -> None:
+    """_plugin_latest_available_period returns the last item from plugin.periods()."""
+
+    class FakePlugin:
+        max_concurrency = 1
+        commit_batch_size = 1
+        rechunk_time = None
+
+        async def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+        async def periods(self, start: str, end: str) -> list[str]:
+            return [d for d in ["2026-02-07", "2026-02-08", "2026-02-09"] if start <= d <= end]
+
+        async def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+    orch_mod.load_plugin = lambda path, params, extra_params=None: FakePlugin()  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "fake.Plugin", "params": {}}},
+            next_period_start="2026-02-07",
+            requested_end="2026-02-10",
+            current_end="2026-02-06",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result == "2026-02-09"
+
+
+def test_plugin_latest_available_period_returns_current_end_when_empty() -> None:
+    """When plugin.periods() returns [], _plugin_latest_available_period returns current_end."""
+
+    class EmptyPlugin:
+        max_concurrency = 1
+        commit_batch_size = 1
+        rechunk_time = None
+
+        async def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+        async def periods(self, start: str, end: str) -> list[str]:
+            return []
+
+        async def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+    orch_mod.load_plugin = lambda *_a, **_kw: EmptyPlugin()  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "fake.Plugin", "params": {}}},
+            next_period_start="2026-02-07",
+            requested_end="2026-02-10",
+            current_end="2026-02-06",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result == "2026-02-06"
+
+
+def test_plugin_latest_available_period_returns_none_on_instantiation_failure() -> None:
+    """TypeError during load_plugin (e.g. plugin needs country_code) → returns None."""
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+
+    def explode(path: str, params: dict, extra_params: object = None) -> object:
+        raise TypeError("country_code is required")
+
+    orch_mod.load_plugin = explode  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "worldpop.Plugin", "params": {}}},
+            next_period_start="2026",
+            requested_end="2026",
+            current_end="2025",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result is None
+
+
+def test_plan_sync_uses_plugin_periods_for_availability(monkeypatch: pytest.MonkeyPatch) -> None:
+    """For an ICECHUNK artifact backed by a plugin, plan_sync calls plugin.periods() to
+    determine whether new data is available, not a static lag function."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: "2024-01-01T05",
+    )
+
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+            "ingestion": {
+                "plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin",
+                "params": {"variable": "t2m"},
+            },
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T10",
+    )
+
+    assert result.action == "append"
+    assert result.target_end == "2024-01-01T05"
+    assert result.delta_start == "2024-01-01T04"
+    assert result.delta_end == "2024-01-01T05"
+
+
+def test_plan_sync_noop_when_plugin_reports_no_new_periods(monkeypatch: pytest.MonkeyPatch) -> None:
+    """plan_sync returns NO_OP when plugin.periods() is empty (nothing new since current_end)."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: current_end,
+    )
+
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+            "ingestion": {
+                "plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin",
+                "params": {"variable": "t2m"},
+            },
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T10",
+    )
+
+    assert result.action == "no_op"
+
+
 def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

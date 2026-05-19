@@ -11,6 +11,7 @@ and keeps future scheduler-driven sync jobs on the same code path.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import inspect
 import logging
@@ -88,7 +89,9 @@ def plan_sync(
         resolved_end = normalize_period_string(normalized_requested_end, period_type)
     else:
         resolved_end = _default_target_end(period_type=period_type)
-    latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
+    latest_available_end = _latest_available_end(
+        source_dataset=source_dataset, requested_end=resolved_end, current_end=current_end
+    )
     target_end_source = (
         requested_target_end_source
         if latest_available_end == resolved_end
@@ -334,13 +337,34 @@ def _default_target_end(*, period_type: str) -> str:
     raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
 
-def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str) -> str:
-    """Clamp requested sync end to the latest upstream state declared by template metadata.
+def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str, current_end: str | None = None) -> str:
+    """Clamp requested sync end to the latest upstream state.
 
-    The current engine does not query upstream providers directly. Instead it can
-    apply conservative template metadata so sync planning does not overshoot known
-    provider lag or release cadence.
+    For plugin datasets (ingestion.plugin set) the plugin's own periods() method
+    is the authoritative availability source — no separate latest_available_function
+    is needed in the YAML. The lag cutoff lives in the plugin and is not duplicated.
+
+    For legacy ZARR datasets the existing sync.availability metadata (lag_days or
+    latest_available_function) is used unchanged.
+
+    current_end must be provided for the plugin path so the function can return it
+    when periods() reports nothing new (empty list → NOOP detected by caller).
     """
+    period_type = source_dataset.get("period_type")
+    if current_end is not None and isinstance(period_type, str):
+        ingestion = source_dataset.get("ingestion")
+        if isinstance(ingestion, dict) and isinstance(ingestion.get("plugin"), str):
+            next_start = _next_period_start(current_end, period_type=period_type)
+            plugin_latest = _plugin_latest_available_period(
+                source_dataset=source_dataset,
+                next_period_start=next_start,
+                requested_end=requested_end,
+                current_end=current_end,
+            )
+            if plugin_latest is not None:
+                return min(requested_end, plugin_latest)
+
+    # Legacy path: lag metadata or latest_available_function in sync.availability.
     availability = source_dataset.get("sync", {}).get("availability")
     if not isinstance(availability, dict):
         return requested_end
@@ -352,9 +376,6 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
     )
     if provider_latest is not None:
         return min(requested_end, provider_latest)
-    # Keep the legacy metadata-only lag fallback for templates that do not yet
-    # declare a latest_available_function, but delegate to the provider helper
-    # so lag logic lives in one place.
     return min(
         requested_end,
         provider_availability.lagged_latest_available(
@@ -362,6 +383,53 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
             requested_end=requested_end,
         ),
     )
+
+
+def _plugin_latest_available_period(
+    *,
+    source_dataset: dict[str, Any],
+    next_period_start: str,
+    requested_end: str,
+    current_end: str,
+) -> str | None:
+    """Return the last period available from next_period_start..requested_end via the plugin.
+
+    Returns:
+    - str: the last available period in the range (may equal current_end when nothing new)
+    - None: plugin could not be instantiated (caller falls back to legacy availability logic)
+
+    Calls asyncio.run() which requires no running event loop — plan_sync is synchronous
+    and FastAPI runs sync handlers in a thread pool, so this is safe.
+    """
+    ingestion = source_dataset.get("ingestion")
+    if not isinstance(ingestion, dict):
+        return None
+    plugin_path = ingestion.get("plugin")
+    if not isinstance(plugin_path, str):
+        return None
+
+    _raw_params = ingestion.get("params")
+    params: dict[str, Any] = dict(_raw_params) if isinstance(_raw_params, dict) else {}
+
+    try:
+        from climate_api.ingest.orchestrator import load_plugin
+
+        plugin = load_plugin(plugin_path, params)
+    except (TypeError, ValueError, ImportError, AttributeError) as exc:
+        logger.debug(
+            "Plugin '%s' cannot be instantiated for availability check (needs extra_params?): %s",
+            plugin_path,
+            exc,
+        )
+        return None
+
+    try:
+        periods = asyncio.run(plugin.periods(next_period_start, requested_end))
+    except Exception as exc:
+        logger.debug("plugin.periods() failed during availability check for '%s': %s", plugin_path, exc)
+        return None
+
+    return periods[-1] if periods else current_end
 
 
 def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> bool:
