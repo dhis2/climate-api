@@ -178,7 +178,7 @@ def test_dataset_registry_accepts_sync_availability_function(
   sync:
     kind: temporal
     availability:
-      latest_available_function: climate_api.providers.availability.lagged_latest_available
+      latest_available_function: some.module.latest_available
   ingestion:
     plugin: some.ingest.Plugin
 """,
@@ -187,5 +187,5 @@ def test_dataset_registry_accepts_sync_availability_function(
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
     assert datasets.list_datasets()[0]["sync"]["availability"]["latest_available_function"].endswith(
-        "lagged_latest_available"
+        "latest_available"
     )
