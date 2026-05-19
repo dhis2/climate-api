@@ -352,3 +352,145 @@ def test_era5land_build_periods_spans_months() -> None:
     plugin = Era5LandPlugin(variable="t2m")
     periods = plugin._build_periods("2024-01-31T23", "2024-02-01T01")
     assert periods == ["2024-01-31T23", "2024-02-01T00", "2024-02-01T01"]
+
+
+# ---------------------------------------------------------------------------
+# Rechunking
+# ---------------------------------------------------------------------------
+
+def _time_chunk_size(store_path: Path) -> int:
+    """Read the time chunk size of the first data variable from the committed store."""
+    import icechunk
+    import zarr
+
+    repo = icechunk.Repository.open(icechunk.local_filesystem_storage(str(store_path)))
+    session = repo.readonly_session("main")
+    g = zarr.open_group(session.store, mode="r")
+    for name in g.array_keys():
+        arr = g[name]
+        dims = list(arr.metadata.dimension_names or [])
+        if "time" in dims:
+            return arr.chunks[dims.index("time")]
+    raise AssertionError("No array with a time dimension found")
+
+
+def test_run_ingest_rechunks_store_after_all_periods(tmp_path: Path) -> None:
+    """rechunk_time=N rewrites the store so the time chunk size is N after ingest."""
+    plugin = FakePlugin(["2024-01", "2024-02", "2024-03", "2024-04"])
+    store_path = tmp_path / "test.icechunk"
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-04",
+            store_path=store_path,
+            period_type="monthly",
+            rechunk_time=2,
+        )
+    )
+
+    assert read_committed_period_ids(store_path, "monthly") == {"2024-01", "2024-02", "2024-03", "2024-04"}
+    assert _time_chunk_size(store_path) == 2
+
+
+def test_run_ingest_rechunk_preserves_all_periods_in_store(tmp_path: Path) -> None:
+    """After rechunking, read_committed_period_ids returns the same set as before."""
+    plugin = FakePlugin(["2024-01", "2024-02", "2024-03"])
+    store_path = tmp_path / "test.icechunk"
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-03",
+            store_path=store_path,
+            period_type="monthly",
+            rechunk_time=3,
+        )
+    )
+
+    assert read_committed_period_ids(store_path, "monthly") == {"2024-01", "2024-02", "2024-03"}
+    assert _time_chunk_size(store_path) == 3
+
+
+def test_run_ingest_no_rechunk_when_rechunk_time_is_none(tmp_path: Path) -> None:
+    """Without rechunk_time the time chunk stays at 1 (one period per commit)."""
+    plugin = FakePlugin(["2024-01", "2024-02", "2024-03"])
+    store_path = tmp_path / "test.icechunk"
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-03",
+            store_path=store_path,
+            period_type="monthly",
+        )
+    )
+
+    assert _time_chunk_size(store_path) == 1
+
+
+def test_rechunk_store_noop_on_nonexistent_store(tmp_path: Path) -> None:
+    from climate_api.ingest.store import rechunk_store
+
+    rechunk_store(tmp_path / "nostore.icechunk", time_chunk=12)
+
+
+def test_rechunk_store_changes_chunk_size(tmp_path: Path) -> None:
+    """rechunk_store can be called directly to rechunk an existing store."""
+    from climate_api.ingest.store import rechunk_store
+
+    plugin = FakePlugin(["2024-01", "2024-02", "2024-03", "2024-04"])
+    store_path = tmp_path / "test.icechunk"
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-04",
+            store_path=store_path,
+            period_type="monthly",
+        )
+    )
+
+    assert _time_chunk_size(store_path) == 1
+
+    rechunk_store(store_path, time_chunk=4)
+
+    assert _time_chunk_size(store_path) == 4
+    assert read_committed_period_ids(store_path, "monthly") == {"2024-01", "2024-02", "2024-03", "2024-04"}
+
+
+def test_rechunk_store_skips_when_no_time_dimension(tmp_path: Path) -> None:
+    """rechunk_store is a no-op when the store has no time dimension."""
+    import icechunk
+    import xarray as xr
+    import numpy as np
+    from climate_api.ingest.store import rechunk_store
+
+    store_path = tmp_path / "static.icechunk"
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.create(storage)
+    ds = xr.Dataset({"elevation": xr.DataArray(np.zeros((4, 4), dtype="float32"), dims=["y", "x"])})
+    session = repo.writable_session("main")
+    ds.to_zarr(session.store, mode="w")
+    session.commit("static write")
+
+    rechunk_store(store_path, time_chunk=12)
+
+
+def test_era5land_plugin_declares_rechunk_time() -> None:
+    from climate_api.ingest.plugins.era5_land import Era5LandPlugin
+
+    plugin = Era5LandPlugin(variable="t2m")
+    assert plugin.rechunk_time == 12

@@ -22,6 +22,53 @@ def open_or_create_repo(store_path: Path) -> "icechunk.Repository":
     return icechunk.Repository.create(storage)
 
 
+def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
+    """Rewrite the committed Icechunk store with a coarser time chunk size.
+
+    Opens the latest committed snapshot for reading and a new writable session
+    for writing, lazily rechunks the time dimension via dask, then commits the
+    result as a new snapshot. Icechunk's MVCC ensures the previous snapshot is
+    preserved — if the rechunk fails the store rolls back to its original state.
+
+    A no-op when the store does not exist or has no time dimension.
+    """
+    import xarray as xr
+
+    if not store_path.exists():
+        return
+
+    repo = open_or_create_repo(store_path)
+    read_session = repo.readonly_session("main")
+    ds = xr.open_zarr(read_session.store)
+
+    n_times = ds.sizes.get("time", 0)
+    if n_times == 0:
+        return
+
+    effective_chunk = min(time_chunk, n_times)
+    encoding: dict[str, dict] = {}
+    for name in list(ds.data_vars) + list(ds.coords):
+        da = ds[name]
+        existing = dict(da.encoding)
+        if "time" in da.dims:
+            current = existing.get("chunks")
+            if isinstance(current, (list, tuple)):
+                new_chunks = list(current)
+                new_chunks[list(da.dims).index("time")] = effective_chunk
+            else:
+                new_chunks = [
+                    effective_chunk if dim == "time" else da.sizes[dim]
+                    for dim in da.dims
+                ]
+            existing["chunks"] = new_chunks
+        encoding[name] = existing
+
+    write_session = repo.writable_session("main")
+    ds.chunk({"time": effective_chunk}).to_zarr(write_session.store, mode="w", encoding=encoding)
+    write_session.commit(f"rechunk: time={effective_chunk}")
+    logger.info("Rechunked %s: time chunk → %d (%d periods)", store_path, effective_chunk, n_times)
+
+
 def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
     """Return the set of period IDs already committed to the Icechunk store.
 

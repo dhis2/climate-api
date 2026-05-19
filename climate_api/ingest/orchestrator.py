@@ -22,7 +22,7 @@ from typing import Any
 import xarray as xr
 
 from climate_api.ingest.protocol import GridSpec, IngestionPlugin
-from climate_api.ingest.store import open_or_create_repo, read_committed_period_ids
+from climate_api.ingest.store import open_or_create_repo, read_committed_period_ids, rechunk_store
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ async def run_ingest(
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
+    rechunk_time: int | None = None,
 ) -> None:
     """Probe the source then stream per-period data into an Icechunk store.
 
@@ -154,6 +155,10 @@ async def run_ingest(
         if not spec.time_dim:
             break
 
+    if rechunk_time is not None and spec.time_dim:
+        logger.info("Rechunking %s after ingest: time chunk → %d", store_path, rechunk_time)
+        rechunk_store(store_path, time_chunk=rechunk_time)
+
 
 def run_ingest_sync(
     *,
@@ -168,6 +173,7 @@ def run_ingest_sync(
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
+    rechunk_time: int | None = None,
 ) -> None:
     """Synchronous wrapper around run_ingest for use in threaded job workers."""
     asyncio.run(
@@ -183,5 +189,6 @@ def run_ingest_sync(
             is_cancel_requested=is_cancel_requested,
             save_cursor=save_cursor,
             load_cursor=load_cursor,
+            rechunk_time=rechunk_time,
         )
     )

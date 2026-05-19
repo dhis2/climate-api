@@ -365,9 +365,13 @@ def _create_icechunk_artifact(
     plugin = load_plugin(plugin_path, params)
 
     effective_start = ingest_start if ingest_start is not None else start
+    # Rechunk after the initial ingest (when no delta start is provided) using the
+    # plugin's declared rechunk_time, if any. Sync appends skip rechunking to avoid
+    # rewriting the full store on every small update.
+    rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
     logger.info(
-        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s",
-        dataset_id, effective_start, end, start, end,
+        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s",
+        dataset_id, effective_start, end, start, end, rechunk_time,
     )
     run_ingest_sync(
         plugin=plugin,
@@ -377,6 +381,7 @@ def _create_icechunk_artifact(
         end=end,
         store_path=store_path,
         period_type=period_type,
+        rechunk_time=rechunk_time,
     )
 
     repo = open_or_create_repo(store_path)

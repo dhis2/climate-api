@@ -44,6 +44,7 @@ class Era5LandPlugin:
 
     max_concurrency = 4
     commit_batch_size = 720  # one month of hourly periods
+    rechunk_time = 12  # group 12 hourly periods per chunk after initial ingest
 
     def __init__(self, variable: str) -> None:
         self.variable = variable
