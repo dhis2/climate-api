@@ -386,7 +386,7 @@ def _create_icechunk_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored = _upsert_icechunk_artifact_record(record, publish=publish)
+    stored = _upsert_icechunk_artifact_record(record)
     logger.info(
         "Stored Icechunk artifact '%s' for '%s': coverage=%s..%s",
         stored.artifact_id,
@@ -769,7 +769,7 @@ def _store_artifact_record(
     return _mutate_records(mutate)
 
 
-def _upsert_icechunk_artifact_record(record: ArtifactRecord, *, publish: bool) -> ArtifactRecord:
+def _upsert_icechunk_artifact_record(record: ArtifactRecord) -> ArtifactRecord:
     """Persist an Icechunk artifact record, replacing any existing record for the same store path.
 
     Matches by dataset_id + path rather than request_scope so that sync appends

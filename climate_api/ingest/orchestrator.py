@@ -46,6 +46,19 @@ def _strip_cf_encoding(ds: xr.Dataset, period_type: str) -> None:
         ds["time"].encoding.update({"units": units, "dtype": "int32"})
 
 
+def _write_geozarr_attrs(store: Any, *, spec: GridSpec, bbox: list[float]) -> None:
+    """Write GeoZarr root-level attributes to the store after the first mode='w' write."""
+    import zarr
+
+    root = zarr.open_group(store, mode="r+")
+    attrs: dict[str, Any] = {
+        "proj:code": f"EPSG:{spec.crs}",
+        "spatial:bbox": bbox,
+    }
+    attrs.update(spec.attrs)
+    root.attrs.update(attrs)
+
+
 def load_plugin(
     dotted_path: str,
     params: dict[str, Any],
@@ -154,52 +167,58 @@ async def run_ingest(
     # Await in chronological order so writes are always sequential.
     tasks = [asyncio.create_task(_fetch(p)) for p in pending]
 
-    for i, task in enumerate(tasks):
-        if is_cancel_requested and is_cancel_requested():
-            for t in tasks[i:]:
+    try:
+        for i, task in enumerate(tasks):
+            if is_cancel_requested and is_cancel_requested():
+                for t in tasks[i:]:
+                    t.cancel()
+                from climate_api.jobs.models import JobCancelledError
+
+                raise JobCancelledError("Ingest cancelled between periods")
+
+            ds = await task
+            period_id = pending[i]
+            if apply_transforms is not None:
+                ds = apply_transforms(ds)
+            _strip_cf_encoding(ds, period_type=period_type)
+
+            # Each period uses its own writable session so that to_zarr(append_dim=)
+            # on the next period reads the committed store and finds the time axis.
+            # Icechunk 2.x sessions do not expose uncommitted writes to subsequent
+            # zarr.open_group calls, so batching writes within one session breaks the
+            # append — committing per period is the correct pattern.
+            session = repo.writable_session("main")
+
+            is_first_period_write = not spec.time_dim or (i == 0 and is_first_write)
+            if is_first_period_write:
+                ds.to_zarr(session.store, mode="w")
+                _write_geozarr_attrs(session.store, spec=spec, bbox=bbox)
+            else:
+                ds.to_zarr(session.store, append_dim="time")
+
+            session.commit(f"ingest: {period_id}")
+
+            # Save cursor at commit_batch_size intervals and at the end.
+            # commit_batch_size controls resume granularity (cursor save frequency),
+            # not commit frequency — every period is committed for correctness.
+            if save_cursor and ((i + 1) % plugin.commit_batch_size == 0 or (i + 1) == len(pending)):
+                save_cursor({"last_committed": period_id})
+                logger.info("Cursor saved: up to %s (%d/%d)", period_id, i + 1, len(pending))
+
+            logger.debug("Committed: %s (%d/%d)", period_id, i + 1, len(pending))
+
+            if on_progress:
+                on_progress(done=done_offset + i + 1, total=len(all_periods), message=f"Wrote {period_id}")
+
+            if not spec.time_dim:
+                for t in tasks[i + 1 :]:
+                    t.cancel()
+                break
+    except BaseException:
+        for t in tasks:
+            if not t.done():
                 t.cancel()
-            from climate_api.jobs.models import JobCancelledError
-
-            raise JobCancelledError("Ingest cancelled between periods")
-
-        ds = await task
-        period_id = pending[i]
-        if apply_transforms is not None:
-            ds = apply_transforms(ds)
-        _strip_cf_encoding(ds, period_type=period_type)
-
-        # Each period uses its own writable session so that to_zarr(append_dim=)
-        # on the next period reads the committed store and finds the time axis.
-        # Icechunk 2.x sessions do not expose uncommitted writes to subsequent
-        # zarr.open_group calls, so batching writes within one session breaks the
-        # append — committing per period is the correct pattern.
-        session = repo.writable_session("main")
-
-        if not spec.time_dim:
-            ds.to_zarr(session.store, mode="w")
-        elif i == 0 and is_first_write:
-            ds.to_zarr(session.store, mode="w")
-        else:
-            ds.to_zarr(session.store, append_dim="time")
-
-        session.commit(f"ingest: {period_id}")
-
-        # Save cursor at commit_batch_size intervals and at the end.
-        # commit_batch_size controls resume granularity (cursor save frequency),
-        # not commit frequency — every period is committed for correctness.
-        if save_cursor and ((i + 1) % plugin.commit_batch_size == 0 or (i + 1) == len(pending)):
-            save_cursor({"last_committed": period_id})
-            logger.info("Cursor saved: up to %s (%d/%d)", period_id, i + 1, len(pending))
-
-        logger.debug("Committed: %s (%d/%d)", period_id, i + 1, len(pending))
-
-        if on_progress:
-            on_progress(done=done_offset + i + 1, total=len(all_periods), message=f"Wrote {period_id}")
-
-        if not spec.time_dim:
-            for t in tasks[i + 1 :]:
-                t.cancel()
-            break
+        raise
 
     if rechunk_time is not None and spec.time_dim:
         logger.info("Rechunking %s after ingest: time chunk → %d", store_path, rechunk_time)

@@ -186,6 +186,4 @@ def test_dataset_registry_accepts_sync_availability_function(
     )
     monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
 
-    assert datasets.list_datasets()[0]["sync"]["availability"]["latest_available_function"].endswith(
-        "latest_available"
-    )
+    assert datasets.list_datasets()[0]["sync"]["availability"]["latest_available_function"].endswith("latest_available")

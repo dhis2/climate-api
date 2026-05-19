@@ -1025,7 +1025,7 @@ def _patch_icechunk_artifact_dependencies(
     monkeypatch.setattr(svc, "get_extent", lambda: None)
     monkeypatch.setattr(svc.downloader, "DOWNLOAD_DIR", tmp_path)
     monkeypatch.setattr(svc, "_store_artifact_record", lambda record, **_: record)
-    monkeypatch.setattr(svc, "_upsert_icechunk_artifact_record", lambda record, **_: record)
+    monkeypatch.setattr(svc, "_upsert_icechunk_artifact_record", lambda record: record)
 
 
 class _FakeRepo:

@@ -55,16 +55,18 @@ class IngestionPlugin(Protocol):
         restart resumes from the last checkpoint rather than re-scanning the
         store. Use 1 for monthly sources, ~30 for daily, ~720 for hourly.
 
-    rechunk_time: optional target time chunk size for the post-ingest rechunk.
-        When set, the orchestrator rewrites the store after all periods are
-        committed so the time axis uses chunks of this size instead of the
-        per-period chunk-of-1. Omit (or set to None) to skip rechunking.
-        Typical values: 30 for daily, 720 for hourly.
+    rechunk_time (optional class attribute): target time chunk size for the
+        post-ingest rechunk. When set, the orchestrator rewrites the store after
+        all periods are committed so the time axis uses chunks of this size
+        instead of the per-period chunk-of-1. Declare as a class attribute
+        (``rechunk_time: int | None = None``) to skip rechunking, or set to a
+        positive int (30 for daily, 720 for hourly). This attribute is read via
+        ``getattr`` and is intentionally excluded from the Protocol so that
+        plugins that omit it still pass the ``isinstance`` check.
     """
 
     max_concurrency: int
     commit_batch_size: int
-    rechunk_time: int | None
 
     async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         """Metadata-only source probe. Returns grid spec. No data transfer."""
