@@ -131,7 +131,7 @@ def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
 
     repo = open_or_create_repo(Path(store_path))
     session = repo.readonly_session("main")
-    return xr.open_zarr(session.store)
+    return xr.open_zarr(session.store)  # type: ignore[no-any-return]
 
 
 def _open_zarr(zarr_path: str) -> xr.Dataset:

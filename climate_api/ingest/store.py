@@ -58,7 +58,7 @@ def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
             else:
                 new_chunks = [effective_chunk if dim == "time" else da.sizes[dim] for dim in da.dims]
             existing["chunks"] = new_chunks
-        encoding[name] = existing
+        encoding[name] = existing  # pyright: ignore[reportArgumentType]
 
     write_session = repo.writable_session("main")
     ds.chunk({"time": effective_chunk}).to_zarr(write_session.store, mode="w", encoding=encoding)

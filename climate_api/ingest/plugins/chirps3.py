@@ -104,6 +104,7 @@ class Chirps3Plugin:
         logger.info("Fetching CHIRPS3 %s: %s", period_id, url)
 
         da = rioxarray.open_rasterio(url, chunks=None, masked=True, lock=False)
+        assert isinstance(da, xr.DataArray)
         xmin, ymin, xmax, ymax = map(float, bbox)
         da = da.rio.clip_box(minx=xmin, miny=ymin, maxx=xmax, maxy=ymax)
         da = da.squeeze("band", drop=True)
@@ -112,8 +113,7 @@ class Chirps3Plugin:
         da = da.load()
 
         ds = da.to_dataset(name="precip")
-        ds = ds.expand_dims(time=[np.datetime64(period_id, "D")])
-        return ds
+        return ds.expand_dims(time=[np.datetime64(period_id, "D")])  # type: ignore[no-any-return]
 
     def _probe_estimate(self, bbox: list[float]) -> GridSpec:
         """Derive GridSpec from CHIRPS3's known 0.05° resolution."""

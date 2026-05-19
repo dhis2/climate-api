@@ -92,6 +92,7 @@ class WorldPopPlugin:
         resp.raise_for_status()
 
         da = rioxarray.open_rasterio(io.BytesIO(resp.content))
+        assert isinstance(da, xr.DataArray)
         xmin, ymin, xmax, ymax = map(float, bbox)
         da = da.rio.clip_box(minx=xmin, miny=ymin, maxx=xmax, maxy=ymax)
         da = da.squeeze("band", drop=True)
@@ -102,8 +103,7 @@ class WorldPopPlugin:
         da = da.load()
 
         ds = da.to_dataset(name="pop_total")
-        ds = ds.expand_dims(time=[np.datetime64(f"{year}-01-01", "D")])
-        return ds
+        return ds.expand_dims(time=[np.datetime64(f"{year}-01-01", "D")])  # type: ignore[no-any-return]
 
     def _probe_estimate(self, bbox: list[float]) -> GridSpec:
         """Derive GridSpec from WorldPop's known 3 arc-second resolution."""

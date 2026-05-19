@@ -66,14 +66,12 @@ async def manage_ingest(request: Request) -> RedirectResponse:
 
         extent = get_extent_or_404()
         resolved_bbox = list(extent["bbox"])
-        country_code = extent.get("country_code")
 
         create_artifact(
             dataset=template,
             start=start,
             end=end,
             bbox=resolved_bbox,
-            country_code=country_code,
             overwrite=overwrite,
             prefer_zarr=True,
             publish=publish,

@@ -377,9 +377,9 @@ def _time_chunk_size(store_path: Path) -> int:
     g = zarr.open_group(session.store, mode="r")
     for name in g.array_keys():
         arr = g[name]
-        dims = list(arr.metadata.dimension_names or [])
+        dims = list(arr.metadata.dimension_names or [])  # type: ignore[union-attr]
         if "time" in dims:
-            return arr.chunks[dims.index("time")]
+            return arr.chunks[dims.index("time")]  # type: ignore[union-attr]
     raise AssertionError("No array with a time dimension found")
 
 

@@ -1087,7 +1087,7 @@ def test_create_icechunk_artifact_uses_ingest_start_for_delta_efficiency(
     }
 
     svc._create_icechunk_artifact(
-        dataset=dataset,
+        dataset=dataset,  # type: ignore[arg-type]
         start="2024-01-01T00",
         end="2024-01-01T06",
         bbox=None,
@@ -1117,7 +1117,7 @@ def test_create_icechunk_artifact_uses_full_start_when_no_ingest_start(
     }
 
     svc._create_icechunk_artifact(
-        dataset=dataset,
+        dataset=dataset,  # type: ignore[arg-type]
         start="2024-01-01T00",
         end="2024-01-01T06",
         bbox=None,

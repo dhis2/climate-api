@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import portalocker
 import pyproj
+import xarray as xr
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
@@ -73,7 +74,7 @@ def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) 
         )
 
 
-def _read_crs_from_spatial_ref(ds: object) -> str | None:
+def _read_crs_from_spatial_ref(ds: xr.Dataset) -> str | None:
     """Return 'EPSG:<n>' from a dataset's spatial_ref coordinate, or None."""
     if "spatial_ref" not in ds.coords:
         return None
@@ -271,9 +272,11 @@ def _create_icechunk_artifact(
 
     dataset_id = str(dataset["id"])
     period_type = str(dataset["period_type"])
-    ingestion = dict(dataset.get("ingestion") or {})  # type: ignore[arg-type]
+    _raw_ingestion = dataset.get("ingestion")
+    ingestion: dict[str, object] = dict(_raw_ingestion) if isinstance(_raw_ingestion, dict) else {}
     plugin_path = str(ingestion["plugin"])
-    params = dict(ingestion.get("params") or {})
+    _raw_params = ingestion.get("params")
+    params: dict[str, object] = dict(_raw_params) if isinstance(_raw_params, dict) else {}
 
     extent = get_extent()
     resolved_bbox: list[float] = (
@@ -545,14 +548,14 @@ def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str,
     store_attrs: dict[str, object] = {}
     try:
         root_meta = json.loads(bytes(session.store["zarr.json"]))  # type: ignore[index]
-        store_attrs = root_meta.get("attributes", {})  # type: ignore[assignment]
+        store_attrs = root_meta.get("attributes", {})
     except Exception:
         pass
 
     store_crs = store_attrs.get("proj:code")
     crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
 
-    root: zarr.Group = zarr.open_group(session.store, mode="r")  # type: ignore[assignment]
+    root: zarr.Group = zarr.open_group(session.store, mode="r")
     entries = [
         {
             "name": name,
@@ -660,7 +663,7 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
 
     # Directory-like paths: list child keys as a ZarrListing
     if not key or key.endswith("/"):
-        root: zarr.Group = zarr.open_group(session.store, mode="r")  # type: ignore[assignment]
+        root: zarr.Group = zarr.open_group(session.store, mode="r")
         prefix = key.rstrip("/")
         try:
             node: zarr.Group = root[prefix] if prefix else root  # type: ignore[assignment]
@@ -686,7 +689,7 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
 
         proto = zarr.core.buffer.default_buffer_prototype()
         data = session.store._get_bytes_sync(key, prototype=proto)
-        if data is None:
+        if data is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
     except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
