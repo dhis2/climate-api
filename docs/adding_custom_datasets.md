@@ -8,8 +8,10 @@ The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package da
 
 Adding a custom dataset involves two things:
 
-1. **A download function** — a Python function that downloads data and writes it as one or more NetCDF files to a given directory.
-2. **A dataset template YAML** — a file that describes the dataset and tells the API which download function to call.
+1. **An ingestion function or plugin** — either a download function that writes NetCDF files to disk, or an `IngestionPlugin` class that streams data directly into an Icechunk store.
+2. **A dataset template YAML** — a file that describes the dataset and tells the API which function or plugin to call.
+
+Use the **download function** approach for simple sources. Use the **IngestionPlugin** approach for sources that benefit from streaming (COG range requests, remote zarr, resumable long ingests with per-period commits). Both can coexist in the same template during migration.
 
 ## Step 1: Write the download function
 
@@ -127,8 +129,12 @@ Omit `sync.availability` entirely for `static` datasets or when you always want 
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `ingestion.function` | Yes | Dotted path to the download function |
+| `ingestion.plugin` | One of `plugin` or `function` | Dotted path to an `IngestionPlugin` class — preferred for streaming sources |
+| `ingestion.params` | No | Constructor keyword arguments forwarded to the plugin class |
+| `ingestion.function` | One of `plugin` or `function` | Dotted path to the download function — for simpler file-based sources |
 | `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
+
+Both keys can coexist in the same template. When `ingestion.plugin` is present it is used; `ingestion.function` serves as a fallback for legacy tooling.
 
 **Transforms** — applied after download, before writing to Zarr:
 
@@ -225,3 +231,94 @@ The smallest valid template for a static dataset with no sync:
   ingestion:
     function: mypackage.sources.my_source.download
 ```
+
+---
+
+## Ingestion plugin
+
+For sources that need streaming access or resumable long ingests, implement an `IngestionPlugin` instead of a download function. The plugin streams data directly into the Icechunk store one period at a time — no intermediate files, no full-rebuild on sync.
+
+### Plugin skeleton
+
+```python
+# mypackage/sources/my_plugin.py
+from __future__ import annotations
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import numpy as np
+import xarray as xr
+
+from climate_api.ingest.protocol import GridSpec
+
+_executor = ThreadPoolExecutor(max_workers=2)
+
+
+class MyPlugin:
+    max_concurrency = 2   # fetch this many periods in parallel
+    commit_batch_size = 1  # commit every N periods
+
+    def __init__(self, variable: str) -> None:
+        self.variable = variable
+
+    async def probe(self, bbox: list[float], **_: Any) -> GridSpec:
+        """Return grid shape and CRS without downloading data."""
+        # Derive shape from known resolution, or open a small metadata request.
+        xmin, ymin, xmax, ymax = bbox
+        res = 0.05  # degrees per pixel
+        import math
+        nx = max(1, math.ceil((xmax - xmin) / res))
+        ny = max(1, math.ceil((ymax - ymin) / res))
+        return GridSpec(shape=(ny, nx), crs=4326, dtype=np.dtype("float32"), nodata=-9999.0)
+
+    async def periods(self, start: str, end: str) -> list[str]:
+        """Return the ordered list of period IDs to fetch."""
+        # Return ISO date strings, month strings, year strings, etc.
+        return ["2024-01-01", "2024-01-02"]  # replace with real logic
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
+        """Fetch one period. Must return a Dataset with a 'time' dimension."""
+        return await asyncio.get_running_loop().run_in_executor(
+            _executor, self._fetch_sync, period_id, bbox
+        )
+
+    def _fetch_sync(self, period_id: str, bbox: list[float]) -> xr.Dataset:
+        # Blocking I/O in thread pool — download, clip to bbox, return Dataset.
+        ...
+```
+
+### Dataset template
+
+```yaml
+- id: my_streaming_dataset
+  name: My streaming dataset
+  variable: rainfall
+  period_type: daily
+  sync:
+    kind: temporal
+    execution: append
+  extents:
+    spatial:
+      bbox: [-180, -50, 180, 50]
+    temporal:
+      begin: "2000-01-01"
+      resolution: P1D
+  ingestion:
+    plugin: mypackage.sources.my_plugin.MyPlugin
+    params:
+      variable: rainfall
+  units: mm
+  resolution: 5 km x 5 km
+  source: My source
+```
+
+### Key conventions for `fetch_period`
+
+- The returned Dataset must have a `time` dimension with exactly the period's time steps as coordinate values.
+- Spatial dimensions should be named `x` and `y` (or match `GridSpec.x_dim` / `GridSpec.y_dim`).
+- Clear all encoding before returning and pin the time encoding: `ds["time"].encoding.update({"units": "days since 1970-01-01", "dtype": "int32"})`.
+- For sources where blocking I/O is unavoidable (rioxarray, requests), run it in a `ThreadPoolExecutor` as shown above.
+
+See the built-in plugins (`climate_api/ingest/plugins/`) for complete worked examples: `chirps3.py` (COG range requests), `era5_land.py` (remote zarr), and `worldpop.py` (full-file download).

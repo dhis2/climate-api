@@ -52,6 +52,10 @@ This is a deliberate design constraint: each instance serves one place. A Sierra
 
 ## Data lifecycle
 
+The framework supports two ingestion paths depending on the template's `ingestion` block.
+
+**Function path** (`ingestion.function`) — for simpler file-based sources:
+
 ```
 Template (YAML)
     │
@@ -69,26 +73,38 @@ Artifact (internal record)
     │  publish=true
     ▼
 Managed dataset (public API)
-    ├── /datasets/{id}         — native metadata
-    ├── /zarr/{id}             — raw zarr store access
-    ├── /stac/collections/{id} — STAC discovery
+    ├── /datasets/{id}           — native metadata
+    ├── /zarr/{id}               — raw zarr store access
+    ├── /stac/collections/{id}   — STAC discovery
     └── /ogcapi/collections/{id} — OGC API access
 ```
 
-The ingestion function is called identically by both `POST /ingestions` and `POST /sync` — the framework invokes it the same way regardless of the trigger. A correctly written ingestion function works for both without any changes.
+**Plugin path** (`ingestion.plugin`) — for streaming and resumable ingests:
 
-The framework is responsible for everything from "write zarr" onward. An ingestion function only needs to write NetCDF files to a given directory. The framework then:
+```
+Template (YAML)
+    │
+    │  POST /ingestions  (or  POST /sync)
+    ▼
+Orchestrator
+    │  probe() → fix chunk shape, write GeoZarr attributes
+    │  periods() → compare against committed store state
+    │  for each pending period:
+    │    fetch_period() → xr.Dataset (in source CRS)
+    │    to_zarr(icechunk_store, append_dim="time")
+    │    commit every commit_batch_size periods
+    │  rechunk in-place (if rechunk_time is set)
+    │  expire intermediate snapshots
+    │  register ArtifactFormat.ICECHUNK artifact record
+    │
+    │  publish=true
+    ▼
+Managed dataset (public API)  — same endpoints as above
+```
 
-1. reads and normalises the coordinate names
-2. applies transforms (unit conversion, etc.)
-3. reprojects to the instance CRS
-4. builds the zarr store with auto-computed chunking
-5. writes GeoZarr root attributes (`spatial:bbox`, `proj:code`) so map clients can position tiles
-6. computes artifact coverage (spatial bounds + time range) from the written data
-7. stores the artifact record
-8. publishes the managed dataset through pygeoapi if `publish=true`
+The plugin path writes directly to an Icechunk store — no intermediate files on disk. A crash leaves the store at the last committed period; restart resumes from there. The store is readable and serveable from the first committed period.
 
-This division means that ingestion functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data files; the framework handles everything else.
+Both paths produce the same public API surface. The `/zarr/{id}` and `/stac/collections/{id}` routes handle both `ZARR` and `ICECHUNK` artifact formats transparently.
 
 ---
 
@@ -130,7 +146,7 @@ Before executing a sync, the engine calls the availability function to clamp the
 
 ## The plugin contract
 
-The platform has four extension points. Each one has a narrow contract — the framework handles everything else automatically.
+The platform has five extension points. Each one has a narrow contract — the framework handles everything else automatically.
 
 ### Ingestion function
 
@@ -150,25 +166,40 @@ def download(
 
 The function writes NetCDF files. The framework reads them, normalises coordinate names, applies transforms, reprojects to the instance CRS, builds the zarr, writes GeoZarr attributes, computes coverage, and registers the artifact.
 
-The ingestion function is called identically by `POST /ingestions` and `POST /sync`. The caller makes no difference to the function — it always receives the same parameters.
-
-**Reusing ingestion logic across templates**: multiple YAML templates can reference the same Python function and differentiate via `default_params`. This is the intended pattern for sources that have the same fetching logic but expose different variables:
+**Reusing ingestion logic across templates**: multiple YAML templates can reference the same Python function and differentiate via `default_params`:
 
 ```yaml
-# era5land_temperature_hourly.yaml
 ingestion:
   function: dhis2eo.data.era5_land.download
   default_params:
     variable: 2m_temperature
-
-# era5land_precipitation_hourly.yaml
-ingestion:
-  function: dhis2eo.data.era5_land.download
-  default_params:
-    variable: total_precipitation
 ```
 
-No framework changes are needed to support a new variable from the same source.
+### Ingestion plugin
+
+For sources that need streaming access, concurrent fetching, or resumable long ingests, use `ingestion.plugin` instead of a download function:
+
+```python
+class MyPlugin:
+    max_concurrency: int = 1    # parallel fetch limit
+    commit_batch_size: int = 1  # periods per Icechunk commit
+
+    async def probe(self, bbox: list[float], **params) -> GridSpec:
+        """Metadata-only probe — no data transfer."""
+        ...
+
+    async def periods(self, start: str, end: str) -> list[str]:
+        """Return the ordered list of period IDs available from start to end."""
+        ...
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+        """Fetch one period. Return a Dataset with a 'time' dimension in source CRS."""
+        ...
+```
+
+The orchestrator calls `probe()` once, `periods()` once, then drives a bounded-concurrency fetch loop — writing each period directly to an Icechunk store and committing every `commit_batch_size` periods. Plugins never touch zarr or Icechunk directly.
+
+See [Extensibility — Ingestion plugins](extensibility.md#ingestion-plugins) for the full protocol and `GridSpec` reference.
 
 ### Transform function
 
@@ -284,9 +315,11 @@ Each instance is configured for one place. This keeps the data model simple (no 
 
 The sync engine validates that new data connects to the end of the existing artifact before appending. If a gap exists, the sync fails rather than silently producing a dataset with a hole. This is a deliberate constraint: downstream consumers (DHIS2, CHAP) depend on continuous time series and should not receive data with silent gaps.
 
-### The append execution mode avoids re-downloading history
+### The append execution mode
 
-`append` downloads only the missing range and rebuilds the full zarr from all cached files. This means the local cache (NetCDF files in `data/downloads/`) is the source of truth for the full time series; the zarr is a derived view. If the cache is deleted, a rematerialize is required to recover.
+For **function-path** datasets, `append` downloads only the missing time range and rebuilds the full zarr from all cached files. The local cache (NetCDF files in `data/downloads/`) is the source of truth; the zarr is a derived view. If the cache is deleted, a rematerialize is required to recover.
+
+For **plugin-path** datasets, `append` compares the pending period list against the already-committed time coordinates in the Icechunk store and fetches only the missing periods. The Icechunk store itself is the source of truth — no separate download cache. A crash leaves the store at the last committed period; restart resumes from there without any additional recovery logic.
 
 ### Transforms run after download, before reproject
 
