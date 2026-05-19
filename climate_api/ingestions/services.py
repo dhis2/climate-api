@@ -288,6 +288,12 @@ def _create_icechunk_artifact(
     _check_bbox_overlap(dataset, resolved_bbox)
     store_path = downloader.DOWNLOAD_DIR / f"{dataset_id}.icechunk"
 
+    if overwrite and store_path.exists():
+        import shutil
+
+        shutil.rmtree(store_path)
+        logger.info("Cleared existing store for overwrite: %s", store_path)
+
     extent_country_code = extent.get("country_code") if extent else None
     extra_params: dict[str, object] = {}
     if extent_country_code:
@@ -336,8 +342,10 @@ def _create_icechunk_artifact(
     from climate_api import config as api_config
 
     native_crs = _read_crs_from_spatial_ref(ds) or api_config.get_crs() or "EPSG:4326"
-    coverage_data = coverage_from_open_dataset(ds, period_type=period_type, native_crs=native_crs)
-    ds.close()
+    try:
+        coverage_data = coverage_from_open_dataset(ds, period_type=period_type, native_crs=native_crs)
+    finally:
+        ds.close()
 
     if not coverage_data.get("has_data", True):
         raise HTTPException(status_code=409, detail="Icechunk store contains no data for the requested scope")
@@ -348,6 +356,18 @@ def _create_icechunk_artifact(
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
         spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
     )
+
+    # When a plugin clamps availability (e.g. CHIRPS3 has a 3-month lag), the
+    # realized coverage end is earlier than the requested end. Normalise the
+    # stored request_scope to the actual coverage end so that
+    # _artifact_coverage_matches_request_scope passes on future requests for the
+    # same realized range, instead of triggering an unnecessary re-ingest.
+    if request_scope.end is not None and coverage.temporal.end != request_scope.end:
+        request_scope = ArtifactRequestScope(
+            start=request_scope.start,
+            end=coverage.temporal.end,
+            bbox=request_scope.bbox,
+        )
 
     record = ArtifactRecord(
         artifact_id=str(uuid4()),
