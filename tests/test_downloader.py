@@ -7,8 +7,6 @@ import pandas as pd
 import pytest
 import xarray as xr
 import zarr
-from topozarr.pyramid import Pyramid
-from xarray import DataTree
 
 from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
 from climate_api.data_manager.services import downloader
@@ -71,52 +69,6 @@ def _make_dataset() -> xr.Dataset:
     )
 
 
-def _write_nc_files(tmp_path: Path) -> list[Path]:
-    paths = []
-    for year in (2020, 2021):
-        ds = xr.Dataset(
-            {"pop_total": (["time", "lat", "lon"], np.ones((1, 3, 3), dtype="float32"))},
-            coords={
-                "time": [pd.Timestamp(f"{year}-01-01")],
-                "lat": [10.0, 9.0, 8.0],
-                "lon": [30.0, 31.0, 32.0],
-            },
-        )
-        path = tmp_path / f"my_dataset_{year}.nc"
-        ds.to_netcdf(path)
-        paths.append(path)
-    return paths
-
-
-def _write_daily_nc_file(tmp_path: Path) -> list[Path]:
-    ds = xr.Dataset(
-        {"precip": (["time", "lat", "lon"], np.ones((29, 3, 3), dtype="float32"))},
-        coords={
-            "time": pd.date_range("2024-02-01", "2024-02-29", freq="D"),
-            "lat": [10.0, 9.0, 8.0],
-            "lon": [30.0, 31.0, 32.0],
-        },
-    )
-    path = tmp_path / "chirps3_precipitation_daily_2024-02.nc"
-    ds.to_netcdf(path)
-    return [path]
-
-
-_FLAT_DATASET: dict[str, Any] = {
-    "id": "my_dataset",
-    "variable": "pop_total",
-    "period_type": "yearly",
-    "ingestion": {},
-}
-
-_PYRAMID_DATASET: dict[str, Any] = {
-    "id": "my_dataset",
-    "variable": "pop_total",
-    "period_type": "yearly",
-    "ingestion": {},
-}
-
-
 # ---------------------------------------------------------------------------
 # open_zarr_dataset
 # ---------------------------------------------------------------------------
@@ -151,237 +103,22 @@ def test_open_zarr_dataset_pyramid_falls_back_to_level_0(tmp_path: Path) -> None
 
 
 def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: Path) -> None:
-    """Root-level time coord (copied for zarr-layer) does not confuse the fallback.
+    """Root-level time coord does not confuse the fallback.
 
     The fallback triggers on empty data_vars, not empty dims, so a root group
     that only has a 'time' coordinate array still falls back to /0.
     """
+    import shutil
+
     ds = _make_dataset()
     zarr_path = tmp_path / "pyramid.zarr"
     zarr.open_group(str(zarr_path), mode="w", zarr_format=3)
     ds.to_zarr(str(zarr_path / "0"), mode="w", zarr_format=3)
-    # Simulate what build_dataset_zarr does: copy time to root
-    import shutil
-
     shutil.copytree(str(zarr_path / "0" / "time"), str(zarr_path / "time"))
 
     result = open_zarr_dataset(str(zarr_path))
     try:
         assert "pop_total" in result.data_vars
-    finally:
-        result.close()
-
-
-# ---------------------------------------------------------------------------
-# build_dataset_zarr — flat path
-# ---------------------------------------------------------------------------
-
-
-def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flat zarr is written with the correct variable and no pyramid level dirs."""
-    nc_files = _write_nc_files(tmp_path)
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
-
-    downloader.build_dataset_zarr(_FLAT_DATASET)
-
-    zarr_path = tmp_path / "my_dataset.zarr"
-    assert zarr_path.exists()
-    assert not (zarr_path / "0").exists()
-
-    result = open_zarr_dataset(str(zarr_path))
-    try:
-        assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
-    finally:
-        result.close()
-
-
-def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Source coordinates (lat/lon, valid_time) are renamed to x/y/time."""
-    # Simulate ERA5-Land source with valid_time and lon/lat
-    ds_era5 = xr.Dataset(
-        {"t2m": (["valid_time", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
-        coords={
-            "valid_time": pd.date_range("2024-01-01", periods=2, freq="h"),
-            "lat": [10.0, 9.0, 8.0],
-            "lon": [30.0, 31.0, 32.0],
-        },
-    )
-    path = tmp_path / "era5_t2m_2024-01.nc"
-    ds_era5.to_netcdf(path)
-
-    dataset: dict[str, Any] = {
-        "id": "era5land_temperature_hourly",
-        "variable": "t2m",
-        "period_type": "hourly",
-        "ingestion": {},
-    }
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
-
-    downloader.build_dataset_zarr(dataset)
-
-    result = open_zarr_dataset(str(tmp_path / "era5land_temperature_hourly.zarr"))
-    try:
-        assert "time" in result.coords
-        assert "x" in result.coords
-        assert "y" in result.coords
-        assert "valid_time" not in result.coords
-        assert "lat" not in result.coords
-        assert "lon" not in result.coords
-    finally:
-        result.close()
-
-
-def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Source coordinates already named x/y are preserved as x/y."""
-    ds_xy = xr.Dataset(
-        {"precip": (["time", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
-        coords={
-            "time": pd.date_range("2024-01-01", periods=2, freq="D"),
-            "y": [10.0, 9.0, 8.0],
-            "x": [30.0, 31.0, 32.0],
-        },
-    )
-    path = tmp_path / "chirps_xy_2024-01.nc"
-    ds_xy.to_netcdf(path)
-
-    dataset: dict[str, Any] = {
-        "id": "chirps3_precipitation_daily",
-        "variable": "precip",
-        "period_type": "daily",
-        "ingestion": {},
-    }
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: [path])
-
-    downloader.build_dataset_zarr(dataset)
-
-    result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
-    try:
-        assert "time" in result.coords
-        assert "x" in result.coords
-        assert "y" in result.coords
-    finally:
-        result.close()
-
-
-def test_build_dataset_zarr_clips_to_requested_daily_range(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Provider cache files may contain full months; canonical Zarr honors request scope."""
-    nc_files = _write_daily_nc_file(tmp_path)
-    dataset: dict[str, Any] = {
-        "id": "chirps3_precipitation_daily",
-        "variable": "precip",
-        "period_type": "daily",
-        "ingestion": {},
-    }
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
-
-    downloader.build_dataset_zarr(dataset, start="2024-02-01", end="2024-02-10")
-
-    result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
-    try:
-        assert result.sizes["time"] == 10
-        assert pd.Timestamp(result.time.min().item()).strftime("%Y-%m-%d") == "2024-02-01"
-        assert pd.Timestamp(result.time.max().item()).strftime("%Y-%m-%d") == "2024-02-10"
-    finally:
-        result.close()
-
-
-# ---------------------------------------------------------------------------
-# build_dataset_zarr — pyramid path
-# ---------------------------------------------------------------------------
-
-
-def _make_fake_pyramid(ds: xr.Dataset, zarr_path: Path) -> Pyramid:
-    """Return a Pyramid whose .dt.to_zarr writes a minimal two-level DataTree store."""
-    level0 = ds
-    level1 = ds.coarsen(y=2, x=2, boundary="trim").mean()  # pyright: ignore[reportAttributeAccessIssue]
-    dt = DataTree.from_dict({"0": level0, "1": level1})
-    return Pyramid(datatree=dt, encoding={})
-
-
-def test_build_dataset_zarr_pyramid_copies_time_to_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pyramid zarr build copies the time coordinate to the store root for zarr-layer."""
-    nc_files = _write_nc_files(tmp_path)
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
-    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
-
-    def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
-        return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
-
-    monkeypatch.setattr(downloader, "create_pyramid", fake_create_pyramid)
-
-    downloader.build_dataset_zarr(_PYRAMID_DATASET)
-
-    zarr_path = tmp_path / "my_dataset.zarr"
-    assert (zarr_path / "0").exists(), "pyramid level 0 should exist"
-    assert (zarr_path / "time").exists(), "time coordinate must be copied to zarr root"
-
-
-def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """open_zarr_dataset returns the dataset from level 0 of the pyramid store."""
-    nc_files = _write_nc_files(tmp_path)
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
-    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
-
-    def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
-        return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
-
-    monkeypatch.setattr(downloader, "create_pyramid", fake_create_pyramid)
-
-    downloader.build_dataset_zarr(_PYRAMID_DATASET)
-
-    result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
-    try:
-        assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
-    finally:
-        result.close()
-
-
-def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Pyramid zarr store uses canonical x/y/time coordinate names."""
-    # Source files use lat/lon (WorldPop-style); canonical names must appear in the written store.
-    nc_files = _write_nc_files(tmp_path)
-    monkeypatch.setattr(downloader, "DOWNLOAD_DIR", tmp_path)
-    monkeypatch.setattr(downloader, "get_cache_files", lambda _: nc_files)
-    monkeypatch.setattr(downloader, "_needs_pyramid", lambda *_: True)
-
-    received: list[xr.Dataset] = []
-
-    def fake_create_pyramid(ds: xr.Dataset, levels: int, x_dim: str, y_dim: str, method: str) -> Pyramid:
-        received.append(ds)
-        return _make_fake_pyramid(ds, tmp_path / "my_dataset.zarr")
-
-    monkeypatch.setattr(downloader, "create_pyramid", fake_create_pyramid)
-
-    downloader.build_dataset_zarr(_PYRAMID_DATASET)
-
-    # The dataset handed to create_pyramid must already carry canonical names.
-    assert len(received) == 1
-    ds_in = received[0]
-    assert "x" in ds_in.coords
-    assert "y" in ds_in.coords
-    assert "time" in ds_in.coords
-    assert "lon" not in ds_in.coords
-    assert "lat" not in ds_in.coords
-
-    # The written store must also expose canonical names when opened.
-    result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
-    try:
-        assert "x" in result.coords
-        assert "y" in result.coords
-        assert "time" in result.coords
     finally:
         result.close()
 
