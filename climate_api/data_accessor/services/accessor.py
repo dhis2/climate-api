@@ -127,9 +127,13 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
 
 def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
     """Open an Icechunk store as an xarray Dataset via a readonly MVCC session."""
-    from climate_api.ingest.store import open_or_create_repo
+    import icechunk
 
-    repo = open_or_create_repo(Path(store_path))
+    path = Path(store_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Icechunk store not found: {path}")
+    storage = icechunk.local_filesystem_storage(str(path))
+    repo = icechunk.Repository.open(storage)
     session = repo.readonly_session("main")
     return xr.open_zarr(session.store)  # type: ignore[no-any-return]
 

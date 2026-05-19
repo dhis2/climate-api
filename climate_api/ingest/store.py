@@ -40,30 +40,32 @@ def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
     repo = open_or_create_repo(store_path)
     read_session = repo.readonly_session("main")
     ds = xr.open_zarr(read_session.store)
+    try:
+        n_times = ds.sizes.get("time", 0)
+        if n_times == 0:
+            return
 
-    n_times = ds.sizes.get("time", 0)
-    if n_times == 0:
-        return
+        effective_chunk = min(time_chunk, n_times)
+        encoding: dict[str, dict] = {}
+        for name in list(ds.data_vars) + list(ds.coords):
+            da = ds[name]
+            existing = dict(da.encoding)
+            if "time" in da.dims:
+                current = existing.get("chunks")
+                if isinstance(current, (list, tuple)):
+                    new_chunks = list(current)
+                    new_chunks[list(da.dims).index("time")] = effective_chunk
+                else:
+                    new_chunks = [effective_chunk if dim == "time" else da.sizes[dim] for dim in da.dims]
+                existing["chunks"] = new_chunks
+            encoding[name] = existing  # pyright: ignore[reportArgumentType]
 
-    effective_chunk = min(time_chunk, n_times)
-    encoding: dict[str, dict] = {}
-    for name in list(ds.data_vars) + list(ds.coords):
-        da = ds[name]
-        existing = dict(da.encoding)
-        if "time" in da.dims:
-            current = existing.get("chunks")
-            if isinstance(current, (list, tuple)):
-                new_chunks = list(current)
-                new_chunks[list(da.dims).index("time")] = effective_chunk
-            else:
-                new_chunks = [effective_chunk if dim == "time" else da.sizes[dim] for dim in da.dims]
-            existing["chunks"] = new_chunks
-        encoding[name] = existing  # pyright: ignore[reportArgumentType]
-
-    write_session = repo.writable_session("main")
-    ds.chunk({"time": effective_chunk}).to_zarr(write_session.store, mode="w", encoding=encoding)
-    write_session.commit(f"rechunk: time={effective_chunk}")
-    logger.info("Rechunked %s: time chunk → %d (%d periods)", store_path, effective_chunk, n_times)
+        write_session = repo.writable_session("main")
+        ds.chunk({"time": effective_chunk}).to_zarr(write_session.store, mode="w", encoding=encoding)
+        write_session.commit(f"rechunk: time={effective_chunk}")
+        logger.info("Rechunked %s: time chunk → %d (%d periods)", store_path, effective_chunk, n_times)
+    finally:
+        ds.close()
 
 
 def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
@@ -84,11 +86,14 @@ def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
         repo = open_or_create_repo(store_path)
         session = repo.readonly_session("main")
         ds = xr.open_zarr(session.store)
-        if "time" not in ds.coords:
-            return set()
-        import pandas as pd
+        try:
+            if "time" not in ds.coords:
+                return set()
+            import pandas as pd
 
-        return {datetime_to_period_string(pd.Timestamp(t.item()).to_pydatetime(), period_type) for t in ds.time}
+            return {datetime_to_period_string(pd.Timestamp(t.item()).to_pydatetime(), period_type) for t in ds.time}
+        finally:
+            ds.close()
     except Exception:
         logger.debug("Could not read committed periods from %s", store_path, exc_info=True)
         return set()

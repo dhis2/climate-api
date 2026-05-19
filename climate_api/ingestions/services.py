@@ -289,7 +289,10 @@ def _create_icechunk_artifact(
     extra_params: dict[str, object] = {}
     if extent_country_code:
         extra_params["country_code"] = extent_country_code
-    plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
+    try:
+        plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
+    except TypeError as exc:
+        raise HTTPException(status_code=400, detail=f"Plugin configuration error: {exc}") from exc
 
     effective_start = ingest_start if ingest_start is not None else start
     # Rechunk after the initial ingest (when no delta start is provided) using the
@@ -940,7 +943,7 @@ def _find_existing_artifact_in_records(
                 record.request_scope.end,
             )
             continue
-        if prefer_zarr and record.format != ArtifactFormat.ZARR:
+        if prefer_zarr and record.format not in (ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK):
             continue
         return record
     return None

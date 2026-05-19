@@ -49,10 +49,11 @@ class IngestionPlugin(Protocol):
         Keep at 1 for sources with large per-period files or rate-limited APIs.
         Raise for sources where individual periods are small (< 50 MB).
 
-    commit_batch_size: number of periods written between Icechunk commits.
-        Use 1 for monthly sources. For daily sources use ~30; for hourly ~720.
-        This controls crash-recovery granularity, not peak memory — to_zarr
-        flushes each period immediately.
+    commit_batch_size: how often the job cursor checkpoint is saved.
+        Every period is always committed individually to Icechunk; this
+        controls how frequently the orchestrator persists the cursor so that a
+        restart resumes from the last checkpoint rather than re-scanning the
+        store. Use 1 for monthly sources, ~30 for daily, ~720 for hourly.
     """
 
     max_concurrency: int

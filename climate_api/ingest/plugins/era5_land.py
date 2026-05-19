@@ -103,8 +103,8 @@ class Era5LandPlugin:
             dtype=np.dtype(da.dtype),
             nodata=None,
             time_dim=True,
-            x_dim="longitude",
-            y_dim="latitude",
+            x_dim="x",
+            y_dim="y",
         )
 
     def _fetch_sync(self, period_id: str, bbox: list[float]) -> xr.Dataset:
