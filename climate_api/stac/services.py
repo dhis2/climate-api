@@ -500,7 +500,7 @@ def _detect_dataset_crs(ds: Any) -> str | None:
     the deployment-wide proj:code with the actual native CRS of the data so that
     datasets stored in WGS84 (e.g. WorldPop) are not misidentified as projected.
     """
-    if "spatial_ref" not in ds.coords:
+    if not hasattr(ds, "coords") or "spatial_ref" not in ds.coords:
         return None
     try:
         import pyproj

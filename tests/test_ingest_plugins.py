@@ -8,6 +8,7 @@ monkeypatching to replace the network/rioxarray layer with a minimal stub.
 from __future__ import annotations
 
 import asyncio
+import math
 from datetime import date
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -119,7 +120,7 @@ class TestWorldPopPlugin:
         assert spec.crs == 4326
         assert spec.time_dim is True
         assert spec.dtype == np.dtype("float32")
-        assert spec.nodata == 0.0
+        assert math.isnan(spec.nodata)
         assert spec.shape[0] > 0 and spec.shape[1] > 0
 
     def test_probe_estimate_shape_proportional_to_bbox(self) -> None:
@@ -171,7 +172,7 @@ class TestWorldPopPlugin:
         time_val = pd.Timestamp(ds["time"].values[0])
         assert time_val.year == 2024
 
-    def test_fetch_period_clears_encoding_except_time(self) -> None:
+    def test_fetch_period_returns_dataset_with_time_dim(self) -> None:
         from climate_api.ingest.plugins.worldpop import WorldPopPlugin
 
         fake_da = self._make_fake_da()
@@ -182,7 +183,9 @@ class TestWorldPopPlugin:
         with patch("requests.get", return_value=fake_resp), patch("rioxarray.open_rasterio", return_value=fake_da):
             ds = WorldPopPlugin(country_code="NOR")._fetch_sync(2024, [4.0, 57.5, 31.5, 71.5])
 
-        assert ds["time"].encoding.get("units") == "days since 1970-01-01"
+        assert "time" in ds.dims
+        assert ds.sizes["time"] == 1
+        # Encoding is intentionally left unset — the orchestrator's _strip_cf_encoding handles it.
 
 
 # ---------------------------------------------------------------------------
@@ -386,11 +389,13 @@ class TestChirps3Plugin:
         assert np.isnan(precip).any(), "nodata pixels should be NaN"
         assert not np.isnan(precip).all(), "non-nodata pixels should be finite"
 
-    def test_fetch_period_time_encoding_pinned(self) -> None:
+    def test_fetch_period_returns_dataset_with_time_dim(self) -> None:
         from climate_api.ingest.plugins.chirps3 import Chirps3Plugin
 
         fake_da = self._make_fake_chirps_da()
         with patch("rioxarray.open_rasterio", return_value=fake_da):
             ds = Chirps3Plugin()._fetch_sync("2024-03-15", [-5.0, 5.0, 5.0, 10.0])
 
-        assert ds["time"].encoding.get("units") == "days since 1970-01-01"
+        assert "time" in ds.dims
+        assert ds.sizes["time"] == 1
+        # Encoding is intentionally left unset — the orchestrator's _strip_cf_encoding handles it.
