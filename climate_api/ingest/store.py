@@ -46,10 +46,14 @@ def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
             return
 
         effective_chunk = min(time_chunk, n_times)
+        # Keys that are CF conventions attrs, not valid zarr encoding parameters.
+        # xarray copies them into .encoding when reading from zarr; strip them
+        # before passing back to to_zarr() to avoid ValueError.
+        _INVALID_ZARR_KEYS = frozenset({"scale_factor", "add_offset", "missing_value", "_FillValue", "coordinates"})
         encoding: dict[str, dict] = {}
         for name in list(ds.data_vars) + list(ds.coords):
             da = ds[name]
-            existing = dict(da.encoding)
+            existing = {k: v for k, v in da.encoding.items() if k not in _INVALID_ZARR_KEYS}
             if "time" in da.dims:
                 current = existing.get("chunks")
                 if isinstance(current, (list, tuple)):
