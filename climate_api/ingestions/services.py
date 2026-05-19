@@ -62,7 +62,10 @@ def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) 
     dataset_bbox = spatial.get("bbox")
     if not (isinstance(dataset_bbox, list) and len(dataset_bbox) == 4):
         return
-    dx_min, dy_min, dx_max, dy_max = (float(v) for v in dataset_bbox)
+    try:
+        dx_min, dy_min, dx_max, dy_max = (float(v) for v in dataset_bbox)
+    except (TypeError, ValueError):
+        return  # malformed dataset bbox — skip overlap check
     ix_min, iy_min, ix_max, iy_max = (float(v) for v in instance_bbox)
     if dx_max <= ix_min or dx_min >= ix_max or dy_max <= iy_min or dy_min >= iy_max:
         raise HTTPException(
@@ -319,11 +322,17 @@ def _create_icechunk_artifact(
         rechunk_time=rechunk_time,
     )
 
+    if not store_path.exists():
+        raise HTTPException(status_code=409, detail="Plugin returned no periods for the requested range")
+
     repo = open_or_create_repo(store_path)
     session = repo.readonly_session("main")
     import xarray as xr
 
-    ds = xr.open_zarr(session.store)
+    try:
+        ds = xr.open_zarr(session.store)
+    except Exception as exc:
+        raise HTTPException(status_code=409, detail="Ingest produced no readable data for the requested range") from exc
     from climate_api import config as api_config
 
     native_crs = _read_crs_from_spatial_ref(ds) or api_config.get_crs() or "EPSG:4326"
@@ -548,17 +557,11 @@ def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str,
     repo = open_or_create_repo(store_path)
     session = repo.readonly_session("main")
 
-    store_attrs: dict[str, object] = {}
-    try:
-        root_meta = json.loads(bytes(session.store["zarr.json"]))  # type: ignore[index]
-        store_attrs = root_meta.get("attributes", {})
-    except Exception:
-        pass
+    root: zarr.Group = zarr.open_group(session.store, mode="r")
+    store_attrs: dict[str, object] = dict(root.attrs)
 
     store_crs = store_attrs.get("proj:code")
     crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
-
-    root: zarr.Group = zarr.open_group(session.store, mode="r")
     entries = [
         {
             "name": name,
@@ -697,9 +700,10 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
     except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
 
+    raw = bytes(data)
     if key.endswith("zarr.json"):
-        return JSONResponse(content=json.loads(data))
-    return Response(content=data, media_type="application/octet-stream")
+        return JSONResponse(content=json.loads(raw))
+    return Response(content=raw, media_type="application/octet-stream")
 
 
 def _load_records() -> list[ArtifactRecord]:

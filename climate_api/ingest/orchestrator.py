@@ -191,6 +191,8 @@ async def run_ingest(
             on_progress(done=done_offset + i + 1, total=len(all_periods), message=f"Wrote {period_id}")
 
         if not spec.time_dim:
+            for t in tasks[i + 1 :]:
+                t.cancel()
             break
 
     if rechunk_time is not None and spec.time_dim:

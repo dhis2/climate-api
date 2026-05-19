@@ -1035,6 +1035,7 @@ def _patch_icechunk_artifact_dependencies(
 
     def fake_run_ingest_sync(**kwargs: object) -> None:
         captured.update(kwargs)
+        Path(str(kwargs["store_path"])).mkdir(exist_ok=True)
 
     monkeypatch.setattr(orchestrator_mod, "run_ingest_sync", fake_run_ingest_sync)
     monkeypatch.setattr(orchestrator_mod, "load_plugin", lambda path, params, extra_params=None: object())
