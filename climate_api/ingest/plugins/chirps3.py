@@ -104,7 +104,8 @@ class Chirps3Plugin:
         logger.info("Fetching CHIRPS3 %s: %s", period_id, url)
 
         da = rioxarray.open_rasterio(url, chunks=None, masked=True, lock=False)
-        assert isinstance(da, xr.DataArray)
+        if not isinstance(da, xr.DataArray):
+            raise TypeError(f"rioxarray.open_rasterio returned {type(da).__name__!r}, expected DataArray")
         xmin, ymin, xmax, ymax = map(float, bbox)
         da = da.rio.clip_box(minx=xmin, miny=ymin, maxx=xmax, maxy=ymax)
         da = da.squeeze("band", drop=True)

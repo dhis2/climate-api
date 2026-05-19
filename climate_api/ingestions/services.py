@@ -317,6 +317,8 @@ def _create_icechunk_artifact(
         end,
         rechunk_time,
     )
+    transforms = dataset.get("transforms")
+    apply_transforms = (lambda ds: downloader._run_transforms(ds, dataset)) if transforms else None
     run_ingest_sync(
         plugin=plugin,
         params=params,
@@ -326,6 +328,7 @@ def _create_icechunk_artifact(
         store_path=store_path,
         period_type=period_type,
         rechunk_time=rechunk_time,
+        apply_transforms=apply_transforms,
     )
 
     if not store_path.exists():
@@ -383,7 +386,7 @@ def _create_icechunk_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored = _upsert_artifact_record(record, prefer_zarr=False, publish=publish, overwrite=overwrite)
+    stored = _upsert_icechunk_artifact_record(record, publish=publish)
     logger.info(
         "Stored Icechunk artifact '%s' for '%s': coverage=%s..%s",
         stored.artifact_id,
@@ -714,6 +717,8 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
         import zarr.core.buffer
 
         proto = zarr.core.buffer.default_buffer_prototype()
+        # IcechunkStore does not expose a public synchronous read method; _get_bytes_sync
+        # is the internal synchronous accessor used by zarr's own blocking read path.
         data = session.store._get_bytes_sync(key, prototype=proto)
         if data is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
@@ -758,6 +763,31 @@ def _store_artifact_record(
                 return existing
             return existing
 
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
+def _upsert_icechunk_artifact_record(record: ArtifactRecord, *, publish: bool) -> ArtifactRecord:
+    """Persist an Icechunk artifact record, replacing any existing record for the same store path.
+
+    Matches by dataset_id + path rather than request_scope so that sync appends
+    (which extend the end date) update the existing record in-place instead of
+    accumulating duplicate entries for the same physical store.
+    """
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for i, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.path == record.path:
+                replacement = record.model_copy(
+                    update={
+                        "artifact_id": existing.artifact_id,
+                        "publication": existing.publication,
+                    }
+                )
+                records[i] = replacement
+                return replacement
         records.append(record)
         return record
 

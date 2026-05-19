@@ -261,7 +261,7 @@ The sync engine validates that new data connects to the end of the existing arti
 
 ### The append execution mode
 
-For **function-path** datasets, `append` downloads only the missing time range and rebuilds the full zarr from all cached files. The local cache (NetCDF files in `data/downloads/`) is the source of truth; the zarr is a derived view. If the cache is deleted, a rematerialize is required to recover.
+For **legacy ZARR datasets** (downloader-based, no `ingestion.plugin`), `append` downloads only the missing time range and rebuilds the full zarr from all cached files. The local cache (NetCDF files in `data/downloads/`) is the source of truth; the zarr is a derived view. If the cache is deleted, a rematerialize is required to recover.
 
 For **plugin-path** datasets, `append` compares the pending period list against the already-committed time coordinates in the Icechunk store and fetches only the missing periods. The Icechunk store itself is the source of truth — no separate download cache. A crash leaves the store at the last committed period; restart resumes from there without any additional recovery logic.
 

@@ -125,15 +125,6 @@ class Era5LandPlugin:
 
         ds = ds.rename({"longitude": "x", "latitude": "y"})
         ds = ds.load()
-        # Strip zarr v2 codec encoding (Blosc) so the orchestrator writes
-        # with zarr v3-compatible defaults into the icechunk store.
-        for name in list(ds.data_vars) + list(ds.coords):
-            ds[name].encoding.clear()
-        # Pin time to a stable hourly unit so every period append uses the
-        # same encoding. Without this, the first write picks "days since …"
-        # and sub-daily values on subsequent appends land on the wrong hour.
-        if "time" in ds.coords:
-            ds["time"].encoding.update({"units": "hours since 1970-01-01", "dtype": "int64"})
         return ds
 
     # ------------------------------------------------------------------

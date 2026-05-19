@@ -93,6 +93,7 @@ async def run_ingest(
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
+    apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
 ) -> None:
     """Probe the source then stream per-period data into an Icechunk store.
 
@@ -138,6 +139,9 @@ async def run_ingest(
     # store and a store directory that exists as an empty skeleton from a
     # previous failed initialisation (where append_dim would fail on an empty store).
     is_first_write = done_offset == 0
+    # Capture before any commits so expire_snapshots only marks snapshots that
+    # were created during this run, not the pre-existing HEAD.
+    ingest_started_at = datetime.now(tz=timezone.utc)
     repo = open_or_create_repo(store_path)
 
     semaphore = asyncio.Semaphore(plugin.max_concurrency)
@@ -160,6 +164,8 @@ async def run_ingest(
 
         ds = await task
         period_id = pending[i]
+        if apply_transforms is not None:
+            ds = apply_transforms(ds)
         _strip_cf_encoding(ds, period_type=period_type)
 
         # Each period uses its own writable session so that to_zarr(append_dim=)
@@ -207,7 +213,7 @@ async def run_ingest(
     # data — garbage_collect would be needed to reclaim manifest storage.
     # The "main" branch ref preserves HEAD even when it appears in the expired set.
     try:
-        expired = repo.expire_snapshots(older_than=datetime.now(tz=timezone.utc))
+        expired = repo.expire_snapshots(older_than=ingest_started_at)
         if expired:
             logger.info("Expired %d intermediate snapshots from %s", len(expired), store_path)
     except Exception:
@@ -228,6 +234,7 @@ def run_ingest_sync(
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
+    apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
 ) -> None:
     """Synchronous wrapper around run_ingest for use in threaded job workers."""
     asyncio.run(
@@ -244,5 +251,6 @@ def run_ingest_sync(
             save_cursor=save_cursor,
             load_cursor=load_cursor,
             rechunk_time=rechunk_time,
+            apply_transforms=apply_transforms,
         )
     )

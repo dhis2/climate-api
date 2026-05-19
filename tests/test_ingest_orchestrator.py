@@ -44,6 +44,7 @@ class FakePlugin:
 
     max_concurrency = 2
     commit_batch_size = 2
+    rechunk_time: int | None = None
 
     def __init__(self, periods: list[str]) -> None:
         self._periods = periods
@@ -504,3 +505,84 @@ def test_era5land_plugin_declares_rechunk_time() -> None:
 
     plugin = Era5LandPlugin(variable="t2m")
     assert plugin.rechunk_time == 12
+
+
+# ---------------------------------------------------------------------------
+# time_dim=False (static datasets)
+# ---------------------------------------------------------------------------
+
+
+class FakeStaticPlugin(FakePlugin):
+    """FakePlugin variant whose probe returns time_dim=False (static dataset)."""
+
+    async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
+        return GridSpec(shape=(4, 4), crs=4326, dtype=np.dtype("float32"), nodata=None, time_dim=False)
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+        self.fetched.append(period_id)
+        return xr.Dataset(
+            {"elevation": xr.DataArray(np.zeros((4, 4), dtype="float32"), dims=["y", "x"])},
+        )
+
+
+def test_run_ingest_static_dataset_writes_once(tmp_path: Path) -> None:
+    """time_dim=False: the orchestrator commits only one write (no append) and the
+    store has no time dimension."""
+    import icechunk
+    import zarr
+
+    plugin = FakeStaticPlugin(["2024-01", "2024-02", "2024-03"])
+    store_path = tmp_path / "static.icechunk"
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-03",
+            store_path=store_path,
+            period_type="monthly",
+        )
+    )
+
+    assert store_path.exists()
+    # The store must exist and contain the static variable without a time axis.
+    repo = icechunk.Repository.open(icechunk.local_filesystem_storage(str(store_path)))
+    session = repo.readonly_session("main")
+    g = zarr.open_group(session.store, mode="r")
+    assert "elevation" in g
+    assert "time" not in g
+
+
+# ---------------------------------------------------------------------------
+# apply_transforms
+# ---------------------------------------------------------------------------
+
+
+def test_run_ingest_apply_transforms_called_per_period(tmp_path: Path) -> None:
+    """apply_transforms is invoked for every fetched period before writing."""
+    plugin = FakePlugin(["2024-01", "2024-02"])
+    store_path = tmp_path / "test.icechunk"
+    transform_calls: list[str] = []
+
+    def record_transform(ds: xr.Dataset) -> xr.Dataset:
+        transform_calls.append(str(ds.time.values[0]))
+        return ds
+
+    asyncio.run(
+        run_ingest(
+            plugin=plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-02",
+            store_path=store_path,
+            period_type="monthly",
+            apply_transforms=record_transform,
+        )
+    )
+
+    assert len(transform_calls) == 2
+    committed = read_committed_period_ids(store_path, "monthly")
+    assert committed == {"2024-01", "2024-02"}
