@@ -100,6 +100,10 @@ class WorldPopPlugin:
         xmin, ymin, xmax, ymax = map(float, bbox)
         da = da.rio.clip_box(minx=xmin, miny=ymin, maxx=xmax, maxy=ymax)
         da = da.squeeze("band", drop=True)
+        # Mask the rioxarray nodata sentinel (-99999) to NaN before writing.
+        _nodata = da.rio.nodata
+        if _nodata is not None and not math.isnan(float(_nodata)):
+            da = da.where(da != _nodata)
         da = da.load()
 
         ds = da.to_dataset(name="pop_total")
@@ -121,7 +125,7 @@ class WorldPopPlugin:
             shape=(ny, nx),
             crs=4326,
             dtype=np.dtype("float32"),
-            nodata=0.0,
+            nodata=float("nan"),
             time_dim=True,
         )
 

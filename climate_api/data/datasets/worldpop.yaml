@@ -28,4 +28,4 @@
   display:
     colormap: reds
     range: [0.0, 25.0]
-    nodata: 0.0
+    nodata: -99999
