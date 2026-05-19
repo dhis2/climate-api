@@ -145,6 +145,35 @@ def test_post_resample_execution_returns_completed_response(
     assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_daily_w_mon_sum"
 
 
+def test_post_process_execution_honors_case_insensitive_prefer_tokens(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        processing_services,
+        "run_resample_process",
+        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
+    )
+
+    response = client.post(
+        "/processes/resample/execution",
+        headers={"Prefer": "Respond-Async, wait=10"},
+        json={
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "frequency": "W-MON",
+            "method": "sum",
+            "start": "2026-01-05",
+            "end": "2026-01-12",
+            "publish": True,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] in {"accepted", "running", "successful"}
+    assert response.headers["Location"].startswith("/jobs/")
+
+
 def test_post_internal_process_execution_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "climate_api.processing.routes.process_registry.get_process",

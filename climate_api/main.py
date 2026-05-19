@@ -41,8 +41,12 @@ def _append_vary_value(response: Response, value: str) -> None:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Run lightweight startup recovery hooks for the application lifecycle."""
-    get_job_service().recover_pending_jobs()
-    yield
+    job_service = get_job_service()
+    job_service.recover_pending_jobs()
+    try:
+        yield
+    finally:
+        job_service.shutdown()
 
 
 def create_app() -> FastAPI:

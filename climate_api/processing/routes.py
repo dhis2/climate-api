@@ -12,6 +12,14 @@ from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessL
 router = APIRouter()
 
 
+def _prefer_respond_async(prefer: str | None) -> bool:
+    """Return True when Prefer contains a respond-async directive."""
+    if prefer is None:
+        return False
+    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
+    return "respond-async" in directives
+
+
 def _process_links(process_id: str) -> list[ProcessLink]:
     return [
         ProcessLink(href=f"/processes/{process_id}", rel="self", title="Process detail"),
@@ -124,7 +132,7 @@ def run_process_execution(
     """Dispatch to a registered process execution function by process id."""
     process = _get_public_process_or_404(process_id)
     _validate_process_request(process, request)
-    if prefer is not None and "respond-async" in prefer:
+    if _prefer_respond_async(prefer):
         job = get_job_service().submit_process_job(process_id=process_id, request=request)
         response.status_code = 202
         response.headers["Location"] = f"/jobs/{job.job_id}"

@@ -258,3 +258,51 @@ def test_retrying_job_exhausts_attempts_and_fails(monkeypatch: pytest.MonkeyPatc
         assert record.error.type == "RuntimeError"
     finally:
         service.shutdown()
+
+
+def test_retry_wait_honors_cancellation_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = JobService(max_workers=1)
+    try:
+
+        def fake_get_process(process_id: str) -> dict[str, object] | None:
+            if process_id != "recoverable-process":
+                return None
+            return {
+                "id": process_id,
+                "title": "Recoverable process",
+                "execution": {"function": "tests.fake.failing"},
+                "expose": True,
+                "jobControlOptions": ["sync-execute", "async-execute"],
+            }
+
+        monkeypatch.setattr("climate_api.jobs.service.process_registry.get_process", fake_get_process)
+        monkeypatch.setattr(
+            "climate_api.data_registry.services.processes._get_dynamic_function",
+            lambda path: lambda *, value: (_ for _ in ()).throw(RuntimeError(f"boom:{value}")),
+        )
+
+        sleep_calls = {"count": 0}
+
+        def fake_sleep(_seconds: float) -> None:
+            sleep_calls["count"] += 1
+            if sleep_calls["count"] == 1:
+                service.request_cancellation(created.job_id)
+
+        monkeypatch.setattr("climate_api.jobs.service.time.sleep", fake_sleep)
+
+        created = service.submit_process_job(process_id="recoverable-process", request={"value": 2}, max_attempts=2)
+
+        for _ in range(100):
+            record = job_store.get_job_record(created.job_id)
+            if record is not None and record.status == JobStatus.CANCELLED:
+                break
+            time.sleep(0.01)
+        else:
+            raise AssertionError("Retrying job did not cancel in time")
+
+        record = job_store.get_job_record(created.job_id)
+        assert record is not None
+        assert record.status == JobStatus.CANCELLED
+        assert record.progress.message == "Cancelled before retry execution resumed"
+    finally:
+        service.shutdown()

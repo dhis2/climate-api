@@ -52,6 +52,10 @@ def _supports_argument(func: Any, name: str) -> bool:
     return any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values())
 
 
+def _is_pre_execution_cancellation(record: JobRecord) -> bool:
+    return record.cancel_requested and record.status in {JobStatus.ACCEPTED, JobStatus.RETRYING}
+
+
 class JobExecutionContext:
     """Callbacks and state helpers exposed to one running job."""
 
@@ -241,6 +245,18 @@ class JobService:
             future = self._executor.submit(self._run_job, job_id)
             self._futures[job_id] = future
 
+    def _sleep_for_retry(self, job_id: str, seconds: int) -> bool:
+        """Sleep in short intervals so retry wait remains cancellation-aware."""
+        remaining = float(seconds)
+        while remaining > 0:
+            record = store.get_job_record(job_id)
+            if record is not None and record.cancel_requested:
+                return False
+            interval = min(1.0, remaining)
+            time.sleep(interval)
+            remaining -= interval
+        return True
+
     def _run_job(self, job_id: str) -> None:
         try:
             self._execute_job(job_id)
@@ -251,14 +267,19 @@ class JobService:
     def _execute_job(self, job_id: str) -> None:
         while True:
             record = self.get_job_or_404(job_id)
-            if record.cancel_requested and record.status == JobStatus.ACCEPTED:
+            if _is_pre_execution_cancellation(record):
+                message = (
+                    "Cancellation accepted before execution started"
+                    if record.status == JobStatus.ACCEPTED
+                    else "Cancelled before retry execution resumed"
+                )
                 store.mutate_job_record(
                     job_id,
                     lambda current: current.model_copy(
                         update={
                             "status": JobStatus.CANCELLED,
                             "finished_at": utc_now(),
-                            "progress": JobProgress(message="Cancellation accepted before execution started"),
+                            "progress": JobProgress(message=message),
                         }
                     ),
                 )
@@ -330,7 +351,8 @@ class JobService:
                             }
                         ),
                     )
-                    time.sleep(retry_after)
+                    if not self._sleep_for_retry(job_id, retry_after):
+                        continue
                     continue
 
                 store.mutate_job_record(
