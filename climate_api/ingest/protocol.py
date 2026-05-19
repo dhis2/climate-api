@@ -63,6 +63,13 @@ class IngestionPlugin(Protocol):
         positive int (30 for daily, 720 for hourly). This attribute is read via
         ``getattr`` and is intentionally excluded from the Protocol so that
         plugins that omit it still pass the ``isinstance`` check.
+
+    pyramid (optional class attribute): when ``True``, the orchestrator builds
+        a multiscale pyramid after ingest completes. Level count is derived
+        automatically from the spatial dimensions (same 512-pixel tile target
+        and 2048×2048 threshold as the legacy downloader). Set on plugins whose
+        data resolution produces tiles too large for efficient browser rendering
+        without overviews. Like ``rechunk_time``, read via ``getattr``.
     """
 
     max_concurrency: int

@@ -46,6 +46,7 @@ class WorldPopPlugin:
     max_concurrency = 1
     commit_batch_size = 1
     rechunk_time: int | None = None
+    pyramid: bool = True
 
     def __init__(self, country_code: str = "", version: str = "global2") -> None:
         self.country_code = country_code.upper()

@@ -24,7 +24,7 @@ from typing import Any
 import xarray as xr
 
 from climate_api.ingest.protocol import GridSpec, IngestionPlugin
-from climate_api.ingest.store import open_or_create_repo, read_committed_period_ids, rechunk_store
+from climate_api.ingest.store import build_pyramid_store, open_or_create_repo, read_committed_period_ids, rechunk_store
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,7 @@ async def run_ingest(
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
     apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
+    pyramid: bool = False,
 ) -> None:
     """Probe the source then stream per-period data into an Icechunk store.
 
@@ -223,7 +224,11 @@ async def run_ingest(
     if rechunk_time is not None and spec.time_dim:
         logger.info("Rechunking %s after ingest: time chunk → %d", store_path, rechunk_time)
         rechunk_store(store_path, time_chunk=rechunk_time)
-        # Reopen repo so expire_snapshots sees the post-rechunk HEAD.
+        repo = open_or_create_repo(store_path)
+
+    if pyramid:
+        build_pyramid_store(store_path, x_dim=spec.x_dim, y_dim=spec.y_dim)
+        # Reopen repo so expire_snapshots sees the post-pyramid HEAD.
         repo = open_or_create_repo(store_path)
 
     # Prune intermediate ingest snapshots: each period commit created one
@@ -254,6 +259,7 @@ def run_ingest_sync(
     load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
     apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
+    pyramid: bool = False,
 ) -> None:
     """Synchronous wrapper around run_ingest for use in threaded job workers."""
     asyncio.run(
@@ -271,5 +277,6 @@ def run_ingest_sync(
             load_cursor=load_cursor,
             rechunk_time=rechunk_time,
             apply_transforms=apply_transforms,
+            pyramid=pyramid,
         )
     )

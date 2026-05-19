@@ -308,14 +308,16 @@ def _create_icechunk_artifact(
     # plugin's declared rechunk_time, if any. Sync appends skip rechunking to avoid
     # rewriting the full store on every small update.
     rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
+    pyramid: bool = bool(getattr(plugin, "pyramid", False)) if ingest_start is None else False
     logger.info(
-        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s",
+        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s pyramid=%s",
         dataset_id,
         effective_start,
         end,
         start,
         end,
         rechunk_time,
+        pyramid,
     )
     transforms = dataset.get("transforms")
     apply_transforms = (lambda ds: downloader._run_transforms(ds, dataset)) if transforms else None
@@ -329,6 +331,7 @@ def _create_icechunk_artifact(
         period_type=period_type,
         rechunk_time=rechunk_time,
         apply_transforms=apply_transforms,
+        pyramid=pyramid,
     )
 
     if not store_path.exists():

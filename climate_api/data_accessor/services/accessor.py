@@ -126,8 +126,13 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
 
 
 def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
-    """Open an Icechunk store as an xarray Dataset via a readonly MVCC session."""
+    """Open an Icechunk store as an xarray Dataset via a readonly MVCC session.
+
+    Detects multiscale pyramid stores (root group has ``multiscales`` in attrs)
+    and opens group ``0`` (full resolution) in that case.
+    """
     import icechunk
+    import zarr
 
     path = Path(store_path)
     if not path.exists():
@@ -135,7 +140,9 @@ def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
     storage = icechunk.local_filesystem_storage(str(path))
     repo = icechunk.Repository.open(storage)
     session = repo.readonly_session("main")
-    return xr.open_zarr(session.store)  # type: ignore[no-any-return]
+    root = zarr.open_group(session.store, mode="r")
+    group: str | None = "0" if "multiscales" in root.attrs else None
+    return xr.open_zarr(session.store, group=group)  # type: ignore[no-any-return]
 
 
 def _open_zarr(zarr_path: str) -> xr.Dataset:

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import icechunk
+
+_PYRAMID_PIXEL_THRESHOLD = 2048 * 2048
+_PYRAMID_TARGET_TILE_SIZE = 512
+_PYRAMID_MAX_LEVELS = 8
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,45 @@ def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
         ds.close()
 
 
+def build_pyramid_store(store_path: Path, *, x_dim: str = "x", y_dim: str = "y") -> None:
+    """Rewrite the committed Icechunk store as a multiscale pyramid.
+
+    Level count is derived from the actual spatial dimensions using the same
+    512-pixel tile target as the legacy downloader. A no-op when the store does
+    not exist or its spatial extent is below the 2048×2048 threshold.
+
+    The pyramid commit replaces the flat root structure: data moves from root
+    to ``0/`` and coarsened overviews are written to ``1/``, ``2/``, etc.
+    Intermediate ingest snapshots are left for the orchestrator's
+    expire_snapshots call to prune.
+    """
+    import xarray as xr
+    from topozarr import create_pyramid
+
+    if not store_path.exists():
+        return
+
+    repo = open_or_create_repo(store_path)
+    read_session = repo.readonly_session("main")
+    ds = xr.open_zarr(read_session.store)
+    try:
+        nx = ds.sizes.get(x_dim, 0)
+        ny = ds.sizes.get(y_dim, 0)
+        if nx * ny <= _PYRAMID_PIXEL_THRESHOLD:
+            logger.info("Skipping pyramid for %s: %dx%d below threshold", store_path, nx, ny)
+            return
+        levels = min(math.ceil(math.log2(max(nx, ny) / _PYRAMID_TARGET_TILE_SIZE)), _PYRAMID_MAX_LEVELS)
+        ds_loaded = ds.load()
+    finally:
+        ds.close()
+
+    pyramid = create_pyramid(ds_loaded, levels=levels, x_dim=x_dim, y_dim=y_dim)
+    write_session = repo.writable_session("main")
+    pyramid.dt.to_zarr(write_session.store, mode="w", encoding=pyramid.encoding, zarr_format=3)
+    write_session.commit(f"pyramid: {levels} levels")
+    logger.info("Built %d-level pyramid for %s (%dx%d)", levels, store_path, nx, ny)
+
+
 def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
     """Return the set of period IDs already committed to the Icechunk store.
 
@@ -91,6 +135,12 @@ def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
         session = repo.readonly_session("main")
         ds = xr.open_zarr(session.store)
         try:
+            if "time" not in ds.coords:
+                # Pyramid store: time lives in level "0", not at root.
+                if "multiscales" not in ds.attrs:
+                    return set()
+                ds.close()
+                ds = xr.open_zarr(session.store, group="0")
             if "time" not in ds.coords:
                 return set()
             import pandas as pd

@@ -313,7 +313,10 @@ def _public_zarr_asset_href(
     source_dataset: dict[str, Any],
 ) -> str:
     artifact_path = _artifact_store_path(artifact)
-    if _is_pyramid_zarr(artifact_path):
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        if _is_icechunk_pyramid(artifact_path):
+            return _abs_url(request, f"/zarr/{dataset_id}/0")
+    elif _is_pyramid_zarr(artifact_path):
         return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
 
@@ -323,6 +326,21 @@ def _is_pyramid_zarr(artifact_path: str) -> bool:
     if "://" in artifact_path:
         return False
     return (Path(artifact_path) / "0").is_dir()
+
+
+def _is_icechunk_pyramid(store_path: str) -> bool:
+    """Return True if the Icechunk store contains a multiscale pyramid."""
+    try:
+        import zarr
+
+        from climate_api.ingest.store import open_or_create_repo
+
+        repo = open_or_create_repo(Path(store_path))
+        session = repo.readonly_session("main")
+        root = zarr.open_group(session.store, mode="r")
+        return "multiscales" in root.attrs
+    except Exception:
+        return False
 
 
 def _abs_url(request: Request, path: str) -> str:
