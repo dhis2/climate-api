@@ -134,7 +134,10 @@ async def run_ingest(
     if on_progress:
         on_progress(done=done_offset, total=len(all_periods), message=f"{len(pending)} periods pending")
 
-    is_first_write = not store_path.exists()
+    # True when no periods have been committed yet — handles both a brand-new
+    # store and a store directory that exists as an empty skeleton from a
+    # previous failed initialisation (where append_dim would fail on an empty store).
+    is_first_write = done_offset == 0
     repo = open_or_create_repo(store_path)
 
     semaphore = asyncio.Semaphore(plugin.max_concurrency)
