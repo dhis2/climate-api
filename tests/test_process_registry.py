@@ -21,7 +21,7 @@ def test_builtin_resample_has_execution_function(monkeypatch: pytest.MonkeyPatch
     assert resample is not None
     assert resample["title"] == "Temporal resampling"
     assert resample["execution"]["function"] == "climate_api.processing.services.execute_resample"
-    assert resample["jobControlOptions"] == ["sync-execute"]
+    assert resample["jobControlOptions"] == ["sync-execute", "async-execute"]
 
 
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,6 +29,24 @@ def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
 
     assert process_registry.get_process("does_not_exist") is None
+
+
+def test_get_process_function_returns_callable_for_registered_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        process_registry,
+        "get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Callable process",
+            "execution": {"function": "mypackage.execute.run"},
+            "expose": True,
+        },
+    )
+    monkeypatch.setattr(process_registry, "_get_dynamic_function", lambda path: {"path": path})
+
+    resolved = process_registry.get_process_function("callable-process")
+
+    assert resolved == {"path": "mypackage.execute.run"}
 
 
 def test_process_registry_rejects_missing_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

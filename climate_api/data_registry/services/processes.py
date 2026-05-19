@@ -81,6 +81,14 @@ def get_process(process_id: str) -> dict[str, Any] | None:
     return {p["id"]: p for p in list_processes()}.get(process_id)
 
 
+def get_process_function(process_id: str) -> Any:
+    """Import and return the execution callable for one registered process id."""
+    process = get_process(process_id)
+    if process is None:
+        raise ValueError(f"Unknown process '{process_id}'")
+    return _get_dynamic_function(process["execution"]["function"])
+
+
 def _load_builtin_processes() -> list[dict[str, Any]]:
     """Load built-in process definitions from package data via importlib.resources."""
     pkg = importlib.resources.files("climate_api") / "data" / "processes"

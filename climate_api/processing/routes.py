@@ -2,12 +2,22 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Header, HTTPException, Response
 
 from climate_api.data_registry.services import processes as process_registry
+from climate_api.jobs.service import get_job_service
+from climate_api.processing import services as processing_services
 from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessLink, ProcessListResponse, ProcessSummary
 
 router = APIRouter()
+
+
+def _prefer_respond_async(prefer: str | None) -> bool:
+    """Return True when Prefer contains a respond-async directive."""
+    if prefer is None:
+        return False
+    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
+    return "respond-async" in directives
 
 
 def _process_links(process_id: str) -> list[ProcessLink]:
@@ -75,6 +85,31 @@ def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
     return process
 
 
+def _validate_required_process_inputs(process: dict[str, Any], request: dict[str, Any]) -> None:
+    raw_inputs = process.get("inputs")
+    if not isinstance(raw_inputs, dict):
+        return
+    missing = [
+        key
+        for key, value in raw_inputs.items()
+        if isinstance(key, str) and isinstance(value, dict) and value.get("required") is True and key not in request
+    ]
+    if missing:
+        joined = ", ".join(sorted(missing))
+        raise HTTPException(status_code=400, detail=f"Missing required process inputs: {joined}")
+
+
+def _validate_process_request(process: dict[str, Any], request: dict[str, Any]) -> None:
+    _validate_required_process_inputs(process, request)
+    if process.get("id") == "resample":
+        processing_services.validate_resample_request(**request)
+
+
+def _supports_async_execution(process: dict[str, Any]) -> bool:
+    job_control_options = process.get("jobControlOptions")
+    return isinstance(job_control_options, list) and "async-execute" in job_control_options
+
+
 @router.get("", response_model=ProcessListResponse)
 def get_processes_catalog() -> ProcessListResponse:
     """Return the registered native process catalog."""
@@ -95,12 +130,26 @@ def get_process(process_id: str) -> ProcessDetail:
 @router.post("/{process_id}/execution")
 def run_process_execution(
     process_id: str,
+    response: Response,
     request: dict[str, Any] = Body(...),
+    prefer: str | None = Header(default=None),
 ) -> Any:
     """Dispatch to a registered process execution function by process id."""
     process = _get_public_process_or_404(process_id)
+    _validate_process_request(process, request)
+    if _prefer_respond_async(prefer):
+        if not _supports_async_execution(process):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Process '{process_id}' does not support async execution",
+            )
+        job = get_job_service().submit_process_job(process_id=process_id, request=request)
+        response.status_code = 202
+        response.headers["Location"] = f"/jobs/{job.job_id}"
+        return job
+
     try:
-        func = process_registry._get_dynamic_function(process["execution"]["function"])
+        func = process_registry.get_process_function(process_id)
     except (ImportError, AttributeError, ValueError) as exc:
         raise HTTPException(
             status_code=500,
