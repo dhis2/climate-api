@@ -47,7 +47,7 @@ class WorldPopPlugin:
     commit_batch_size = 1
     rechunk_time: int | None = None
 
-    def __init__(self, country_code: str, version: str = "global2") -> None:
+    def __init__(self, country_code: str = "", version: str = "global2") -> None:
         self.country_code = country_code.upper()
         self.version = version
 

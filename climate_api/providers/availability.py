@@ -7,31 +7,10 @@ choose the right policy per upstream provider.
 
 from __future__ import annotations
 
-from calendar import monthrange
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from climate_api.shared.time import datetime_to_period_string, utc_now, utc_today
-
-
-def chirps3_daily_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
-    """Return latest complete CHIRPS3 daily period available for safe sync.
-
-    The dhis2eo CHIRPS3 downloader groups daily files by source month. For
-    final/rnl data, use only fully released months by default: after the 20th,
-    the previous month is considered available; otherwise the month before that
-    is the latest safe complete month.
-    """
-    availability = _availability_metadata(dataset)
-    threshold_day = availability.get("complete_month_after_day", 20)
-    if not isinstance(threshold_day, int):
-        threshold_day = 20
-
-    today = utc_today()
-    months_back = 1 if today.day > threshold_day else 2
-    available_month = _add_months(today.replace(day=1), -months_back)
-    latest_day = monthrange(available_month.year, available_month.month)[1]
-    return date(available_month.year, available_month.month, latest_day).isoformat()
 
 
 def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
@@ -61,28 +40,7 @@ def lagged_latest_available(*, dataset: dict[str, Any], requested_end: str) -> s
     return requested_end
 
 
-def worldpop_release_latest_available(*, dataset: dict[str, Any], requested_end: str) -> str:
-    """Return WorldPop release availability, including configured projections."""
-    availability = _availability_metadata(dataset)
-    if availability.get("allow_future") is True:
-        return requested_end
-
-    latest_year = availability.get("latest_year")
-    if isinstance(latest_year, int):
-        return str(latest_year)
-
-    return lagged_latest_available(dataset=dataset, requested_end=requested_end)
-
-
 def _availability_metadata(dataset: dict[str, Any]) -> dict[str, Any]:
     """Return sync availability metadata from a dataset template."""
     availability = dataset.get("sync", {}).get("availability")
     return availability if isinstance(availability, dict) else {}
-
-
-def _add_months(value: date, offset: int) -> date:
-    """Add a month offset to the first day of a month."""
-    month_index = value.year * 12 + value.month - 1 + offset
-    year = month_index // 12
-    month = month_index % 12 + 1
-    return date(year, month, 1)

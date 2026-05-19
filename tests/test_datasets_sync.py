@@ -623,16 +623,14 @@ def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pyt
 
     result = sync_engine.plan_sync(
         source_dataset={
-            "id": "chirps3_precipitation_daily",
+            "id": "legacy_dataset",
             "period_type": "daily",
             "sync": {
                 "kind": "temporal",
                 "execution": "append",
-                "availability": {
-                    "latest_available_function": "climate_api.providers.availability.chirps3_daily_latest_available"
-                },
+                "availability": {"latest_available_function": "provider.latest_available"},
             },
-            "ingestion": {},
+            # No ingestion.plugin — exercises the legacy latest_available_function path.
         },
         latest_artifact=_artifact(artifact_id="a1", end="2026-02-28"),
         requested_end="2026-04-21",
