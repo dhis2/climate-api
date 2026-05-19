@@ -218,6 +218,7 @@ def create_artifact(
         end=resolved_download_end,
         bbox=bbox,
         request_scope=request_scope,
+        overwrite=overwrite,
         publish=publish,
         ingest_start=download_start,
     )
@@ -230,6 +231,7 @@ def _create_icechunk_artifact(
     end: str,
     bbox: list[float] | None,
     request_scope: ArtifactRequestScope,
+    overwrite: bool = False,
     publish: bool,
     ingest_start: str | None = None,
 ) -> ArtifactRecord:
@@ -316,7 +318,7 @@ def _create_icechunk_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored = _store_artifact_record(record, prefer_zarr=False, publish=publish)
+    stored = _upsert_artifact_record(record, prefer_zarr=False, publish=publish, overwrite=overwrite)
     logger.info(
         "Stored Icechunk artifact '%s' for '%s': coverage=%s..%s",
         stored.artifact_id,
