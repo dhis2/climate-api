@@ -50,6 +50,22 @@ from climate_api.shared.time import datetime_to_period_string, normalize_period_
 logger = logging.getLogger(__name__)
 
 
+def _read_crs_from_spatial_ref(ds: object) -> str | None:
+    """Return 'EPSG:<n>' from a dataset's spatial_ref coordinate, or None."""
+    if "spatial_ref" not in ds.coords:
+        return None
+    try:
+        import pyproj
+        attrs = dict(ds["spatial_ref"].attrs)
+        wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+        if not wkt:
+            return None
+        epsg = pyproj.CRS.from_wkt(str(wkt)).to_epsg()
+        return f"EPSG:{epsg}" if epsg else None
+    except Exception:
+        return None
+
+
 def _resolve_artifacts_dir() -> Path:
     from climate_api import config as api_config
 
@@ -272,7 +288,7 @@ def _create_icechunk_artifact(
     ds = xr.open_zarr(session.store)
     from climate_api import config as api_config
 
-    native_crs = api_config.get_crs() or "EPSG:4326"
+    native_crs = _read_crs_from_spatial_ref(ds) or api_config.get_crs() or "EPSG:4326"
     coverage_data = coverage_from_open_dataset(ds, period_type=period_type, native_crs=native_crs)
     ds.close()
 

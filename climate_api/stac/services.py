@@ -212,13 +212,23 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
     try:
         x_dimension, y_dimension = get_x_y_dims(ds)
         time_dimension = get_time_dim(ds)
+        # Detect the actual data CRS so proj:code reflects the store's native coordinate
+        # system rather than the deployment CRS. This matters when a dataset (e.g. WorldPop)
+        # is stored in WGS84 while the deployment is configured for a projected CRS.
+        detected_crs = _detect_dataset_crs(ds)
+        if detected_crs:
+            template.extra_fields["proj:code"] = detected_crs
+        try:
+            reference_system = int(detected_crs.split(":")[-1]) if detected_crs else 4326
+        except ValueError:
+            reference_system = 4326
         result = xarray_to_stac(
             ds,
             template,
             temporal_dimension=time_dimension,
             x_dimension=x_dimension,
             y_dimension=y_dimension,
-            reference_system=4326,
+            reference_system=reference_system,
             # Schema validation can trigger outbound fetches for STAC extension schemas.
             validate=False,
         )
@@ -478,3 +488,25 @@ def _zarr_consolidated_flag(artifact_path: str) -> bool | None:
     if (store_root / ".zgroup").exists():
         return False
     return None
+
+
+def _detect_dataset_crs(ds: Any) -> str | None:
+    """Read the EPSG CRS code from a dataset's spatial_ref coordinate, if present.
+
+    Returns a string like 'EPSG:4326' or None if undetectable. Used to override
+    the deployment-wide proj:code with the actual native CRS of the data so that
+    datasets stored in WGS84 (e.g. WorldPop) are not misidentified as projected.
+    """
+    if "spatial_ref" not in ds.coords:
+        return None
+    try:
+        import pyproj
+        attrs = dict(ds["spatial_ref"].attrs)
+        wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+        if not wkt:
+            return None
+        crs = pyproj.CRS.from_wkt(str(wkt))
+        epsg = crs.to_epsg()
+        return f"EPSG:{epsg}" if epsg else None
+    except Exception:
+        return None
