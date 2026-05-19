@@ -654,8 +654,12 @@ def _serve_icechunk_key(
         }
 
     try:
-        data: bytes = bytes(session.store[key])  # type: ignore[index]
-    except KeyError:
+        import zarr.core.buffer
+        proto = zarr.core.buffer.default_buffer_prototype()
+        data = session.store._get_bytes_sync(key, prototype=proto)
+        if data is None:
+            raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
+    except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
 
     if key.endswith("zarr.json"):

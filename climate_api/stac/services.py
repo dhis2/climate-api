@@ -425,6 +425,9 @@ def _keywords(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> list[
 
 def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     metadata: dict[str, object] = {"zarr:node_type": "group"}
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        metadata["zarr:zarr_format"] = 3
+        return metadata
     artifact_path = _artifact_store_path(artifact)
     consolidated = _zarr_consolidated_flag(artifact_path)
     if consolidated is not None:
