@@ -174,6 +174,31 @@ def test_post_process_execution_honors_case_insensitive_prefer_tokens(
     assert response.headers["Location"].startswith("/jobs/")
 
 
+def test_post_process_execution_rejects_async_when_process_is_sync_only(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Sync only process",
+            "execution": {"function": "mypackage.sync_only.execute"},
+            "expose": True,
+            "jobControlOptions": ["sync-execute"],
+        },
+    )
+
+    response = client.post(
+        "/processes/sync-only/execution",
+        headers={"Prefer": "respond-async"},
+        json={},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Process 'sync-only' does not support async execution"
+
+
 def test_post_internal_process_execution_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "climate_api.processing.routes.process_registry.get_process",
@@ -240,6 +265,21 @@ def test_post_resample_execution_returns_400_for_invalid_frequency(
         },
     )
     assert response.status_code == 400
+
+
+def test_post_resample_execution_returns_400_for_null_frequency(client: TestClient) -> None:
+    response = client.post(
+        "/processes/resample/execution",
+        json={
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "frequency": None,
+            "method": "sum",
+            "start": "2026-01-01",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "frequency is required"
 
 
 def test_post_resample_execution_returns_400_for_unsupported_method(

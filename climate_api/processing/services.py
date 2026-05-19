@@ -28,14 +28,16 @@ def _never_cancel() -> bool:
 def validate_resample_request(
     *,
     source_dataset_id: str,
-    frequency: str,
-    method: str,
-    start: str,
+    frequency: str | None,
+    method: str | None,
+    start: str | None,
     **_ignored: Any,
 ) -> None:
     """Validate resample request parameters before execution or async acceptance."""
     if not source_dataset_id:
         raise HTTPException(status_code=400, detail="source_dataset_id is required")
+    if not frequency:
+        raise HTTPException(status_code=400, detail="frequency is required")
     if not start:
         raise HTTPException(status_code=400, detail="start is required")
     if method not in _SUPPORTED_RESAMPLE_METHODS:
@@ -43,7 +45,7 @@ def validate_resample_request(
         raise HTTPException(status_code=400, detail=f"Unsupported method '{method}'. Supported: {supported}")
     try:
         _offset = pd.tseries.frequencies.to_offset(frequency)
-    except ValueError:
+    except (TypeError, ValueError):
         _offset = None
     if _offset is None:
         raise HTTPException(status_code=400, detail=f"Invalid frequency '{frequency}'")
