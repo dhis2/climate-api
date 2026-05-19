@@ -21,7 +21,7 @@ def test_builtin_resample_has_execution_function(monkeypatch: pytest.MonkeyPatch
     assert resample is not None
     assert resample["title"] == "Temporal resampling"
     assert resample["execution"]["function"] == "climate_api.processing.services.execute_resample"
-    assert resample["jobControlOptions"] == ["sync-execute"]
+    assert resample["jobControlOptions"] == ["sync-execute", "async-execute"]
 
 
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,8 @@
 """DHIS2 Climate API -- Climate and earth observation data API for DHIS2."""
 
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,8 @@ import climate_api.startup  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from climate_api.data_registry import routes as dataset_template_routes
 from climate_api.extents import routes as extent_routes
 from climate_api.ingestions import routes as ingestion_routes
+from climate_api.jobs import routes as job_routes
+from climate_api.jobs.service import get_job_service
 from climate_api.processing import routes as processing_routes
 from climate_api.pygeoapi_app import mount_pygeoapi
 from climate_api.stac import routes as stac_routes
@@ -35,6 +38,13 @@ def _append_vary_value(response: Response, value: str) -> None:
         response.headers["Vary"] = ", ".join([*values, value])
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Run lightweight startup recovery hooks for the application lifecycle."""
+    get_job_service().recover_pending_jobs()
+    yield
+
+
 def create_app() -> FastAPI:
     """Create and configure the Climate API FastAPI application.
 
@@ -43,7 +53,7 @@ def create_app() -> FastAPI:
         from climate_api.main import create_app
         app = create_app()
     """
-    _app = FastAPI()
+    _app = FastAPI(lifespan=_lifespan)
 
     _app.add_middleware(
         CORSMiddleware,
@@ -89,6 +99,7 @@ def create_app() -> FastAPI:
     _app.include_router(dataset_template_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
     _app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
     _app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
+    _app.include_router(job_routes.router, prefix="/jobs", tags=["Jobs"])
     _app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
     _app.include_router(ingestion_routes.sync_router, prefix="/sync", tags=["Sync"])
     _app.include_router(processing_routes.router, prefix="/processes", tags=["Processes"])

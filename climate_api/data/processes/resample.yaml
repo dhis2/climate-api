@@ -9,6 +9,7 @@
     - resampling
   jobControlOptions:
     - sync-execute
+    - async-execute
   inputs:
     source_dataset_id:
       type: string

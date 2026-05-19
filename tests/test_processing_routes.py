@@ -1,44 +1,12 @@
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from climate_api.ingestions.schemas import (
-    ArtifactCoverage,
-    CoverageSpatial,
-    CoverageTemporal,
-    DatasetPublication,
-    DatasetRecord,
-    PublicationStatus,
-)
+from climate_api.ingestions.schemas import DatasetRecord
 from climate_api.processing import services as processing_services
-
-
-def _dataset_record(dataset_id: str) -> DatasetRecord:
-    return DatasetRecord(
-        dataset_id=dataset_id,
-        source_dataset_id="chirps3_precipitation_daily_w_mon_sum",
-        dataset_name="CHIRPS weekly precipitation",
-        short_name="CHIRPS weekly",
-        variable="precip",
-        period_type="daily",
-        units="mm",
-        resolution="5 km x 5 km",
-        source="CHIRPS v3",
-        source_url="https://example.com/chirps",
-        extent=ArtifactCoverage(
-            temporal=CoverageTemporal(start="2026-01-05", end="2026-01-11"),
-            spatial=CoverageSpatial(xmin=1.0, ymin=2.0, xmax=3.0, ymax=4.0),
-        ),
-        last_updated=datetime(2026, 1, 21, tzinfo=UTC),
-        links=[],
-        publication=DatasetPublication(
-            status=PublicationStatus.PUBLISHED,
-            published_at=datetime(2026, 1, 21, tzinfo=UTC),
-        ),
-    )
+from tests.helpers import dataset_record
 
 
 def test_get_processes_lists_registered_processes(client: TestClient) -> None:
@@ -57,7 +25,7 @@ def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
     payload = response.json()
     assert payload["id"] == "resample"
     assert payload["title"] == "Temporal resampling"
-    assert payload["jobControlOptions"] == ["sync-execute"]
+    assert payload["jobControlOptions"] == ["sync-execute", "async-execute"]
     assert "execution_function" not in payload
     assert payload["inputs"]["source_dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True
@@ -155,7 +123,7 @@ def test_post_resample_execution_returns_completed_response(
     monkeypatch.setattr(
         processing_services,
         "run_resample_process",
-        lambda **kwargs: ("artifact-123", _dataset_record("chirps3_precipitation_daily_w_mon_sum")),
+        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
     )
 
     response = client.post(
@@ -202,7 +170,7 @@ def test_post_resample_execution_passes_params_to_service(
 
     def fake_run_resample_process(**kwargs: object) -> tuple[str, DatasetRecord]:
         captured.update(kwargs)
-        return "artifact-456", _dataset_record("chirps3_precipitation_daily_w_mon_sum")
+        return "artifact-456", dataset_record("chirps3_precipitation_daily_w_mon_sum")
 
     monkeypatch.setattr(processing_services, "run_resample_process", fake_run_resample_process)
 
