@@ -132,22 +132,30 @@ class Era5LandPlugin:
     # ------------------------------------------------------------------
 
     def _build_periods(self, start: str, end: str) -> list[str]:
-        """Generate hourly period IDs, clamped to the provider's availability lag."""
+        """Generate hourly period IDs, clamped to the provider's availability lag.
+
+        start and end are period-ID strings of the form 'YYYY-MM-DDTHH'.
+        The comparison is lexicographic so the filter respects the hour component.
+        """
         cutoff = date.today() - timedelta(days=_LAG_DAYS)
         start_dt = date.fromisoformat(start[:10])
         end_dt = min(date.fromisoformat(end[:10]), cutoff)
+        # Cutoff clamped to end-of-day of the cutoff date so we filter later.
+        cutoff_period = f"{cutoff.isoformat()}T23"
 
         periods: list[str] = []
         current = start_dt
         while current <= end_dt:
             _, last_day = calendar.monthrange(current.year, current.month)
-            for day in range(current.day if current == start_dt else 1, last_day + 1):
-                d = current.replace(day=day)
-                if d > end_dt:
-                    break
+            for day_num in range(1, last_day + 1):
+                d = current.replace(day=day_num)
+                if d < start_dt or d > end_dt:
+                    continue
                 for hour in range(24):
-                    periods.append(f"{d.isoformat()}T{hour:02d}")
-            # Advance to first day of next month
+                    p = f"{d.isoformat()}T{hour:02d}"
+                    if p < start or p > end or p > cutoff_period:
+                        continue
+                    periods.append(p)
             if current.month == 12:
                 current = current.replace(year=current.year + 1, month=1, day=1)
             else:

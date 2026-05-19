@@ -4,9 +4,10 @@ The orchestrator is the only place that writes to the Icechunk store.
 Plugins implement three focused async methods (probe / periods / fetch_period)
 and never touch zarr directly.
 
-Crash recovery: each commit advances the job cursor. On restart the
-orchestrator reads the cursor, skips already-committed periods, and continues
-from where it stopped. A crash loses at most one uncommitted batch.
+Crash recovery: every period is committed individually. The cursor is saved
+every commit_batch_size periods so that a restart resumes from the last
+cursor checkpoint. A crash loses at most commit_batch_size periods of
+re-fetch work (the store itself is always in a valid committed state).
 """
 
 from __future__ import annotations
@@ -111,8 +112,6 @@ async def run_ingest(
     # Await in chronological order so writes are always sequential.
     tasks = [asyncio.create_task(_fetch(p)) for p in pending]
 
-    session = repo.writable_session("main")
-
     for i, task in enumerate(tasks):
         if is_cancel_requested and is_cancel_requested():
             for t in tasks[i:]:
@@ -124,23 +123,30 @@ async def run_ingest(
         ds = await task
         period_id = pending[i]
 
+        # Each period uses its own writable session so that to_zarr(append_dim=)
+        # on the next period reads the committed store and finds the time axis.
+        # Icechunk 2.x sessions do not expose uncommitted writes to subsequent
+        # zarr.open_group calls, so batching writes within one session breaks the
+        # append — committing per period is the correct pattern.
+        session = repo.writable_session("main")
+
         if not spec.time_dim:
-            # Static dataset: single write, no append dimension.
             ds.to_zarr(session.store, mode="w")
         elif i == 0 and is_first_write:
             ds.to_zarr(session.store, mode="w")
         else:
             ds.to_zarr(session.store, append_dim="time")
 
-        should_commit = (i + 1) % plugin.commit_batch_size == 0 or (i + 1) == len(pending)
-        if should_commit:
-            session.commit(f"ingest up to {period_id}")
-            logger.info("Committed: up to %s (%d/%d)", period_id, i + 1, len(pending))
-            if save_cursor:
-                save_cursor({"last_committed": period_id})
-            if (i + 1) < len(pending):
-                # Fresh writable session for the next batch.
-                session = repo.writable_session("main")
+        session.commit(f"ingest: {period_id}")
+
+        # Save cursor at commit_batch_size intervals and at the end.
+        # commit_batch_size controls resume granularity (cursor save frequency),
+        # not commit frequency — every period is committed for correctness.
+        if save_cursor and ((i + 1) % plugin.commit_batch_size == 0 or (i + 1) == len(pending)):
+            save_cursor({"last_committed": period_id})
+            logger.info("Cursor saved: up to %s (%d/%d)", period_id, i + 1, len(pending))
+
+        logger.debug("Committed: %s (%d/%d)", period_id, i + 1, len(pending))
 
         if on_progress:
             on_progress(done=done_offset + i + 1, total=len(all_periods), message=f"Wrote {period_id}")

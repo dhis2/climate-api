@@ -324,3 +324,31 @@ def test_load_plugin_raises_for_non_protocol() -> None:
 
 def test_read_committed_period_ids_empty_when_no_store(tmp_path: Path) -> None:
     assert read_committed_period_ids(tmp_path / "nostore.icechunk", "monthly") == set()
+
+
+# ---------------------------------------------------------------------------
+# Era5LandPlugin._build_periods (unit tests, no network)
+# ---------------------------------------------------------------------------
+
+def test_era5land_build_periods_respects_hour_component() -> None:
+    from climate_api.ingest.plugins.era5_land import Era5LandPlugin
+
+    plugin = Era5LandPlugin(variable="t2m")
+    periods = plugin._build_periods("2024-01-01T06", "2024-01-01T08")
+    assert periods == ["2024-01-01T06", "2024-01-01T07", "2024-01-01T08"]
+
+
+def test_era5land_build_periods_single_hour() -> None:
+    from climate_api.ingest.plugins.era5_land import Era5LandPlugin
+
+    plugin = Era5LandPlugin(variable="t2m")
+    periods = plugin._build_periods("2024-01-01T00", "2024-01-01T00")
+    assert periods == ["2024-01-01T00"]
+
+
+def test_era5land_build_periods_spans_months() -> None:
+    from climate_api.ingest.plugins.era5_land import Era5LandPlugin
+
+    plugin = Era5LandPlugin(variable="t2m")
+    periods = plugin._build_periods("2024-01-31T23", "2024-02-01T01")
+    assert periods == ["2024-01-31T23", "2024-02-01T00", "2024-02-01T01"]
