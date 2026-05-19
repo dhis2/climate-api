@@ -120,7 +120,7 @@ class TestWorldPopPlugin:
         assert spec.crs == 4326
         assert spec.time_dim is True
         assert spec.dtype == np.dtype("float32")
-        assert math.isnan(spec.nodata)
+        assert spec.nodata is not None and math.isnan(spec.nodata)
         assert spec.shape[0] > 0 and spec.shape[1] > 0
 
     def test_probe_estimate_shape_proportional_to_bbox(self) -> None:
