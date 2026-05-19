@@ -19,6 +19,11 @@ class GridSpec:
     attributes before the first period is written. Set time_dim=False for
     static (time-invariant) datasets — the orchestrator branches on this flag
     and issues a single write with no append dimension.
+
+    extra_dims: optional non-spatial, non-time dimensions in the store, e.g.
+        {"age_group": 20, "sex": 2}. The orchestrator does not use this field;
+        it exists for plugin authors who need to document multidimensional
+        stores and for future orchestrator extensions.
     """
 
     shape: tuple[int, int]
@@ -29,6 +34,7 @@ class GridSpec:
     x_dim: str = "x"
     y_dim: str = "y"
     attrs: dict[str, Any] = field(default_factory=dict)
+    extra_dims: dict[str, int] = field(default_factory=dict)
 
 
 @runtime_checkable

@@ -16,6 +16,7 @@ import asyncio
 import importlib
 import logging
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +159,20 @@ async def run_ingest(
     if rechunk_time is not None and spec.time_dim:
         logger.info("Rechunking %s after ingest: time chunk → %d", store_path, rechunk_time)
         rechunk_store(store_path, time_chunk=rechunk_time)
+        # Reopen repo so expire_snapshots sees the post-rechunk HEAD.
+        repo = open_or_create_repo(store_path)
+
+    # Prune intermediate ingest snapshots: each period commit created one
+    # snapshot; only the final state (HEAD of "main") needs to be retained.
+    # expire_snapshots marks older snapshots as expired without deleting chunk
+    # data — garbage_collect would be needed to reclaim manifest storage.
+    # The "main" branch ref preserves HEAD even when it appears in the expired set.
+    try:
+        expired = repo.expire_snapshots(older_than=datetime.now(tz=timezone.utc))
+        if expired:
+            logger.info("Expired %d intermediate snapshots from %s", len(expired), store_path)
+    except Exception:
+        logger.warning("expire_snapshots failed for %s — store remains valid", store_path, exc_info=True)
 
 
 def run_ingest_sync(
