@@ -125,7 +125,12 @@ class Era5LandPlugin:
             ds = ds.expand_dims("time").assign_coords(time=[ds.valid_time.values])
 
         ds = ds.rename({"longitude": "x", "latitude": "y"})
-        return ds.load()
+        ds = ds.load()
+        # Strip zarr v2 codec encoding (Blosc) so the orchestrator writes
+        # with zarr v3-compatible defaults into the icechunk store.
+        for name in list(ds.data_vars) + list(ds.coords):
+            ds[name].encoding.clear()
+        return ds
 
     # ------------------------------------------------------------------
     # Period generation
