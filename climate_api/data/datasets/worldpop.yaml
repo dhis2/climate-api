@@ -17,6 +17,11 @@
       end: "2030"
       resolution: P1Y
   ingestion:
+    plugin: climate_api.ingest.plugins.worldpop.WorldPopPlugin
+    params:
+      # country_code is required — set the ISO 3166-1 alpha-3 code for your deployment
+      # e.g. country_code: NOR
+      version: global2
     function: dhis2eo.data.worldpop.pop_total.yearly.download
     default_params:
       version: global2

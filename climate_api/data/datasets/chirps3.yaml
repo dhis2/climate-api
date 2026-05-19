@@ -15,6 +15,10 @@
       begin: "1981-01-01"
       resolution: P1D
   ingestion:
+    plugin: climate_api.ingest.plugins.chirps3.Chirps3Plugin
+    params:
+      stage: final
+      flavor: rnl
     function: dhis2eo.data.chc.chirps3.daily.download
   units: mm
   resolution: 5 km x 5 km
