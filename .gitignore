@@ -8,3 +8,4 @@ eo_api.egg-info/
 data/
 docs/internal/
 site/
+.ipynb_checkpoints/
