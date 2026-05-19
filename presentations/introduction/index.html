@@ -1,1190 +1,1744 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Open Climate Service — Introduction</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-  <style>
-    /* ── Base ─────────────────────────────────────────────────── */
-    :root {
-      --blue:       #147cd7;
-      --blue-dark:  #0d5fa3;
-      --blue-light: #e8f4fd;
-      --teal:       #00897b;
-      --teal-light: #e0f2f1;
-      --amber:      #f59e0b;
-      --amber-light:#fffbeb;
-      --green:      #16a34a;
-      --green-light:#f0fdf4;
-      --purple:     #7c3aed;
-      --purple-light:#f5f3ff;
-      --navy:       #0d2137;
-      --text:       #1a1a2e;
-      --muted:      #64748b;
-      --border:     #e2e8f0;
-      --bg:         #f8fafd;
-    }
-
-    .reveal {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      color: var(--text);
-      background: #fff;
-    }
-
-    .reveal h1, .reveal h2, .reveal h3 {
-      font-family: 'Inter', system-ui, sans-serif;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      text-transform: none;
-      color: var(--text);
-    }
-
-    .reveal h1 { font-size: 2.6em; }
-    .reveal h2 { font-size: 1.6em; margin-bottom: 0.6em; }
-    .reveal h3 { font-size: 1.1em; font-weight: 600; }
-    .reveal p  { font-size: 0.88em; line-height: 1.65; }
-    .reveal ul { list-style: none; padding: 0; }
-    .reveal ul li { padding: 0.25em 0; font-size: 0.85em; }
-    .reveal ul li::before { content: '→ '; color: var(--blue); font-weight: 600; }
-
-    .reveal section { padding: 20px 60px; }
-    .reveal .slides > section { padding: 0; }
-
-    /* ── Slide: Title ─────────────────────────────────────────── */
-    .slide-title {
-      background: linear-gradient(145deg, var(--navy) 0%, #1a3a5c 60%, #0d4a6e 100%);
-      color: #fff !important;
-      display: flex !important;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 60px !important;
-      text-align: center;
-    }
-
-    .slide-title h1 {
-      color: #fff;
-      font-size: 3em;
-      margin-bottom: 0.3em;
-    }
-
-    .slide-title .tagline {
-      color: rgba(255,255,255,0.8);
-      font-size: 0.95em;
-      max-width: 700px;
-      line-height: 1.7;
-      margin: 0 auto 2em;
-    }
-
-    .slide-title .badge {
-      display: inline-block;
-      background: rgba(255,255,255,0.15);
-      border: 1px solid rgba(255,255,255,0.25);
-      color: rgba(255,255,255,0.9);
-      padding: 6px 18px;
-      border-radius: 20px;
-      font-size: 0.75em;
-      letter-spacing: 0.05em;
-    }
-
-    .title-accent {
-      color: #5bc4f5;
-    }
-
-    /* ── Slide: generic content ───────────────────────────────── */
-    .slide-content {
-      padding: 50px 70px !important;
-      background: #fff;
-      min-height: 100vh;
-      display: flex !important;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .slide-content h2 {
-      border-bottom: 3px solid var(--blue);
-      padding-bottom: 0.35em;
-      margin-bottom: 0.7em;
-      display: inline-block;
-    }
-
-    /* ── Slide: dark accent ───────────────────────────────────── */
-    .slide-dark {
-      background: var(--navy) !important;
-      color: #fff !important;
-    }
-    .slide-dark h2 { color: #fff; border-color: #5bc4f5; }
-    .slide-dark p  { color: rgba(255,255,255,0.85); }
-    .slide-dark ul li { color: rgba(255,255,255,0.85); }
-    .slide-dark ul li::before { color: #5bc4f5; }
-
-    /* ── Provider grid (problem slide) ───────────────────────── */
-    .provider-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      margin: 20px 0;
-    }
-
-    .provider-chip {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 8px;
-      text-align: center;
-      font-size: 0.72em;
-    }
-
-    .provider-chip .name { font-weight: 600; display: block; margin-bottom: 3px; }
-    .provider-chip .meta { color: var(--muted); font-size: 0.85em; }
-
-    .problem-message {
-      background: #fff3cd;
-      border-left: 4px solid var(--amber);
-      border-radius: 0 8px 8px 0;
-      padding: 14px 20px;
-      margin-top: 20px;
-      font-size: 0.85em;
-      color: #7c5200;
-    }
-
-    /* ── Lessons ──────────────────────────────────────────────── */
-    .lessons-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 20px;
-    }
-
-    .lesson-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-    }
-
-    .lesson-card .num {
-      font-size: 2em;
-      font-weight: 800;
-      color: var(--blue);
-      opacity: 0.25;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-
-    .lesson-card h3 { font-size: 0.92em; margin-bottom: 6px; }
-    .lesson-card p  { font-size: 0.78em; color: var(--muted); margin: 0; }
-
-    /* ── Evolution diagram ────────────────────────────────────── */
-    .stage-label {
-      display: inline-block;
-      font-size: 0.7em;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 4px 14px;
-      border-radius: 20px;
-      margin-bottom: 20px;
-    }
-
-    .stage-label.s1 { background: var(--amber-light); color: #92400e; }
-    .stage-label.s2 { background: var(--blue-light);  color: var(--blue-dark); }
-    .stage-label.s3 { background: var(--green-light); color: #15803d; }
-
-    .diagram {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0;
-      margin: 0 auto;
-      width: 100%;
-    }
-
-    .diagram-row {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-    }
-
-    .box {
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 0.72em;
-      font-weight: 600;
-      text-align: center;
-      min-width: 80px;
-      border: 2px solid transparent;
-      line-height: 1.3;
-    }
-
-    .box-source {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
-      color: #475569;
-    }
-
-    .box-gee {
-      background: var(--amber-light);
-      border-color: var(--amber);
-      color: #92400e;
-      min-width: 160px;
-      padding: 14px 20px;
-      font-size: 0.82em;
-    }
-
-    .box-tools {
-      background: var(--blue-light);
-      border-color: var(--blue);
-      color: var(--blue-dark);
-      min-width: 160px;
-      padding: 14px 20px;
-      font-size: 0.82em;
-    }
-
-    .box-ocs {
-      background: var(--green-light);
-      border-color: var(--green);
-      color: #15803d;
-      min-width: 220px;
-      padding: 16px 24px;
-      font-size: 0.9em;
-    }
-
-    .box-consumer {
-      background: var(--purple-light);
-      border-color: #a78bfa;
-      color: var(--purple);
-    }
-
-    .box-dhis2 {
-      background: #eff6ff;
-      border-color: #93c5fd;
-      color: #1d4ed8;
-      min-width: 160px;
-    }
-
-    .box-label {
-      font-size: 0.65em;
-      font-weight: 400;
-      color: var(--muted);
-      display: block;
-      margin-top: 2px;
-    }
-
-    /* Connectors */
-    .conn-v {
-      width: 3px;
-      height: 28px;
-      background: repeating-linear-gradient(
-        180deg,
-        var(--blue) 0px, var(--blue) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 3px 9px;
-      animation: flow-v 0.5s linear infinite;
-      margin: 0 auto;
-    }
-
-    .conn-v.amber {
-      background: repeating-linear-gradient(
-        180deg, var(--amber) 0px, var(--amber) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 3px 9px;
-    }
-
-    .conn-v.green {
-      background: repeating-linear-gradient(
-        180deg, var(--green) 0px, var(--green) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 3px 9px;
-    }
-
-    @keyframes flow-v {
-      0%   { background-position: 0 0; }
-      100% { background-position: 0 9px; }
-    }
-
-    .conn-bus {
-      width: 80%;
-      height: 3px;
-      background: repeating-linear-gradient(
-        90deg,
-        var(--blue) 0px, var(--blue) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 9px 3px;
-      animation: flow-h 0.5s linear infinite;
-      border-radius: 2px;
-    }
-
-    .conn-bus.amber {
-      background: repeating-linear-gradient(
-        90deg, var(--amber) 0px, var(--amber) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 9px 3px;
-    }
-
-    .conn-bus.green {
-      background: repeating-linear-gradient(
-        90deg, var(--green) 0px, var(--green) 5px,
-        transparent 5px, transparent 9px
-      );
-      background-size: 9px 3px;
-    }
-
-    @keyframes flow-h {
-      0%   { background-position: 0 0; }
-      100% { background-position: 9px 0; }
-    }
-
-    .conn-fan {
-      width: 70%;
-      display: flex;
-      justify-content: center;
-      position: relative;
-      height: 24px;
-      margin: 0 auto;
-    }
-
-    /* Stage insight callout */
-    .insight {
-      margin-top: 18px;
-      padding: 12px 18px;
-      border-radius: 8px;
-      font-size: 0.78em;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-    }
-
-    .insight.amber { background: var(--amber-light); color: #92400e; border: 1px solid #fcd34d; }
-    .insight.blue  { background: var(--blue-light);  color: var(--blue-dark); border: 1px solid #93c5fd; }
-    .insight.green { background: var(--green-light); color: #15803d; border: 1px solid #86efac; }
-
-    .insight .icon { font-size: 1.3em; flex-shrink: 0; }
-
-    /* ── Data types grid ──────────────────────────────────────── */
-    .data-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin: 20px 0;
-    }
-
-    .data-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-    }
-
-    .data-card .icon { font-size: 1.6em; margin-bottom: 8px; }
-    .data-card h3 { font-size: 0.88em; margin-bottom: 4px; }
-    .data-card p  { font-size: 0.75em; color: var(--muted); margin: 0; }
-
-    /* ── Gridded data comparison ──────────────────────────────── */
-    .comparison {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 16px;
-      margin-top: 20px;
-    }
-
-    .comparison-panel {
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-    }
-
-    .comparison-panel.bad  { background: #fff1f2; border: 1px solid #fecdd3; }
-    .comparison-panel.ok   { background: #fefce8; border: 1px solid #fef08a; }
-    .comparison-panel.good { background: var(--green-light); border: 1px solid #86efac; }
-
-    .comparison-panel .vis {
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-      font-size: 2.2em;
-    }
-
-    .comparison-panel h3 { font-size: 0.88em; margin-bottom: 6px; }
-    .comparison-panel p  { font-size: 0.75em; color: var(--muted); margin: 0; }
-
-    /* ── Standards ────────────────────────────────────────────── */
-    .standards-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-top: 20px;
-    }
-
-    .standard-item {
-      background: var(--bg);
-      border-radius: 10px;
-      padding: 16px;
-      border-left: 4px solid var(--blue);
-    }
-
-    .standard-item h3 { font-size: 0.88em; margin-bottom: 4px; }
-    .standard-item p  { font-size: 0.76em; color: var(--muted); margin: 0; }
-
-    .fair-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .fair-item {
-      background: var(--purple-light);
-      border-radius: 10px;
-      padding: 14px;
-      text-align: center;
-      border: 1px solid #c4b5fd;
-    }
-
-    .fair-item .letter {
-      font-size: 2em;
-      font-weight: 800;
-      color: var(--purple);
-      line-height: 1;
-      margin-bottom: 4px;
-    }
-
-    .fair-item .word { font-size: 0.8em; font-weight: 600; }
-    .fair-item .desc { font-size: 0.7em; color: var(--muted); }
-
-    /* ── HISP / sovereignty ───────────────────────────────────── */
-    .pillars {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 16px;
-      margin-top: 20px;
-    }
-
-    .pillar {
-      border-radius: 12px;
-      padding: 22px 18px;
-      text-align: center;
-      background: var(--bg);
-      border: 1px solid var(--border);
-    }
-
-    .pillar .icon { font-size: 2em; margin-bottom: 10px; }
-    .pillar h3 { font-size: 0.9em; margin-bottom: 6px; }
-    .pillar p  { font-size: 0.76em; color: var(--muted); margin: 0; }
-
-    /* ── Team ─────────────────────────────────────────────────── */
-    .team-grid {
-      display: flex;
-      justify-content: center;
-      gap: 24px;
-      flex-wrap: wrap;
-      margin-top: 24px;
-    }
-
-    .team-member {
-      text-align: center;
-      width: 120px;
-    }
-
-    .team-avatar {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--blue), var(--teal));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5em;
-      color: white;
-      font-weight: 700;
-      margin: 0 auto 10px;
-      box-shadow: 0 4px 12px rgba(20,124,215,0.25);
-    }
-
-    .team-member h3 { font-size: 0.82em; margin: 0; }
-
-    /* ── Roadmap ──────────────────────────────────────────────── */
-    .roadmap {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 20px;
-    }
-
-    .roadmap-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      background: var(--bg);
-      border-radius: 10px;
-      padding: 14px 18px;
-      border: 1px solid var(--border);
-    }
-
-    .roadmap-item .dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 3px;
-    }
-
-    .roadmap-item .dot.now  { background: var(--green); box-shadow: 0 0 0 4px var(--green-light); }
-    .roadmap-item .dot.soon { background: var(--blue);  box-shadow: 0 0 0 4px var(--blue-light); }
-    .roadmap-item .dot.later{ background: var(--muted); box-shadow: 0 0 0 4px #f1f5f9; }
-
-    .roadmap-item h3 { font-size: 0.86em; margin-bottom: 3px; }
-    .roadmap-item p  { font-size: 0.76em; color: var(--muted); margin: 0; }
-
-    /* ── Two-column layout ────────────────────────────────────── */
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      align-items: center;
-    }
-
-    /* ── Closing slide ────────────────────────────────────────── */
-    .slide-closing {
-      background: linear-gradient(145deg, var(--navy), #1a3a5c) !important;
-      color: #fff !important;
-      display: flex !important;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      min-height: 100vh;
-      padding: 60px !important;
-    }
-
-    .slide-closing h2 { color: #fff; border-color: #5bc4f5; font-size: 1.8em; }
-    .slide-closing p  { color: rgba(255,255,255,0.8); }
-
-    .link-row {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-top: 28px;
-    }
-
-    .link-btn {
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.25);
-      color: #fff;
-      padding: 10px 22px;
-      border-radius: 8px;
-      font-size: 0.82em;
-      font-weight: 500;
-      text-decoration: none;
-    }
-
-    .link-btn:hover { background: rgba(255,255,255,0.2); }
-
-    /* ── Reveal overrides ─────────────────────────────────────── */
-    .reveal .progress { background: rgba(0,0,0,0.1); }
-    .reveal .progress span { background: var(--blue); }
-    .reveal .controls { color: var(--blue); }
-    .reveal .slide-number { font-family: 'Inter', sans-serif; font-size: 0.7em; }
-
-    .reveal .fragment { opacity: 0; }
-    .reveal .fragment.visible { opacity: 1; }
-
-    /* Pulse animation for key boxes */
-    @keyframes pulse-ring {
-      0%   { box-shadow: 0 0 0 0 rgba(20,124,215,0.3); }
-      70%  { box-shadow: 0 0 0 10px rgba(20,124,215,0); }
-      100% { box-shadow: 0 0 0 0 rgba(20,124,215,0); }
-    }
-
-    .pulse { animation: pulse-ring 2s ease-out infinite; }
-
-    /* Section number chip */
-    .section-chip {
-      display: inline-block;
-      background: var(--blue-light);
-      color: var(--blue);
-      font-size: 0.65em;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      padding: 3px 12px;
-      border-radius: 12px;
-      margin-bottom: 10px;
-    }
-  </style>
-</head>
-<body>
-<div class="reveal">
-<div class="slides">
-
-
-<!-- ── 1. TITLE ─────────────────────────────────────────────── -->
-<section class="slide-title">
-  <div style="margin-bottom:20px; opacity:0.6; font-size:0.75em; letter-spacing:0.1em; text-transform:uppercase; color:rgba(255,255,255,0.7)">DHIS2 &nbsp;·&nbsp; 2026</div>
-  <h1>Open Climate<br><span class="title-accent">Service</span></h1>
-  <p class="tagline">
-    Climate and earth observation data is distributed across dozens of providers —
-    each with different APIs, formats, and access mechanisms.
-    Open Climate Service is an open-source platform that cuts through this complexity
-    to deliver tailored data for climate-smart decision-making.
-  </p>
-  <span class="badge">dhis2.github.io/climate-api</span>
-</section>
-
-
-<!-- ── 2. THE PROBLEM ────────────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">The Challenge</span>
-  <h2>A Deeply Fragmented Landscape</h2>
-  <div class="provider-grid">
-    <div class="provider-chip"><span class="name">ECMWF / ERA5</span><span class="meta">Temperature, wind, humidity</span></div>
-    <div class="provider-chip"><span class="name">CHIRPS / CHC</span><span class="meta">Rainfall estimates</span></div>
-    <div class="provider-chip"><span class="name">NASA / MODIS</span><span class="meta">Elevation, land use, NDVI</span></div>
-    <div class="provider-chip"><span class="name">WorldPop</span><span class="meta">Population distribution</span></div>
-    <div class="provider-chip"><span class="name">Copernicus</span><span class="meta">Satellite observations</span></div>
-    <div class="provider-chip"><span class="name">DestinE</span><span class="meta">ERA5-Land hourly</span></div>
-    <div class="provider-chip"><span class="name">ENACTS / NMHSs</span><span class="meta">Local station data</span></div>
-    <div class="provider-chip"><span class="name">Sentinel Hub</span><span class="meta">Optical &amp; radar imagery</span></div>
-    <div class="provider-chip"><span class="name">Global Flood DB</span><span class="meta">Flood extent records</span></div>
-    <div class="provider-chip"><span class="name">Custom sources</span><span class="meta">Surveys, health systems, IoT</span></div>
-  </div>
-  <div class="problem-message">
-    Each provider has a different API, data format, coordinate system, and access mechanism.
-    Making this accessible to every country — without large technical teams — is the core problem we are solving.
-  </div>
-</section>
-
-
-<!-- ── 3. WHAT IS A CLIMATE SERVICE ─────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">Context</span>
-  <h2>What Is a Climate Service?</h2>
-  <div class="two-col">
-    <div>
-      <p style="font-size:1.05em; line-height:1.75; color:#334155;">
-        A <strong>climate service</strong> turns raw climate data into
-        actionable information for decisions — agriculture, health,
-        water management, disaster risk, urban planning.
-      </p>
-      <p style="color:var(--muted); font-size:0.82em; margin-top:16px;">
-        The World Meteorological Organization (WMO) defines climate services
-        as "climate information developed and delivered to meet a user's needs."
-        Open Climate Service is designed to make this possible for any country,
-        regardless of technical capacity.
-      </p>
-      <p style="color:var(--muted); font-size:0.82em;">
-        Our entry point is health — but the platform is intentionally generic.
-        The same service can support disease modelling, food security early warning,
-        or national climate reporting.
-      </p>
-    </div>
-    <div>
-      <div class="data-grid" style="grid-template-columns:1fr 1fr; margin:0;">
-        <div class="data-card"><div class="icon">🏥</div><h3>Health</h3><p>Malaria, dengue, cholera risk</p></div>
-        <div class="data-card"><div class="icon">🌾</div><h3>Agriculture</h3><p>Drought, yield forecasting</p></div>
-        <div class="data-card"><div class="icon">💧</div><h3>Water</h3><p>Flood risk, water stress</p></div>
-        <div class="data-card"><div class="icon">🏙️</div><h3>Urban</h3><p>Heat stress, air quality</p></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 4. LESSONS LEARNED ────────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">2½ Years of Learning</span>
-  <h2>What We Have Learned</h2>
-  <div class="lessons-grid">
-    <div class="lesson-card fragment">
-      <div class="num">01</div>
-      <h3>The field is more complex than expected</h3>
-      <p>Data formats, projections, temporal gaps, and provider-specific quirks demand a flexible architecture — not a rigid pipeline.</p>
-    </div>
-    <div class="lesson-card fragment">
-      <div class="num">02</div>
-      <h3>Countries want to own their data</h3>
-      <p>Strong demand for local data sources, national hosting, and independence from global platform dependencies like Google Earth Engine.</p>
-    </div>
-    <div class="lesson-card fragment">
-      <div class="num">03</div>
-      <h3>Innovation comes from the countries</h3>
-      <p>The best ideas have come from HISP groups and country teams. A bottom-up approach consistently beats top-down product design.</p>
-    </div>
-    <div class="lesson-card fragment">
-      <div class="num">04</div>
-      <h3>Resolution and local data matter</h3>
-      <p>National teams need higher-resolution data and the ability to blend global datasets with local station observations.</p>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 5. STAGE 1: CLIMATE APP + GEE ─────────────────────────── -->
-<section class="slide-content" data-auto-animate>
-  <span class="section-chip">The Journey — Stage 1</span>
-  <h2>Climate App + Google Earth Engine</h2>
-  <div class="two-col" style="gap:40px; align-items:start;">
-    <div>
-      <span class="stage-label s1">2021 – 2023</span>
-      <div class="diagram">
-        <div class="diagram-row">
-          <div class="box box-source">ECMWF</div>
-          <div class="box box-source">CHIRPS</div>
-          <div class="box box-source">NASA</div>
-          <div class="box box-source">WorldPop</div>
-        </div>
-        <div style="width:60%; margin:0 auto;"><div class="conn-bus amber"></div></div>
-        <div class="conn-v amber" style="height:20px;"></div>
-        <div class="diagram-row">
-          <div class="box box-gee pulse">
-            Google Earth Engine
-            <span class="box-label">External platform · Google-owned</span>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Open Climate Service — Introduction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"
+    />
+    <style>
+      /* ── Base ─────────────────────────────────────────────────── */
+      :root {
+        --blue: #147cd7;
+        --blue-dark: #0d5fa3;
+        --blue-light: #e8f4fd;
+        --teal: #00897b;
+        --teal-light: #e0f2f1;
+        --amber: #f59e0b;
+        --amber-light: #fffbeb;
+        --green: #16a34a;
+        --green-light: #f0fdf4;
+        --purple: #7c3aed;
+        --purple-light: #f5f3ff;
+        --navy: #0d2137;
+        --text: #1a1a2e;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --bg: #f8fafd;
+      }
+
+      .reveal {
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 25px;
+        color: var(--text);
+        background: #fff;
+      }
+
+      .reveal h1,
+      .reveal h2,
+      .reveal h3 {
+        font-family: "Inter", system-ui, sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        text-transform: none;
+        color: var(--text);
+      }
+
+      .reveal h1 {
+        font-size: 2.8em;
+      }
+      .reveal h2 {
+        font-size: 1.8em;
+        margin-bottom: 0.4em;
+      }
+      .reveal h3 {
+        font-size: 1.05em;
+        font-weight: 600;
+      }
+      .reveal p {
+        font-size: 0.9em;
+        line-height: 1.65;
+      }
+      .reveal ul {
+        list-style: none;
+        padding: 0;
+      }
+      .reveal ul li {
+        padding: 0.25em 0;
+        font-size: 0.88em;
+      }
+      .reveal ul li::before {
+        content: "→ ";
+        color: var(--blue);
+        font-weight: 600;
+      }
+
+      .reveal .slides {
+        text-align: left;
+      }
+
+      /* All sections fill the 720px slide frame and flex-center their content */
+      .reveal .slides > section {
+        height: 720px !important;
+        display: flex !important;
+        flex-direction: column;
+        justify-content: center;
+        box-sizing: border-box;
+      }
+
+      /* ── Slide: Title ─────────────────────────────────────────── */
+      .slide-title {
+        background: #fff;
+        color: var(--text) !important;
+        align-items: center;
+        padding: 80px 100px;
+        text-align: center;
+      }
+
+      .slide-title h1 {
+        color: var(--text);
+        font-size: 3em;
+        margin-bottom: 0.5em;
+        white-space: nowrap;
+      }
+
+      .slide-title .tagline {
+        color: var(--muted);
+        font-size: 1.1em;
+        max-width: 750px;
+        line-height: 1.7;
+        margin: 0 auto;
+      }
+
+      .slide-title .tagline + .tagline {
+        margin-top: 0.8em;
+      }
+
+      /* ── Slide: generic content ───────────────────────────────── */
+      .slide-content {
+        padding: 72px 90px;
+        background: #fff;
+      }
+
+      .slide-content h2 {
+        border-bottom: 3px solid var(--blue);
+        padding-bottom: 0.3em;
+        margin-bottom: 0.6em;
+        display: inline-block;
+      }
+
+      /* ── Slide: dark accent ───────────────────────────────────── */
+      .slide-dark {
+        background: #fff !important;
+        color: var(--text) !important;
+      }
+      .slide-dark h2 {
+        color: var(--text);
+        border-color: var(--blue);
+      }
+      .slide-dark p {
+        color: var(--muted);
+      }
+      .slide-dark ul li {
+        color: var(--text);
+      }
+      .slide-dark ul li::before {
+        color: var(--blue);
+      }
+
+      /* ── Provider grid (problem slide) ───────────────────────── */
+      .provider-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+        margin: 26px 0;
+      }
+
+      .provider-chip {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 22px 14px;
+        text-align: center;
+        font-size: 0.88em;
+      }
+
+      .provider-chip .name {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 6px;
+      }
+      .provider-chip .meta {
+        color: var(--muted);
+        font-size: 0.85em;
+      }
+
+      .problem-message {
+        background: #fff3cd;
+        border-left: 5px solid var(--amber);
+        border-radius: 0 10px 10px 0;
+        padding: 20px 28px;
+        margin-top: 26px;
+        font-size: 0.88em;
+        color: #7c5200;
+        line-height: 1.65;
+      }
+
+      /* ── Lessons ──────────────────────────────────────────────── */
+      .lessons-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 24px;
+      }
+
+      .lesson-card {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 26px;
+      }
+
+      .lesson-card .num {
+        font-size: 2em;
+        font-weight: 800;
+        color: var(--blue);
+        opacity: 0.25;
+        line-height: 1;
+        margin-bottom: 10px;
+      }
+
+      .lesson-card h3 {
+        font-size: 0.96em;
+        margin-bottom: 8px;
+      }
+      .lesson-card p {
+        font-size: 0.82em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ── Evolution diagram ────────────────────────────────────── */
+      .stage-label {
+        display: inline-block;
+        font-size: 0.7em;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 4px 14px;
+        border-radius: 20px;
+        margin-bottom: 20px;
+      }
+
+      .stage-label.s1 {
+        background: var(--amber-light);
+        color: #92400e;
+      }
+      .stage-label.s2 {
+        background: var(--blue-light);
+        color: var(--blue-dark);
+      }
+      .stage-label.s3 {
+        background: var(--green-light);
+        color: #15803d;
+      }
+
+      .diagram {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      .diagram-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+      }
+
+      .box {
+        border-radius: 10px;
+        padding: 14px 18px;
+        font-size: 0.82em;
+        font-weight: 600;
+        text-align: center;
+        min-width: 90px;
+        border: 2px solid transparent;
+        line-height: 1.3;
+      }
+
+      .box-source {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        color: #475569;
+      }
+
+      .box-gee {
+        background: var(--amber-light);
+        border-color: var(--amber);
+        color: #92400e;
+        min-width: 160px;
+        padding: 14px 20px;
+        font-size: 0.82em;
+      }
+
+      .box-tools {
+        background: var(--blue-light);
+        border-color: var(--blue);
+        color: var(--blue-dark);
+        min-width: 160px;
+        padding: 14px 20px;
+        font-size: 0.82em;
+      }
+
+      .box-ocs {
+        background: var(--green-light);
+        border-color: var(--green);
+        color: #15803d;
+        min-width: 220px;
+        padding: 16px 24px;
+        font-size: 0.9em;
+      }
+
+      .box-consumer {
+        background: var(--purple-light);
+        border-color: #a78bfa;
+        color: var(--purple);
+      }
+
+      .box-dhis2 {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+        min-width: 160px;
+      }
+
+      .box-label {
+        font-size: 0.65em;
+        font-weight: 400;
+        color: var(--muted);
+        display: block;
+        margin-top: 2px;
+      }
+
+      /* Connectors */
+      .conn-v {
+        width: 3px;
+        height: 28px;
+        background: repeating-linear-gradient(
+          180deg,
+          var(--blue) 0px,
+          var(--blue) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 3px 9px;
+        animation: flow-v 0.5s linear infinite;
+        margin: 0 auto;
+      }
+
+      .conn-v.amber {
+        background: repeating-linear-gradient(
+          180deg,
+          var(--amber) 0px,
+          var(--amber) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 3px 9px;
+      }
+
+      .conn-v.green {
+        background: repeating-linear-gradient(
+          180deg,
+          var(--green) 0px,
+          var(--green) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 3px 9px;
+      }
+
+      @keyframes flow-v {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 0 9px;
+        }
+      }
+
+      .conn-bus {
+        width: 80%;
+        height: 3px;
+        background: repeating-linear-gradient(
+          90deg,
+          var(--blue) 0px,
+          var(--blue) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 9px 3px;
+        animation: flow-h 0.5s linear infinite;
+        border-radius: 2px;
+      }
+
+      .conn-bus.amber {
+        background: repeating-linear-gradient(
+          90deg,
+          var(--amber) 0px,
+          var(--amber) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 9px 3px;
+      }
+
+      .conn-bus.green {
+        background: repeating-linear-gradient(
+          90deg,
+          var(--green) 0px,
+          var(--green) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+        background-size: 9px 3px;
+      }
+
+      @keyframes flow-h {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 9px 0;
+        }
+      }
+
+      .conn-fan {
+        width: 70%;
+        display: flex;
+        justify-content: center;
+        position: relative;
+        height: 24px;
+        margin: 0 auto;
+      }
+
+      /* Stage insight callout */
+      .insight {
+        margin-top: 18px;
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-size: 0.78em;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .insight.amber {
+        background: var(--amber-light);
+        color: #92400e;
+        border: 1px solid #fcd34d;
+      }
+      .insight.blue {
+        background: var(--blue-light);
+        color: var(--blue-dark);
+        border: 1px solid #93c5fd;
+      }
+      .insight.green {
+        background: var(--green-light);
+        color: #15803d;
+        border: 1px solid #86efac;
+      }
+
+      .insight .icon {
+        font-size: 1.3em;
+        flex-shrink: 0;
+      }
+
+      /* ── Data types grid ──────────────────────────────────────── */
+      .data-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin: 24px 0;
+      }
+
+      .data-card {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px 20px;
+      }
+
+      .data-card .icon {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+      .data-card h3 {
+        font-size: 0.96em;
+        margin-bottom: 6px;
+      }
+      .data-card p {
+        font-size: 0.82em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ── Gridded data comparison ──────────────────────────────── */
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        margin-top: 20px;
+      }
+
+      .comparison-panel {
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+      }
+
+      .comparison-panel.bad {
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+      }
+      .comparison-panel.ok {
+        background: #fefce8;
+        border: 1px solid #fef08a;
+      }
+      .comparison-panel.good {
+        background: var(--green-light);
+        border: 1px solid #86efac;
+      }
+
+      .comparison-panel .vis {
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+        font-size: 2.2em;
+      }
+
+      .comparison-panel h3 {
+        font-size: 0.88em;
+        margin-bottom: 6px;
+      }
+      .comparison-panel p {
+        font-size: 0.75em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ── Standards ────────────────────────────────────────────── */
+      .standards-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .standard-item {
+        background: var(--bg);
+        border-radius: 10px;
+        padding: 16px;
+        border-left: 4px solid var(--blue);
+      }
+
+      .standard-item h3 {
+        font-size: 0.88em;
+        margin-bottom: 4px;
+      }
+      .standard-item p {
+        font-size: 0.76em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .fair-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .fair-item {
+        background: var(--purple-light);
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+        border: 1px solid #c4b5fd;
+      }
+
+      .fair-item .letter {
+        font-size: 2em;
+        font-weight: 800;
+        color: var(--purple);
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+
+      .fair-item .word {
+        font-size: 0.8em;
+        font-weight: 600;
+      }
+      .fair-item .desc {
+        font-size: 0.7em;
+        color: var(--muted);
+      }
+
+      /* ── HISP / sovereignty ───────────────────────────────────── */
+      .pillars {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        margin-top: 20px;
+      }
+
+      .pillar {
+        border-radius: 12px;
+        padding: 22px 18px;
+        text-align: center;
+        background: var(--bg);
+        border: 1px solid var(--border);
+      }
+
+      .pillar .icon {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+      .pillar h3 {
+        font-size: 0.9em;
+        margin-bottom: 6px;
+      }
+      .pillar p {
+        font-size: 0.76em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ── Team ─────────────────────────────────────────────────── */
+      .team-grid {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        flex-wrap: wrap;
+        margin-top: 24px;
+      }
+
+      .team-member {
+        text-align: center;
+        width: 120px;
+      }
+
+      .team-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--blue), var(--teal));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5em;
+        color: white;
+        font-weight: 700;
+        margin: 0 auto 10px;
+        box-shadow: 0 4px 12px rgba(20, 124, 215, 0.25);
+      }
+
+      .team-member h3 {
+        font-size: 0.82em;
+        margin: 0;
+      }
+
+      /* ── Roadmap ──────────────────────────────────────────────── */
+      .roadmap {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .roadmap-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        background: var(--bg);
+        border-radius: 10px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+      }
+
+      .roadmap-item .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 3px;
+      }
+
+      .roadmap-item .dot.now {
+        background: var(--green);
+        box-shadow: 0 0 0 4px var(--green-light);
+      }
+      .roadmap-item .dot.soon {
+        background: var(--blue);
+        box-shadow: 0 0 0 4px var(--blue-light);
+      }
+      .roadmap-item .dot.later {
+        background: var(--muted);
+        box-shadow: 0 0 0 4px #f1f5f9;
+      }
+
+      .roadmap-item h3 {
+        font-size: 0.86em;
+        margin-bottom: 3px;
+      }
+      .roadmap-item p {
+        font-size: 0.76em;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ── Two-column layout ────────────────────────────────────── */
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 50px;
+        align-items: center;
+      }
+
+      /* ── Closing slide ────────────────────────────────────────── */
+      .slide-closing {
+        background: #fff !important;
+        color: var(--text) !important;
+        text-align: center;
+        padding: 60px !important;
+      }
+
+      .slide-closing h2 {
+        color: var(--text);
+        border-color: var(--blue);
+        font-size: 1.8em;
+      }
+      .slide-closing p {
+        color: var(--muted);
+      }
+      .slide-closing .team-member h3 {
+        color: var(--text);
+      }
+
+      .link-row {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 28px;
+      }
+
+      .link-btn {
+        background: var(--blue-light);
+        border: 1px solid #bfdbfe;
+        color: var(--blue-dark);
+        padding: 10px 22px;
+        border-radius: 8px;
+        font-size: 0.82em;
+        font-weight: 500;
+        text-decoration: none;
+      }
+
+      .link-btn:hover {
+        background: #dbeafe;
+      }
+
+      /* ── Reveal overrides ─────────────────────────────────────── */
+      .reveal .progress {
+        background: rgba(0, 0, 0, 0.1);
+      }
+      .reveal .progress span {
+        background: var(--blue);
+      }
+      .reveal .controls {
+        color: var(--blue);
+      }
+      .reveal .slide-number {
+        font-family: "Inter", sans-serif;
+        font-size: 0.7em;
+      }
+
+      .reveal .fragment {
+        opacity: 0;
+      }
+      .reveal .fragment.visible {
+        opacity: 1;
+      }
+
+      /* Pulse animation for key boxes */
+      @keyframes pulse-ring {
+        0% {
+          box-shadow: 0 0 0 0 rgba(20, 124, 215, 0.3);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(20, 124, 215, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(20, 124, 215, 0);
+        }
+      }
+
+      .pulse {
+        animation: pulse-ring 2s ease-out infinite;
+      }
+
+      /* Section number chip */
+      .section-chip {
+        display: block;
+        background: var(--blue-light);
+        color: var(--blue);
+        font-size: 0.65em;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 3px 12px;
+        border-radius: 12px;
+        margin-bottom: 14px;
+        width: fit-content;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <!-- ── 1. TITLE ─────────────────────────────────────────────── -->
+        <section class="slide-title">
+          <h1>Open Climate Service</h1>
+          <p class="tagline">
+            Climate and earth observation data is distributed across dozens of
+            providers — each with different APIs, formats, and access
+            mechanisms.
+          </p>
+          <p class="tagline">
+            Open Climate Service is an open-source platform that cuts through
+            this complexity to deliver tailored data for climate-smart
+            decision-making.
+          </p>
+        </section>
+
+        <!-- ── 2. THE PROBLEM ────────────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip"
+            >The Challenge / Why many use Google Earth Engine</span
+          >
+          <h2>A Deeply Fragmented Landscape</h2>
+          <div class="provider-grid">
+            <div class="provider-chip">
+              <span class="name">ECMWF / ERA5</span
+              ><span class="meta">Temperature, wind, humidity</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">CHIRPS / CHC</span
+              ><span class="meta">Rainfall estimates</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">NASA / MODIS</span
+              ><span class="meta">Elevation, land use, NDVI</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">WorldPop</span
+              ><span class="meta">Population distribution</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">Copernicus</span
+              ><span class="meta">Satellite observations</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">DestinE</span
+              ><span class="meta">ERA5-Land hourly</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">ENACTS / NMHSs</span
+              ><span class="meta">Local station data</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">Sentinel Hub</span
+              ><span class="meta">Optical &amp; radar imagery</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">Global Flood DB</span
+              ><span class="meta">Flood extent records</span>
+            </div>
+            <div class="provider-chip">
+              <span class="name">Custom sources</span
+              ><span class="meta">Surveys, health systems, IoT</span>
+            </div>
           </div>
-        </div>
-        <div class="conn-v amber"></div>
-        <div class="diagram-row">
-          <div class="box box-consumer">DHIS2 Climate App</div>
-        </div>
-        <div class="conn-v" style="height:20px;"></div>
-        <div class="diagram-row">
-          <div class="box box-dhis2">DHIS2</div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="insight amber">
-        <span class="icon">⚠️</span>
-        <div>
-          <strong>Single point of dependency.</strong> Everything ran through Google Earth Engine —
-          a powerful platform, but not country-owned. Access could be restricted.
-          Customisation was limited. Local data sources were hard to integrate.
-        </div>
-      </div>
-      <ul style="margin-top:20px;">
-        <li>Rapid to get started</li>
-        <li>Limited data sources (what GEE provides)</li>
-        <li>No offline or local deployment</li>
-        <li>Google controls access and pricing</li>
-        <li>Hard to blend local station data</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 6. STAGE 2: CLIMATE TOOLS ─────────────────────────────── -->
-<section class="slide-content" data-auto-animate>
-  <span class="section-chip">The Journey — Stage 2</span>
-  <h2>Opening the Toolbox</h2>
-  <div class="two-col" style="gap:40px; align-items:start;">
-    <div>
-      <span class="stage-label s2">2023 – 2024</span>
-      <div class="diagram">
-        <div class="diagram-row">
-          <div class="box box-source">ECMWF</div>
-          <div class="box box-source">CHIRPS</div>
-          <div class="box box-source">NASA</div>
-          <div class="box box-source">WorldPop</div>
-          <div class="box box-source" style="border-style:dashed;">Local data</div>
-        </div>
-        <div style="width:75%; margin:0 auto;"><div class="conn-bus"></div></div>
-        <div class="conn-v" style="height:20px;"></div>
-        <div class="diagram-row" style="gap:16px;">
-          <div class="box box-gee" style="opacity:0.45; min-width:120px; font-size:0.7em;">
-            Google EE
-            <span class="box-label">Fading out</span>
+          <div class="problem-message">
+            Each provider has a different API, data format, coordinate system,
+            and access mechanism. Making this accessible to every country —
+            without large technical teams — is the core problem we are solving.
           </div>
-          <div class="box box-tools pulse">
-            Climate Tools
-            <span class="box-label">Open Python library · New!</span>
+        </section>
+
+        <!-- ── 3. WHAT IS A CLIMATE SERVICE ─────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">Context</span>
+          <h2>What Is a Climate Service?</h2>
+          <div class="two-col" style="align-items: start">
+            <div>
+              <p style="font-size: 1.05em; line-height: 1.75; color: #334155">
+                A <strong>climate service</strong> turns raw climate data into
+                actionable information for decisions — agriculture, health,
+                water management, disaster risk, urban planning.
+              </p>
+              <p
+                style="color: var(--muted); font-size: 0.82em; margin-top: 16px"
+              >
+                The World Meteorological Organization (WMO) defines climate
+                services as "climate information developed and delivered to meet
+                a user's needs." Open Climate Service is designed to make this
+                possible for any country, regardless of technical capacity.
+              </p>
+              <p style="color: var(--muted); font-size: 0.82em">
+                Our entry point is health — but the platform is intentionally
+                generic. The same service can support disease modelling, food
+                security early warning, or national climate reporting.
+              </p>
+            </div>
+            <div>
+              <div
+                class="data-grid"
+                style="grid-template-columns: 1fr 1fr; margin: 0"
+              >
+                <div class="data-card">
+                  <div class="icon">🏥</div>
+                  <h3>Health</h3>
+                  <p>Malaria, dengue, cholera risk</p>
+                </div>
+                <div class="data-card">
+                  <div class="icon">🌾</div>
+                  <h3>Agriculture</h3>
+                  <p>Drought, yield forecasting</p>
+                </div>
+                <div class="data-card">
+                  <div class="icon">💧</div>
+                  <h3>Water</h3>
+                  <p>Flood risk, water stress</p>
+                </div>
+                <div class="data-card">
+                  <div class="icon">🏙️</div>
+                  <h3>Urban</h3>
+                  <p>Heat stress, air quality</p>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="conn-v"></div>
-        <div class="diagram-row">
-          <div class="box box-consumer">DHIS2 Climate App</div>
-          <div class="box box-consumer" style="font-size:0.7em;">Analysis &amp; research</div>
-        </div>
-        <div class="conn-v" style="height:20px;"></div>
-        <div class="diagram-row">
-          <div class="box box-dhis2">DHIS2</div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="insight blue">
-        <span class="icon">🔓</span>
-        <div>
-          <strong>Opening the toolbox.</strong> Climate Tools gave HISP groups and
-          researchers direct access to the same data sources, without GEE.
-          Capacity building across Africa and Asia. But still no packaged service.
-        </div>
-      </div>
-      <ul style="margin-top:20px;">
-        <li>Open-source Python library</li>
-        <li>Works without Google credentials</li>
-        <li>More data sources accessible</li>
-        <li>Still requires technical expertise to run</li>
-        <li>No standardised service layer for countries</li>
-      </ul>
-    </div>
-  </div>
-</section>
+        </section>
 
-
-<!-- ── 7. STAGE 3: OPEN CLIMATE SERVICE ──────────────────────── -->
-<section class="slide-content" data-auto-animate>
-  <span class="section-chip">The Journey — Stage 3</span>
-  <h2>Open Climate Service</h2>
-  <div class="two-col" style="gap:40px; align-items:start;">
-    <div>
-      <span class="stage-label s3">2024 →</span>
-      <div class="diagram">
-        <div class="diagram-row" style="flex-wrap:wrap; gap:7px;">
-          <div class="box box-source" style="font-size:0.65em;">ECMWF</div>
-          <div class="box box-source" style="font-size:0.65em;">CHIRPS</div>
-          <div class="box box-source" style="font-size:0.65em;">NASA</div>
-          <div class="box box-source" style="font-size:0.65em;">WorldPop</div>
-          <div class="box box-source" style="font-size:0.65em;">Local data</div>
-          <div class="box box-source" style="font-size:0.65em; border-style:dashed;">Custom</div>
-        </div>
-        <div style="width:85%; margin:0 auto;"><div class="conn-bus green"></div></div>
-        <div class="conn-v green" style="height:20px;"></div>
-        <div class="diagram-row">
-          <div class="box box-ocs pulse">
-            Open Climate Service
-            <span class="box-label">Country-owned · Open-source · Extensible</span>
+        <!-- ── 4. LESSONS LEARNED ────────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">2½ Years of Learning</span>
+          <h2>What We Have Learned</h2>
+          <div class="lessons-grid">
+            <div class="lesson-card fragment">
+              <div class="num">01</div>
+              <h3>The field is more complex than expected</h3>
+              <p>
+                Data formats, projections, temporal gaps, and provider-specific
+                quirks demand a flexible architecture — not a rigid pipeline.
+              </p>
+            </div>
+            <div class="lesson-card fragment">
+              <div class="num">02</div>
+              <h3>Countries want to own their data</h3>
+              <p>
+                Strong demand for local data sources, national hosting, and
+                independence from global platform dependencies like Google Earth
+                Engine.
+              </p>
+            </div>
+            <div class="lesson-card fragment">
+              <div class="num">03</div>
+              <h3>Innovation comes from the countries</h3>
+              <p>
+                The best ideas have come from HISP groups and country teams. A
+                bottom-up approach consistently beats top-down product design.
+              </p>
+            </div>
+            <div class="lesson-card fragment">
+              <div class="num">04</div>
+              <h3>Resolution and local data matter</h3>
+              <p>
+                National teams need higher-resolution data and the ability to
+                blend global datasets with local station observations.
+              </p>
+            </div>
           </div>
-        </div>
-        <div style="width:70%; margin:0 auto;"><div class="conn-bus green"></div></div>
-        <div class="diagram-row" style="gap:8px;">
-          <div class="box box-consumer" style="font-size:0.68em;">Climate App</div>
-          <div class="box box-consumer" style="font-size:0.68em;">CHAP</div>
-          <div class="box box-consumer" style="font-size:0.68em;">QGIS / Python / R</div>
-          <div class="box box-consumer" style="font-size:0.68em; border-style:dashed;">Any tool</div>
-        </div>
-        <div class="conn-v green" style="height:20px;"></div>
-        <div class="diagram-row">
-          <div class="box box-dhis2">DHIS2</div>
-        </div>
+        </section>
+
+        <!-- ── 5. STAGE 1: CLIMATE APP + GEE ─────────────────────────── -->
+        <section class="slide-content" data-auto-animate>
+          <span class="section-chip">The Journey — Stage 1</span>
+          <h2>Climate App + Google Earth Engine</h2>
+          <div class="two-col" style="gap: 40px; align-items: start">
+            <div>
+              <span class="stage-label s1">2021 – 2023</span>
+              <div class="diagram">
+                <div class="diagram-row">
+                  <div class="box box-source">ECMWF</div>
+                  <div class="box box-source">CHIRPS</div>
+                  <div class="box box-source">NASA</div>
+                  <div class="box box-source">WorldPop</div>
+                </div>
+                <div style="width: 60%; margin: 0 auto">
+                  <div class="conn-bus amber"></div>
+                </div>
+                <div class="conn-v amber" style="height: 20px"></div>
+                <div class="diagram-row">
+                  <div class="box box-gee pulse">
+                    Google Earth Engine
+                    <span class="box-label"
+                      >External platform · Google-owned</span
+                    >
+                  </div>
+                </div>
+                <div class="conn-v amber"></div>
+                <div class="diagram-row">
+                  <div class="box box-consumer">DHIS2 Climate App</div>
+                </div>
+                <div class="conn-v" style="height: 20px"></div>
+                <div class="diagram-row">
+                  <div class="box box-dhis2">DHIS2</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="insight amber">
+                <span class="icon">⚠️</span>
+                <div>
+                  <strong>Single point of dependency.</strong> Everything ran
+                  through Google Earth Engine — a powerful platform, but not
+                  country-owned. Access could be restricted. Customisation was
+                  limited. Local data sources were hard to integrate.
+                </div>
+              </div>
+              <ul style="margin-top: 20px">
+                <li>Rapid to get started</li>
+                <li>Limited data sources (what GEE provides)</li>
+                <li>No offline or local deployment</li>
+                <li>Google controls access and pricing</li>
+                <li>Hard to blend local station data</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 6. STAGE 2: CLIMATE TOOLS ─────────────────────────────── -->
+        <section class="slide-content" data-auto-animate>
+          <span class="section-chip">The Journey — Stage 2</span>
+          <h2>Opening the Toolbox</h2>
+          <div class="two-col" style="gap: 40px; align-items: start">
+            <div>
+              <span class="stage-label s2">2023 – 2024</span>
+              <div class="diagram">
+                <div class="diagram-row">
+                  <div class="box box-source">ECMWF</div>
+                  <div class="box box-source">CHIRPS</div>
+                  <div class="box box-source">NASA</div>
+                  <div class="box box-source">WorldPop</div>
+                  <div class="box box-source" style="border-style: dashed">
+                    Local data
+                  </div>
+                </div>
+                <div style="width: 75%; margin: 0 auto">
+                  <div class="conn-bus"></div>
+                </div>
+                <div class="conn-v" style="height: 20px"></div>
+                <div class="diagram-row" style="gap: 16px">
+                  <div
+                    class="box box-gee"
+                    style="opacity: 0.45; min-width: 120px; font-size: 0.7em"
+                  >
+                    Google EE
+                    <span class="box-label">Fading out</span>
+                  </div>
+                  <div class="box box-tools pulse">
+                    Climate Tools
+                    <span class="box-label">Open Python library · New!</span>
+                  </div>
+                </div>
+                <div class="conn-v"></div>
+                <div class="diagram-row">
+                  <div class="box box-consumer">DHIS2 Climate App</div>
+                  <div class="box box-consumer" style="font-size: 0.7em">
+                    Analysis &amp; research
+                  </div>
+                </div>
+                <div class="conn-v" style="height: 20px"></div>
+                <div class="diagram-row">
+                  <div class="box box-dhis2">DHIS2</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="insight blue">
+                <span class="icon">🔓</span>
+                <div>
+                  <strong>Opening the toolbox.</strong> Climate Tools gave HISP
+                  groups and researchers direct access to the same data sources,
+                  without GEE. Capacity building across Africa and Asia. But
+                  still no packaged service.
+                </div>
+              </div>
+              <ul style="margin-top: 20px">
+                <li>Open-source Python library</li>
+                <li>Works without Google credentials</li>
+                <li>More data sources accessible</li>
+                <li>Still requires technical expertise to run</li>
+                <li>No standardised service layer for countries</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 7. STAGE 3: OPEN CLIMATE SERVICE ──────────────────────── -->
+        <section class="slide-content" data-auto-animate>
+          <span class="section-chip">The Journey — Stage 3</span>
+          <h2>Open Climate Service</h2>
+          <div class="two-col" style="gap: 40px; align-items: start">
+            <div>
+              <span class="stage-label s3">2024 →</span>
+              <div class="diagram">
+                <div class="diagram-row" style="flex-wrap: wrap; gap: 7px">
+                  <div class="box box-source" style="font-size: 0.65em">
+                    ECMWF
+                  </div>
+                  <div class="box box-source" style="font-size: 0.65em">
+                    CHIRPS
+                  </div>
+                  <div class="box box-source" style="font-size: 0.65em">
+                    NASA
+                  </div>
+                  <div class="box box-source" style="font-size: 0.65em">
+                    WorldPop
+                  </div>
+                  <div class="box box-source" style="font-size: 0.65em">
+                    Local data
+                  </div>
+                  <div
+                    class="box box-source"
+                    style="font-size: 0.65em; border-style: dashed"
+                  >
+                    Custom
+                  </div>
+                </div>
+                <div style="width: 85%; margin: 0 auto">
+                  <div class="conn-bus green"></div>
+                </div>
+                <div class="conn-v green" style="height: 20px"></div>
+                <div class="diagram-row">
+                  <div class="box box-ocs pulse">
+                    Open Climate Service
+                    <span class="box-label"
+                      >Country-owned · Open-source · Extensible</span
+                    >
+                  </div>
+                </div>
+                <div style="width: 70%; margin: 0 auto">
+                  <div class="conn-bus green"></div>
+                </div>
+                <div class="diagram-row" style="gap: 8px">
+                  <div class="box box-consumer" style="font-size: 0.68em">
+                    Climate App
+                  </div>
+                  <div class="box box-consumer" style="font-size: 0.68em">
+                    CHAP
+                  </div>
+                  <div class="box box-consumer" style="font-size: 0.68em">
+                    QGIS / Python / R
+                  </div>
+                  <div
+                    class="box box-consumer"
+                    style="font-size: 0.68em; border-style: dashed"
+                  >
+                    Any tool
+                  </div>
+                </div>
+                <div class="conn-v green" style="height: 20px"></div>
+                <div class="diagram-row">
+                  <div class="box box-dhis2">DHIS2</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="insight green">
+                <span class="icon">✅</span>
+                <div>
+                  <strong
+                    >A complete, country-owned climate data service.</strong
+                  >
+                  Packages Climate Tools into a deployable service. Replaces the
+                  GEE dependency in the Climate App. Integrates directly with
+                  DHIS2 and CHAP.
+                </div>
+              </div>
+              <ul style="margin-top: 20px">
+                <li>Deploy on your own infrastructure</li>
+                <li>Works with any compatible tool</li>
+                <li>Built-in DHIS2 and CHAP integration</li>
+                <li>Extensible: add new data sources as plugins</li>
+                <li>Open standards — no vendor lock-in</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 8. DIGITAL SOVEREIGNTY ────────────────────────────────── -->
+        <section class="slide-dark slide-content">
+          <span
+            class="section-chip"
+            style="
+              background: rgba(255, 255, 255, 0.15);
+              color: rgba(255, 255, 255, 0.9);
+            "
+            >The HISP Way</span
+          >
+          <h2>Digital Sovereignty</h2>
+          <p style="max-width: 620px; margin-bottom: 30px">
+            We are not replacing Google Earth Engine with another global service
+            that countries depend on. The goal is a service that is
+            <em>owned and operated by the countries themselves.</em>
+          </p>
+          <div class="pillars">
+            <div
+              class="pillar"
+              style="
+                background: rgba(255, 255, 255, 0.07);
+                border-color: rgba(255, 255, 255, 0.12);
+              "
+            >
+              <div class="icon">🏛️</div>
+              <h3 style="color: #fff">Country-owned</h3>
+              <p>
+                Deployed on national or regional infrastructure. Countries
+                retain full ownership of their data and can operate the service
+                independently.
+              </p>
+            </div>
+            <div
+              class="pillar"
+              style="
+                background: rgba(255, 255, 255, 0.07);
+                border-color: rgba(255, 255, 255, 0.12);
+              "
+            >
+              <div class="icon">🔓</div>
+              <h3 style="color: #fff">Open-source</h3>
+              <p>
+                Fully open code, open standards, open data formats. No
+                proprietary lock-in at any layer of the stack.
+              </p>
+            </div>
+            <div
+              class="pillar"
+              style="
+                background: rgba(255, 255, 255, 0.07);
+                border-color: rgba(255, 255, 255, 0.12);
+              "
+            >
+              <div class="icon">🧩</div>
+              <h3 style="color: #fff">Extensible by design</h3>
+              <p>
+                HISP groups and country teams can add new data sources, custom
+                processing, and local integrations without modifying the core
+                service.
+              </p>
+            </div>
+          </div>
+          <p
+            style="
+              margin-top: 24px;
+              font-size: 0.8em;
+              color: rgba(255, 255, 255, 0.5);
+            "
+          >
+            The HISP network — the same organisations that have sustained
+            national DHIS2 implementations for decades — are the natural
+            operators of Open Climate Service instances.
+          </p>
+        </section>
+
+        <!-- ── 9. WHAT'S INCLUDED ────────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">Data &amp; Integrations</span>
+          <h2>A Generic Climate Service for Countries</h2>
+          <div class="data-grid">
+            <div class="data-card">
+              <div class="icon">🌡️</div>
+              <h3>Climate &amp; Weather</h3>
+              <p>
+                Temperature, precipitation, humidity, wind speed, heat stress
+                indices. Daily to monthly aggregates.
+              </p>
+            </div>
+            <div class="data-card">
+              <div class="icon">🌿</div>
+              <h3>Environment</h3>
+              <p>
+                Land cover, vegetation index, air quality, elevation, flood
+                extent.
+              </p>
+            </div>
+            <div class="data-card">
+              <div class="icon">👥</div>
+              <h3>Population &amp; Society</h3>
+              <p>
+                Population distribution by age and sex, urbanisation,
+                socio-economic indicators.
+              </p>
+            </div>
+            <div class="data-card">
+              <div class="icon">🏠</div>
+              <h3>Local &amp; National Data</h3>
+              <p>
+                Station observations, ENACTS data, national surveys. Used for
+                bias correction and filling gaps.
+              </p>
+            </div>
+            <div class="data-card">
+              <div class="icon">💉</div>
+              <h3>Interventions</h3>
+              <p>
+                Vaccination campaigns, bed net distribution, and other programme
+                data that interact with climate.
+              </p>
+            </div>
+            <div
+              class="data-card"
+              style="background: var(--green-light); border-color: #86efac"
+            >
+              <div class="icon">🔌</div>
+              <h3>Custom sources</h3>
+              <p>
+                Any new data source can be added as a plugin — no core code
+                changes needed.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 10. WHY GRIDDED DATA ──────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">Data Quality</span>
+          <h2>The Power of Gridded Data</h2>
+          <div class="comparison">
+            <div class="comparison-panel bad">
+              <div class="vis">📍📍📍</div>
+              <h3>Station data</h3>
+              <p>
+                Sparse coverage. Gaps in remote areas. Can't aggregate to
+                arbitrary boundaries. Requires interpolation.
+              </p>
+            </div>
+            <div class="comparison-panel ok">
+              <div class="vis">
+                <svg viewBox="0 0 80 70" width="80">
+                  <rect
+                    x="5"
+                    y="5"
+                    width="33"
+                    height="28"
+                    fill="#fde68a"
+                    stroke="#d97706"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="42"
+                    y="5"
+                    width="33"
+                    height="28"
+                    fill="#fbbf24"
+                    stroke="#d97706"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="5"
+                    y="37"
+                    width="33"
+                    height="28"
+                    fill="#f59e0b"
+                    stroke="#d97706"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="42"
+                    y="37"
+                    width="33"
+                    height="28"
+                    fill="#fcd34d"
+                    stroke="#d97706"
+                    stroke-width="1.5"
+                  />
+                </svg>
+              </div>
+              <h3>Pre-aggregated districts</h3>
+              <p>
+                Fixed to one boundary. Uniform value per polygon. Loses spatial
+                variation within districts.
+              </p>
+            </div>
+            <div class="comparison-panel good">
+              <div class="vis">
+                <svg viewBox="0 0 80 70" width="80">
+                  <defs>
+                    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#86efac" />
+                      <stop offset="100%" stop-color="#14532d" />
+                    </linearGradient>
+                  </defs>
+                  <rect width="80" height="70" fill="url(#g)" rx="4" />
+                  <line
+                    x1="20"
+                    y1="0"
+                    x2="20"
+                    y2="70"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                  <line
+                    x1="40"
+                    y1="0"
+                    x2="40"
+                    y2="70"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                  <line
+                    x1="60"
+                    y1="0"
+                    x2="60"
+                    y2="70"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                  <line
+                    x1="0"
+                    y1="17"
+                    x2="80"
+                    y2="17"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                  <line
+                    x1="0"
+                    y1="35"
+                    x2="80"
+                    y2="35"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                  <line
+                    x1="0"
+                    y1="52"
+                    x2="80"
+                    y2="52"
+                    stroke="white"
+                    stroke-width="0.5"
+                    opacity="0.4"
+                  />
+                </svg>
+              </div>
+              <h3>Gridded data</h3>
+              <p>
+                Continuous coverage. Aggregate to <em>any</em> boundary — now or
+                in the future. Richer spatial patterns for modelling.
+              </p>
+            </div>
+          </div>
+          <p
+            style="
+              margin-top: 18px;
+              color: var(--muted);
+              font-size: 0.8em;
+              text-align: center;
+            "
+          >
+            Gridded data lets you re-aggregate to new district boundaries,
+            combine with facility catchment areas, or zoom into sub-district
+            patterns — without going back to the original data source.
+          </p>
+        </section>
+
+        <!-- ── 11. OPEN STANDARDS ────────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">Architecture</span>
+          <h2>Built on Open Standards</h2>
+          <div class="two-col" style="align-items: start; gap: 30px">
+            <div>
+              <p
+                style="
+                  color: var(--muted);
+                  font-size: 0.82em;
+                  margin-bottom: 16px;
+                "
+              >
+                Open standards mean no vendor lock-in — data can be accessed
+                from QGIS, Python, R, or any other tool without custom
+                integration work.
+              </p>
+              <div
+                class="standards-grid"
+                style="grid-template-columns: 1fr; gap: 10px; margin: 0"
+              >
+                <div class="standard-item">
+                  <h3>Zarr + GeoZarr</h3>
+                  <p>
+                    Cloud-native storage for multidimensional climate arrays.
+                    Each time step is independently accessible — no need to
+                    download entire datasets.
+                  </p>
+                </div>
+                <div class="standard-item" style="border-color: var(--teal)">
+                  <h3>STAC — Spatial Temporal Asset Catalog</h3>
+                  <p>
+                    Standard way to describe and discover geospatial datasets.
+                    Works with any STAC-compatible catalogue browser.
+                  </p>
+                </div>
+                <div class="standard-item" style="border-color: var(--purple)">
+                  <h3>OGC API</h3>
+                  <p>
+                    Standard API for querying and accessing geographic data,
+                    supported by major GIS tools.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p
+                style="
+                  font-weight: 600;
+                  font-size: 0.82em;
+                  margin-bottom: 12px;
+                  color: var(--text);
+                "
+              >
+                FAIR Principles
+              </p>
+              <div class="fair-row">
+                <div class="fair-item">
+                  <div class="letter">F</div>
+                  <div class="word">Findable</div>
+                  <div class="desc">STAC catalogue</div>
+                </div>
+                <div class="fair-item">
+                  <div class="letter">A</div>
+                  <div class="word">Accessible</div>
+                  <div class="desc">Open HTTP API</div>
+                </div>
+                <div class="fair-item">
+                  <div class="letter">I</div>
+                  <div class="word">Interoperable</div>
+                  <div class="desc">Open formats</div>
+                </div>
+                <div class="fair-item">
+                  <div class="letter">R</div>
+                  <div class="word">Reusable</div>
+                  <div class="desc">Open licence</div>
+                </div>
+              </div>
+              <div
+                class="data-card"
+                style="
+                  margin-top: 14px;
+                  background: var(--blue-light);
+                  border: 1px solid #93c5fd;
+                "
+              >
+                <h3>Best practices built in</h3>
+                <p>
+                  Climate normals and anomalies, climate indices (xclim),
+                  WHO/WMO guidelines for aggregation and reporting.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 12. ROADMAP ───────────────────────────────────────────── -->
+        <section class="slide-content">
+          <span class="section-chip">What's Next</span>
+          <h2>Roadmap</h2>
+          <div class="roadmap">
+            <div class="roadmap-item">
+              <div class="dot now"></div>
+              <div>
+                <h3>Streaming ingest &amp; resumable downloads</h3>
+                <p>
+                  Large historical datasets (35+ years) ingest incrementally and
+                  can resume after interruption. No more starting from scratch
+                  on failure.
+                </p>
+              </div>
+            </div>
+            <div class="roadmap-item">
+              <div class="dot now"></div>
+              <div>
+                <h3>Async job execution &amp; progress reporting</h3>
+                <p>
+                  Long-running ingestion and processing jobs run in the
+                  background with live progress updates and retry on failure.
+                </p>
+              </div>
+            </div>
+            <div class="roadmap-item">
+              <div class="dot soon"></div>
+              <div>
+                <h3>Spatial aggregation to DHIS2 org units</h3>
+                <p>
+                  Automated pipeline from gridded climate data to DHIS2 data
+                  elements — aggregated to district or facility catchment
+                  boundaries.
+                </p>
+              </div>
+            </div>
+            <div class="roadmap-item">
+              <div class="dot soon"></div>
+              <div>
+                <h3>Local data &amp; bias correction</h3>
+                <p>
+                  Integrate station data and ENACTS observations to correct
+                  systematic biases in global reanalysis products.
+                </p>
+              </div>
+            </div>
+            <div class="roadmap-item">
+              <div class="dot later"></div>
+              <div>
+                <h3>Cloud deployment &amp; scalability</h3>
+                <p>
+                  Support for S3-compatible object storage and containerised
+                  deployment on national cloud infrastructure.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── 13. TEAM ──────────────────────────────────────────────── -->
+        <section class="slide-closing">
+          <h2>The Team</h2>
+          <p style="max-width: 500px; margin: 0 auto 8px">
+            Built in close collaboration with HISP groups and country teams
+            across Africa and Asia.
+          </p>
+          <div class="team-grid">
+            <div class="team-member">
+              <div class="team-avatar">A</div>
+              <h3>Abyot</h3>
+            </div>
+            <div class="team-member">
+              <div
+                class="team-avatar"
+                style="background: linear-gradient(135deg, #7c3aed, #2563eb)"
+              >
+                B
+              </div>
+              <h3>Bipin</h3>
+            </div>
+            <div class="team-member">
+              <div
+                class="team-avatar"
+                style="background: linear-gradient(135deg, #059669, #0284c7)"
+              >
+                Y
+              </div>
+              <h3>Yambanso</h3>
+            </div>
+            <div class="team-member">
+              <div
+                class="team-avatar"
+                style="background: linear-gradient(135deg, #db2777, #7c3aed)"
+              >
+                D
+              </div>
+              <h3>Diana</h3>
+            </div>
+            <div class="team-member">
+              <div
+                class="team-avatar"
+                style="background: linear-gradient(135deg, #0d9488, #1d4ed8)"
+              >
+                B
+              </div>
+              <h3>Bjørn</h3>
+            </div>
+          </div>
+          <div class="link-row">
+            <a class="link-btn" href="https://dhis2.github.io/climate-api/"
+              >Documentation</a
+            >
+            <a class="link-btn" href="https://github.com/dhis2/climate-api"
+              >GitHub</a
+            >
+            <a class="link-btn" href="https://dhis2.org/climate/"
+              >DHIS2 Climate</a
+            >
+          </div>
+          <p style="margin-top: 30px; font-size: 0.72em; color: #94a3b8">
+            Open-source · MIT licence · Contributions welcome
+          </p>
+        </section>
       </div>
+      <!-- .slides -->
     </div>
-    <div>
-      <div class="insight green">
-        <span class="icon">✅</span>
-        <div>
-          <strong>A complete, country-owned climate data service.</strong>
-          Packages Climate Tools into a deployable service. Replaces the GEE
-          dependency in the Climate App. Integrates directly with DHIS2 and CHAP.
-        </div>
-      </div>
-      <ul style="margin-top:20px;">
-        <li>Deploy on your own infrastructure</li>
-        <li>Works with any compatible tool</li>
-        <li>Built-in DHIS2 and CHAP integration</li>
-        <li>Extensible: add new data sources as plugins</li>
-        <li>Open standards — no vendor lock-in</li>
-      </ul>
-    </div>
-  </div>
-</section>
+    <!-- .reveal -->
 
-
-<!-- ── 8. DIGITAL SOVEREIGNTY ────────────────────────────────── -->
-<section class="slide-dark slide-content">
-  <span class="section-chip" style="background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.9);">The HISP Way</span>
-  <h2>Digital Sovereignty</h2>
-  <p style="max-width:620px; margin-bottom:30px;">
-    We are not replacing Google Earth Engine with another global service that countries depend on.
-    The goal is a service that is <em>owned and operated by the countries themselves.</em>
-  </p>
-  <div class="pillars">
-    <div class="pillar" style="background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.12);">
-      <div class="icon">🏛️</div>
-      <h3 style="color:#fff;">Country-owned</h3>
-      <p>Deployed on national or regional infrastructure. Countries retain full ownership of their data and can operate the service independently.</p>
-    </div>
-    <div class="pillar" style="background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.12);">
-      <div class="icon">🔓</div>
-      <h3 style="color:#fff;">Open-source</h3>
-      <p>Fully open code, open standards, open data formats. No proprietary lock-in at any layer of the stack.</p>
-    </div>
-    <div class="pillar" style="background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.12);">
-      <div class="icon">🧩</div>
-      <h3 style="color:#fff;">Extensible by design</h3>
-      <p>HISP groups and country teams can add new data sources, custom processing, and local integrations without modifying the core service.</p>
-    </div>
-  </div>
-  <p style="margin-top:24px; font-size:0.8em; color:rgba(255,255,255,0.5);">
-    The HISP network — the same organisations that have sustained national DHIS2 implementations for decades — are the natural operators of Open Climate Service instances.
-  </p>
-</section>
-
-
-<!-- ── 9. WHAT'S INCLUDED ────────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">Data &amp; Integrations</span>
-  <h2>A Generic Climate Service for Countries</h2>
-  <div class="data-grid">
-    <div class="data-card">
-      <div class="icon">🌡️</div>
-      <h3>Climate &amp; Weather</h3>
-      <p>Temperature, precipitation, humidity, wind speed, heat stress indices. Daily to monthly aggregates.</p>
-    </div>
-    <div class="data-card">
-      <div class="icon">🌿</div>
-      <h3>Environment</h3>
-      <p>Land cover, vegetation index, air quality, elevation, flood extent.</p>
-    </div>
-    <div class="data-card">
-      <div class="icon">👥</div>
-      <h3>Population &amp; Society</h3>
-      <p>Population distribution by age and sex, urbanisation, socio-economic indicators.</p>
-    </div>
-    <div class="data-card">
-      <div class="icon">🏠</div>
-      <h3>Local &amp; National Data</h3>
-      <p>Station observations, ENACTS data, national surveys. Used for bias correction and filling gaps.</p>
-    </div>
-    <div class="data-card">
-      <div class="icon">💉</div>
-      <h3>Interventions</h3>
-      <p>Vaccination campaigns, bed net distribution, and other programme data that interact with climate.</p>
-    </div>
-    <div class="data-card" style="background:var(--green-light); border-color:#86efac;">
-      <div class="icon">🔌</div>
-      <h3>Custom sources</h3>
-      <p>Any new data source can be added as a plugin — no core code changes needed.</p>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 10. WHY GRIDDED DATA ──────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">Data Quality</span>
-  <h2>The Power of Gridded Data</h2>
-  <div class="comparison">
-    <div class="comparison-panel bad">
-      <div class="vis">📍📍📍</div>
-      <h3>Station data</h3>
-      <p>Sparse coverage. Gaps in remote areas. Can't aggregate to arbitrary boundaries. Requires interpolation.</p>
-    </div>
-    <div class="comparison-panel ok">
-      <div class="vis">
-        <svg viewBox="0 0 80 70" width="80">
-          <rect x="5"  y="5"  width="33" height="28" fill="#fde68a" stroke="#d97706" stroke-width="1.5"/>
-          <rect x="42" y="5"  width="33" height="28" fill="#fbbf24" stroke="#d97706" stroke-width="1.5"/>
-          <rect x="5"  y="37" width="33" height="28" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
-          <rect x="42" y="37" width="33" height="28" fill="#fcd34d" stroke="#d97706" stroke-width="1.5"/>
-        </svg>
-      </div>
-      <h3>Pre-aggregated districts</h3>
-      <p>Fixed to one boundary. Uniform value per polygon. Loses spatial variation within districts.</p>
-    </div>
-    <div class="comparison-panel good">
-      <div class="vis">
-        <svg viewBox="0 0 80 70" width="80">
-          <defs>
-            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#86efac"/>
-              <stop offset="100%" stop-color="#14532d"/>
-            </linearGradient>
-          </defs>
-          <rect width="80" height="70" fill="url(#g)" rx="4"/>
-          <line x1="20" y1="0" x2="20" y2="70" stroke="white" stroke-width="0.5" opacity="0.4"/>
-          <line x1="40" y1="0" x2="40" y2="70" stroke="white" stroke-width="0.5" opacity="0.4"/>
-          <line x1="60" y1="0" x2="60" y2="70" stroke="white" stroke-width="0.5" opacity="0.4"/>
-          <line x1="0" y1="17" x2="80" y2="17" stroke="white" stroke-width="0.5" opacity="0.4"/>
-          <line x1="0" y1="35" x2="80" y2="35" stroke="white" stroke-width="0.5" opacity="0.4"/>
-          <line x1="0" y1="52" x2="80" y2="52" stroke="white" stroke-width="0.5" opacity="0.4"/>
-        </svg>
-      </div>
-      <h3>Gridded data</h3>
-      <p>Continuous coverage. Aggregate to <em>any</em> boundary — now or in the future. Richer spatial patterns for modelling.</p>
-    </div>
-  </div>
-  <p style="margin-top:18px; color:var(--muted); font-size:0.8em; text-align:center;">
-    Gridded data lets you re-aggregate to new district boundaries, combine with facility catchment areas,
-    or zoom into sub-district patterns — without going back to the original data source.
-  </p>
-</section>
-
-
-<!-- ── 11. OPEN STANDARDS ────────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">Architecture</span>
-  <h2>Built on Open Standards</h2>
-  <div class="two-col" style="align-items:start; gap:30px;">
-    <div>
-      <p style="color:var(--muted); font-size:0.82em; margin-bottom:16px;">
-        Open standards mean no vendor lock-in — data can be accessed from QGIS, Python, R,
-        or any other tool without custom integration work.
-      </p>
-      <div class="standards-grid" style="grid-template-columns:1fr; gap:10px; margin:0;">
-        <div class="standard-item">
-          <h3>Zarr + GeoZarr</h3>
-          <p>Cloud-native storage for multidimensional climate arrays. Each time step is independently accessible — no need to download entire datasets.</p>
-        </div>
-        <div class="standard-item" style="border-color:var(--teal);">
-          <h3>STAC — Spatial Temporal Asset Catalog</h3>
-          <p>Standard way to describe and discover geospatial datasets. Works with any STAC-compatible catalogue browser.</p>
-        </div>
-        <div class="standard-item" style="border-color:var(--purple);">
-          <h3>OGC API</h3>
-          <p>Standard API for querying and accessing geographic data, supported by major GIS tools.</p>
-        </div>
-      </div>
-    </div>
-    <div>
-      <p style="font-weight:600; font-size:0.82em; margin-bottom:12px; color:var(--text);">FAIR Principles</p>
-      <div class="fair-row">
-        <div class="fair-item">
-          <div class="letter">F</div>
-          <div class="word">Findable</div>
-          <div class="desc">STAC catalogue</div>
-        </div>
-        <div class="fair-item">
-          <div class="letter">A</div>
-          <div class="word">Accessible</div>
-          <div class="desc">Open HTTP API</div>
-        </div>
-        <div class="fair-item">
-          <div class="letter">I</div>
-          <div class="word">Interoperable</div>
-          <div class="desc">Open formats</div>
-        </div>
-        <div class="fair-item">
-          <div class="letter">R</div>
-          <div class="word">Reusable</div>
-          <div class="desc">Open licence</div>
-        </div>
-      </div>
-      <div class="data-card" style="margin-top:14px; background:var(--blue-light); border:1px solid #93c5fd;">
-        <h3>Best practices built in</h3>
-        <p>Climate normals and anomalies, climate indices (xclim), WHO/WMO guidelines for aggregation and reporting.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 12. ROADMAP ───────────────────────────────────────────── -->
-<section class="slide-content">
-  <span class="section-chip">What's Next</span>
-  <h2>Roadmap</h2>
-  <div class="roadmap">
-    <div class="roadmap-item">
-      <div class="dot now"></div>
-      <div>
-        <h3>Streaming ingest &amp; resumable downloads</h3>
-        <p>Large historical datasets (35+ years) ingest incrementally and can resume after interruption. No more starting from scratch on failure.</p>
-      </div>
-    </div>
-    <div class="roadmap-item">
-      <div class="dot now"></div>
-      <div>
-        <h3>Async job execution &amp; progress reporting</h3>
-        <p>Long-running ingestion and processing jobs run in the background with live progress updates and retry on failure.</p>
-      </div>
-    </div>
-    <div class="roadmap-item">
-      <div class="dot soon"></div>
-      <div>
-        <h3>Spatial aggregation to DHIS2 org units</h3>
-        <p>Automated pipeline from gridded climate data to DHIS2 data elements — aggregated to district or facility catchment boundaries.</p>
-      </div>
-    </div>
-    <div class="roadmap-item">
-      <div class="dot soon"></div>
-      <div>
-        <h3>Local data &amp; bias correction</h3>
-        <p>Integrate station data and ENACTS observations to correct systematic biases in global reanalysis products.</p>
-      </div>
-    </div>
-    <div class="roadmap-item">
-      <div class="dot later"></div>
-      <div>
-        <h3>Cloud deployment &amp; scalability</h3>
-        <p>Support for S3-compatible object storage and containerised deployment on national cloud infrastructure.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-<!-- ── 13. TEAM ──────────────────────────────────────────────── -->
-<section class="slide-closing">
-  <h2>The Team</h2>
-  <p style="max-width:500px; margin:0 auto 8px;">
-    Built in close collaboration with HISP groups and country teams across Africa and Asia.
-  </p>
-  <div class="team-grid">
-    <div class="team-member">
-      <div class="team-avatar">A</div>
-      <h3>Abyot</h3>
-    </div>
-    <div class="team-member">
-      <div class="team-avatar" style="background:linear-gradient(135deg,#7c3aed,#2563eb);">B</div>
-      <h3>Bipin</h3>
-    </div>
-    <div class="team-member">
-      <div class="team-avatar" style="background:linear-gradient(135deg,#059669,#0284c7);">Y</div>
-      <h3>Yambanso</h3>
-    </div>
-    <div class="team-member">
-      <div class="team-avatar" style="background:linear-gradient(135deg,#db2777,#7c3aed);">D</div>
-      <h3>Diana</h3>
-    </div>
-    <div class="team-member">
-      <div class="team-avatar" style="background:linear-gradient(135deg,#0d9488,#1d4ed8);">B</div>
-      <h3>Bjørn</h3>
-    </div>
-  </div>
-  <div class="link-row">
-    <a class="link-btn" href="https://dhis2.github.io/climate-api/">Documentation</a>
-    <a class="link-btn" href="https://github.com/dhis2/climate-api">GitHub</a>
-    <a class="link-btn" href="https://dhis2.org/climate/">DHIS2 Climate</a>
-  </div>
-  <p style="margin-top:30px; font-size:0.72em; color:rgba(255,255,255,0.35);">
-    Open-source · MIT licence · Contributions welcome
-  </p>
-</section>
-
-
-</div><!-- .slides -->
-</div><!-- .reveal -->
-
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-<script>
-  Reveal.initialize({
-    hash: true,
-    transition: 'fade',
-    transitionSpeed: 'default',
-    backgroundTransition: 'fade',
-    controls: true,
-    controlsTutorial: false,
-    progress: true,
-    slideNumber: 'c/t',
-    center: true,
-    autoAnimateDuration: 0.7,
-    autoAnimateEasing: 'ease-in-out',
-  });
-</script>
-</body>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        width: 1280,
+        height: 720,
+        margin: 0,
+        transition: "fade",
+        transitionSpeed: "default",
+        backgroundTransition: "fade",
+        controls: true,
+        controlsTutorial: false,
+        progress: true,
+        slideNumber: "c/t",
+        center: false,
+        autoAnimateDuration: 0.7,
+        autoAnimateEasing: "ease-in-out",
+      });
+    </script>
+  </body>
 </html>
