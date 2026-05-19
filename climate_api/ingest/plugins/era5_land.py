@@ -63,9 +63,7 @@ class Era5LandPlugin:
 
     async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
         """Fetch one hourly period from the remote zarr store."""
-        return await asyncio.get_running_loop().run_in_executor(
-            _executor, self._fetch_sync, period_id, bbox
-        )
+        return await asyncio.get_running_loop().run_in_executor(_executor, self._fetch_sync, period_id, bbox)
 
     # ------------------------------------------------------------------
     # Sync helpers (run inside the thread pool)

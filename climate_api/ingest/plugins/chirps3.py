@@ -77,9 +77,7 @@ class Chirps3Plugin:
         return self._build_periods(start, end)
 
     async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
-        return await asyncio.get_running_loop().run_in_executor(
-            _executor, self._fetch_sync, period_id, bbox
-        )
+        return await asyncio.get_running_loop().run_in_executor(_executor, self._fetch_sync, period_id, bbox)
 
     # ------------------------------------------------------------------
     # Sync helpers (run inside the thread pool)
@@ -115,10 +113,6 @@ class Chirps3Plugin:
 
         ds = da.to_dataset(name="precip")
         ds = ds.expand_dims(time=[np.datetime64(period_id, "D")])
-
-        for name in list(ds.data_vars) + list(ds.coords):
-            ds[name].encoding.clear()
-        ds["time"].encoding.update({"units": "days since 1970-01-01", "dtype": "int32"})
         return ds
 
     def _probe_estimate(self, bbox: list[float]) -> GridSpec:

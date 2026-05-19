@@ -154,9 +154,7 @@ def _validate_dataset_template(dataset: object, *, source: str) -> None:
         raise ValueError(f"Dataset template '{dataset_id}' in {source} must define an 'ingestion' block")
     plugin = ingestion.get("plugin")
     if not (isinstance(plugin, str) and plugin):
-        raise ValueError(
-            f"Dataset template '{dataset_id}' in {source} must define ingestion.plugin"
-        )
+        raise ValueError(f"Dataset template '{dataset_id}' in {source} must define ingestion.plugin")
 
     sync_availability = sync_block.get("availability") if isinstance(sync_block, dict) else None
     if sync_availability is not None:

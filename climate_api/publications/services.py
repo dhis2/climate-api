@@ -58,7 +58,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
                     # Pyramid zarr and Icechunk stores are served via the /zarr endpoint, not pygeoapi.
-                    "pygeoapi_path": None if (is_pyramid_zarr or is_icechunk)
+                    "pygeoapi_path": None
+                    if (is_pyramid_zarr or is_icechunk)
                     else f"/ogcapi/collections/{collection_id}",
                 }
             )

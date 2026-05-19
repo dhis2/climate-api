@@ -938,8 +938,14 @@ def test_sync_dataset_reads_committed_end_from_icechunk_store(monkeypatch: pytes
     monkeypatch.setattr(
         ingest_store,
         "read_committed_period_ids",
-        lambda path, period_type: {"2024-01-01T00", "2024-01-01T01", "2024-01-01T02", "2024-01-01T03",
-                                    "2024-01-01T04", "2024-01-01T05"},
+        lambda path, period_type: {
+            "2024-01-01T00",
+            "2024-01-01T01",
+            "2024-01-01T02",
+            "2024-01-01T03",
+            "2024-01-01T04",
+            "2024-01-01T05",
+        },
     )
 
     captured: dict[str, object] = {}
@@ -1033,15 +1039,20 @@ def _patch_icechunk_artifact_dependencies(
     monkeypatch.setattr(orchestrator_mod, "run_ingest_sync", fake_run_ingest_sync)
     monkeypatch.setattr(orchestrator_mod, "load_plugin", lambda path, params, extra_params=None: object())
     monkeypatch.setattr(store_mod, "open_or_create_repo", lambda _: _FakeRepo())
-    monkeypatch.setattr(svc, "coverage_from_open_dataset", lambda ds, **_: {
-        "has_data": True,
-        "coverage": {
-            "temporal": {"start": "2024-01-01T00", "end": "2024-01-01T06"},
-            "spatial": {"xmin": 4.0, "ymin": 57.5, "xmax": 31.5, "ymax": 71.5},
-        },
-    })
     monkeypatch.setattr(
-        xr, "open_zarr",
+        svc,
+        "coverage_from_open_dataset",
+        lambda ds, **_: {
+            "has_data": True,
+            "coverage": {
+                "temporal": {"start": "2024-01-01T00", "end": "2024-01-01T06"},
+                "spatial": {"xmin": 4.0, "ymin": 57.5, "xmax": 31.5, "ymax": 71.5},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        xr,
+        "open_zarr",
         lambda *_a, **_k: xr.Dataset({"t2m": xr.DataArray(np.zeros((1,)), dims=["time"])}),
     )
     monkeypatch.setattr(svc, "get_extent", lambda: None)

@@ -162,9 +162,7 @@ class TestWorldPopPlugin:
         fake_resp.raise_for_status = lambda: None
         fake_resp.content = b""
 
-        with patch("requests.get", return_value=fake_resp), patch(
-            "rioxarray.open_rasterio", return_value=fake_da
-        ):
+        with patch("requests.get", return_value=fake_resp), patch("rioxarray.open_rasterio", return_value=fake_da):
             ds = WorldPopPlugin(country_code="NOR")._fetch_sync(2024, [4.0, 57.5, 31.5, 71.5])
 
         assert "pop_total" in ds.data_vars
@@ -181,9 +179,7 @@ class TestWorldPopPlugin:
         fake_resp.raise_for_status = lambda: None
         fake_resp.content = b""
 
-        with patch("requests.get", return_value=fake_resp), patch(
-            "rioxarray.open_rasterio", return_value=fake_da
-        ):
+        with patch("requests.get", return_value=fake_resp), patch("rioxarray.open_rasterio", return_value=fake_da):
             ds = WorldPopPlugin(country_code="NOR")._fetch_sync(2024, [4.0, 57.5, 31.5, 71.5])
 
         assert ds["time"].encoding.get("units") == "days since 1970-01-01"

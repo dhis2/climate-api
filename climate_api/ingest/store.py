@@ -56,10 +56,7 @@ def rechunk_store(store_path: Path, *, time_chunk: int) -> None:
                 new_chunks = list(current)
                 new_chunks[list(da.dims).index("time")] = effective_chunk
             else:
-                new_chunks = [
-                    effective_chunk if dim == "time" else da.sizes[dim]
-                    for dim in da.dims
-                ]
+                new_chunks = [effective_chunk if dim == "time" else da.sizes[dim] for dim in da.dims]
             existing["chunks"] = new_chunks
         encoding[name] = existing
 

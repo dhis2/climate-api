@@ -504,6 +504,7 @@ def _detect_dataset_crs(ds: Any) -> str | None:
         return None
     try:
         import pyproj
+
         attrs = dict(ds["spatial_ref"].attrs)
         wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
         if not wkt:

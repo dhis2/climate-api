@@ -50,12 +50,36 @@ from climate_api.shared.time import datetime_to_period_string, normalize_period_
 logger = logging.getLogger(__name__)
 
 
+def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) -> None:
+    """Raise HTTP 400 if the dataset's declared spatial extent does not overlap the instance bbox."""
+    extents = dataset.get("extents")
+    if not isinstance(extents, dict):
+        return
+    spatial = extents.get("spatial")
+    if not isinstance(spatial, dict):
+        return
+    dataset_bbox = spatial.get("bbox")
+    if not (isinstance(dataset_bbox, list) and len(dataset_bbox) == 4):
+        return
+    dx_min, dy_min, dx_max, dy_max = (float(v) for v in dataset_bbox)
+    ix_min, iy_min, ix_max, iy_max = (float(v) for v in instance_bbox)
+    if dx_max <= ix_min or dx_min >= ix_max or dy_max <= iy_min or dy_min >= iy_max:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset.get('id')}' spatial extent {dataset_bbox} "
+                f"does not overlap the configured instance extent {instance_bbox}"
+            ),
+        )
+
+
 def _read_crs_from_spatial_ref(ds: object) -> str | None:
     """Return 'EPSG:<n>' from a dataset's spatial_ref coordinate, or None."""
     if "spatial_ref" not in ds.coords:
         return None
     try:
         import pyproj
+
         attrs = dict(ds["spatial_ref"].attrs)
         wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
         if not wkt:
@@ -252,9 +276,10 @@ def _create_icechunk_artifact(
     params = dict(ingestion.get("params") or {})
 
     extent = get_extent()
-    resolved_bbox: list[float] = list(bbox) if bbox is not None else (
-        list(extent["bbox"]) if extent else [-180, -90, 180, 90]
+    resolved_bbox: list[float] = (
+        list(bbox) if bbox is not None else (list(extent["bbox"]) if extent else [-180, -90, 180, 90])
     )
+    _check_bbox_overlap(dataset, resolved_bbox)
     store_path = downloader.DOWNLOAD_DIR / f"{dataset_id}.icechunk"
 
     extent_country_code = extent.get("country_code") if extent else None
@@ -270,7 +295,12 @@ def _create_icechunk_artifact(
     rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
     logger.info(
         "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s",
-        dataset_id, effective_start, end, start, end, rechunk_time,
+        dataset_id,
+        effective_start,
+        end,
+        start,
+        end,
+        rechunk_time,
     )
     run_ingest_sync(
         plugin=plugin,
@@ -614,9 +644,7 @@ def get_dataset_zarr_store_file_or_404(
     return FileResponse(target, media_type=media_type, filename=target.name)
 
 
-def _serve_icechunk_key(
-    dataset_id: str, artifact: ArtifactRecord, relative_path: str
-) -> Response | dict[str, object]:
+def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path: str) -> Response | dict[str, object]:
     """Serve a zarr v3 key from an Icechunk store via its session store."""
     import zarr
 
@@ -655,6 +683,7 @@ def _serve_icechunk_key(
 
     try:
         import zarr.core.buffer
+
         proto = zarr.core.buffer.default_buffer_prototype()
         data = session.store._get_bytes_sync(key, prototype=proto)
         if data is None:

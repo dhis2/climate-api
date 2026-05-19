@@ -23,6 +23,7 @@ from climate_api.ingest.store import read_committed_period_ids
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_monthly_dataset(period_id: str, ny: int = 4, nx: int = 4) -> xr.Dataset:
     """Return a tiny single-period dataset matching FakePlugin's grid."""
     t = pd.Timestamp(f"{period_id}-01")
@@ -36,6 +37,7 @@ def _make_monthly_dataset(period_id: str, ny: int = 4, nx: int = 4) -> xr.Datase
 # ---------------------------------------------------------------------------
 # Fake plugin
 # ---------------------------------------------------------------------------
+
 
 class FakePlugin:
     """In-memory IngestionPlugin that generates tiny xarray Datasets."""
@@ -62,6 +64,7 @@ class FakePlugin:
 # Protocol conformance
 # ---------------------------------------------------------------------------
 
+
 def test_fake_plugin_satisfies_protocol() -> None:
     plugin = FakePlugin(["2024-01", "2024-02"])
     assert isinstance(plugin, IngestionPlugin)
@@ -70,6 +73,7 @@ def test_fake_plugin_satisfies_protocol() -> None:
 # ---------------------------------------------------------------------------
 # Core orchestrator tests
 # ---------------------------------------------------------------------------
+
 
 def test_run_ingest_writes_all_periods(tmp_path: Path) -> None:
     plugin = FakePlugin(["2024-01", "2024-02", "2024-03"])
@@ -280,6 +284,7 @@ def test_run_ingest_cancels_on_request(tmp_path: Path) -> None:
 # Sync wrapper
 # ---------------------------------------------------------------------------
 
+
 def test_run_ingest_sync_wrapper(tmp_path: Path) -> None:
     plugin = FakePlugin(["2024-01", "2024-02"])
     store_path = tmp_path / "test.icechunk"
@@ -300,6 +305,7 @@ def test_run_ingest_sync_wrapper(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # load_plugin
 # ---------------------------------------------------------------------------
+
 
 def test_load_plugin_imports_and_instantiates(tmp_path: Path) -> None:
     """load_plugin can resolve built-in plugins by dotted path."""
@@ -322,6 +328,7 @@ def test_load_plugin_raises_for_non_protocol() -> None:
 # read_committed_period_ids
 # ---------------------------------------------------------------------------
 
+
 def test_read_committed_period_ids_empty_when_no_store(tmp_path: Path) -> None:
     assert read_committed_period_ids(tmp_path / "nostore.icechunk", "monthly") == set()
 
@@ -329,6 +336,7 @@ def test_read_committed_period_ids_empty_when_no_store(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Era5LandPlugin._build_periods (unit tests, no network)
 # ---------------------------------------------------------------------------
+
 
 def test_era5land_build_periods_respects_hour_component() -> None:
     from climate_api.ingest.plugins.era5_land import Era5LandPlugin
@@ -357,6 +365,7 @@ def test_era5land_build_periods_spans_months() -> None:
 # ---------------------------------------------------------------------------
 # Rechunking
 # ---------------------------------------------------------------------------
+
 
 def _time_chunk_size(store_path: Path) -> int:
     """Read the time chunk size of the first data variable from the committed store."""

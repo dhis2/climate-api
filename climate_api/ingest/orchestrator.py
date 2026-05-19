@@ -28,6 +28,23 @@ from climate_api.ingest.store import open_or_create_repo, read_committed_period_
 
 logger = logging.getLogger(__name__)
 
+_CF_ENCODING_KEYS = frozenset({"scale_factor", "add_offset", "missing_value", "_FillValue", "coordinates"})
+
+
+def _strip_cf_encoding(ds: xr.Dataset, period_type: str) -> None:
+    """Strip CF attrs and clear encoding to prevent zarr append conflicts.
+
+    GeoTIFF-sourced arrays carry scale_factor/add_offset/_FillValue in both
+    .encoding and .attrs. xarray raises ValueError when appending to zarr if
+    those keys collide with the stored array metadata from a prior write.
+    """
+    for name in list(ds.data_vars) + list(ds.coords):
+        ds[name].encoding.clear()
+        ds[name].attrs = {k: v for k, v in ds[name].attrs.items() if k not in _CF_ENCODING_KEYS}
+    if "time" in ds.coords:
+        units = "hours since 1970-01-01" if period_type == "hourly" else "days since 1970-01-01"
+        ds["time"].encoding.update({"units": units, "dtype": "int32"})
+
 
 def load_plugin(
     dotted_path: str,
@@ -140,6 +157,7 @@ async def run_ingest(
 
         ds = await task
         period_id = pending[i]
+        _strip_cf_encoding(ds, period_type=period_type)
 
         # Each period uses its own writable session so that to_zarr(append_dim=)
         # on the next period reads the committed store and finds the time axis.

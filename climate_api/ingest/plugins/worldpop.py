@@ -62,9 +62,7 @@ class WorldPopPlugin:
         return self._build_periods(start, end)
 
     async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
-        return await asyncio.get_running_loop().run_in_executor(
-            _executor, self._fetch_sync, int(period_id), bbox
-        )
+        return await asyncio.get_running_loop().run_in_executor(_executor, self._fetch_sync, int(period_id), bbox)
 
     # ------------------------------------------------------------------
     # Sync helpers (run inside the thread pool)
@@ -80,10 +78,7 @@ class WorldPopPlugin:
             )
         if self.version == "global1":
             filename = f"{cc.lower()}_ppp_{year}_UNadj.tif"
-            return (
-                f"https://data.worldpop.org/GIS/Population/Global_2000_2020/"
-                f"{year}/{cc}/{filename}"
-            )
+            return f"https://data.worldpop.org/GIS/Population/Global_2000_2020/{year}/{cc}/{filename}"
         raise ValueError(f"Unknown WorldPop version: {self.version!r}")
 
     def _fetch_sync(self, year: int, bbox: list[float]) -> xr.Dataset:
@@ -108,12 +103,6 @@ class WorldPopPlugin:
 
         ds = da.to_dataset(name="pop_total")
         ds = ds.expand_dims(time=[np.datetime64(f"{year}-01-01", "D")])
-
-        _CF_ENCODING_KEYS = {"scale_factor", "add_offset", "missing_value", "_FillValue", "coordinates"}
-        for name in list(ds.data_vars) + list(ds.coords):
-            ds[name].encoding.clear()
-            ds[name].attrs = {k: v for k, v in ds[name].attrs.items() if k not in _CF_ENCODING_KEYS}
-        ds["time"].encoding.update({"units": "days since 1970-01-01", "dtype": "int32"})
         return ds
 
     def _probe_estimate(self, bbox: list[float]) -> GridSpec:
@@ -138,7 +127,4 @@ class WorldPopPlugin:
         start_year = int(start[:4])
         end_year = int(end[:4])
         valid_range = (2015, 2030) if self.version == "global2" else (2000, 2020)
-        return [
-            str(y)
-            for y in range(max(start_year, valid_range[0]), min(end_year, valid_range[1]) + 1)
-        ]
+        return [str(y) for y in range(max(start_year, valid_range[0]), min(end_year, valid_range[1]) + 1)]

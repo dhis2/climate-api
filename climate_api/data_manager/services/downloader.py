@@ -33,7 +33,6 @@ def _resolve_download_dir() -> Path:
 DOWNLOAD_DIR = _resolve_download_dir()
 
 
-
 def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end: str | None = None) -> None:
     """Collect dataset cache files into one optimised Zarr archive, clipped to request scope."""
     logger.info(f"Optimizing cache for dataset {dataset['id']}")
@@ -271,5 +270,3 @@ def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
     function_name = parts[-1]
     module = importlib.import_module(module_path)
     return getattr(module, function_name)  # type: ignore[no-any-return]
-
-
