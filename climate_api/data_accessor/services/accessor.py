@@ -10,7 +10,7 @@ import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from ...data_manager.services.downloader import get_cache_files, get_zarr_path
+from ...data_manager.services.downloader import get_icechunk_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
 
@@ -25,21 +25,8 @@ def get_data(
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
     logger.info("Opening dataset")
-    zarr_path = get_zarr_path(dataset)
-    if zarr_path:
-        logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = open_zarr_dataset(str(zarr_path))
-    else:
-        logger.warning(
-            f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
-        )
-        files = get_cache_files(dataset)
-        ds = xr.open_mfdataset(
-            files,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+    store_path = get_icechunk_path(dataset)
+    ds = open_icechunk_dataset(store_path)
 
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
@@ -73,25 +60,10 @@ def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
 def get_data_coverage_for_paths(
     dataset: dict[str, Any],
     *,
-    zarr_path: str | None = None,
-    netcdf_paths: list[str] | None = None,
+    zarr_path: str,
 ) -> dict[str, Any]:
-    """Return coverage metadata for the concrete files created for one artifact."""
-    if zarr_path is not None and netcdf_paths:
-        raise ValueError("Provide either zarr_path or netcdf_paths when computing coverage, not both")
-    if zarr_path is None and not netcdf_paths:
-        raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
-
-    if zarr_path is not None:
-        ds = open_zarr_dataset(zarr_path)
-    else:
-        assert netcdf_paths is not None
-        ds = xr.open_mfdataset(
-            netcdf_paths,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+    """Return coverage metadata for a materialized flat-zarr artifact."""
+    ds = open_zarr_dataset(zarr_path)
 
     from climate_api import config as api_config
 

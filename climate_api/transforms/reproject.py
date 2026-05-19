@@ -24,7 +24,7 @@ def reproject_to_instance_crs(
     ``params`` dict if your source uses a different input CRS.
 
     The dataset must already have ``x`` and ``y`` as its spatial dimension names,
-    which is guaranteed by ``build_dataset_zarr`` before transforms are run.
+    which is guaranteed by the ingest orchestrator before transforms are run.
     """
     target_crs = api_config.get_crs()
     if target_crs == source_crs:

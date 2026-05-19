@@ -286,7 +286,7 @@ def _create_icechunk_artifact(
         list(bbox) if bbox is not None else (list(extent["bbox"]) if extent else [-180, -90, 180, 90])
     )
     _check_bbox_overlap(dataset, resolved_bbox)
-    store_path = downloader.DOWNLOAD_DIR / f"{dataset_id}.icechunk"
+    store_path = downloader.get_icechunk_path(dataset)
 
     if overwrite and store_path.exists():
         import shutil
