@@ -105,8 +105,10 @@ class WorldPopPlugin:
         ds = da.to_dataset(name="pop_total")
         ds = ds.expand_dims(time=[np.datetime64(f"{year}-01-01", "D")])
 
+        _CF_ENCODING_KEYS = {"scale_factor", "add_offset", "missing_value", "_FillValue", "coordinates"}
         for name in list(ds.data_vars) + list(ds.coords):
             ds[name].encoding.clear()
+            ds[name].attrs = {k: v for k, v in ds[name].attrs.items() if k not in _CF_ENCODING_KEYS}
         ds["time"].encoding.update({"units": "days since 1970-01-01", "dtype": "int32"})
         return ds
 
