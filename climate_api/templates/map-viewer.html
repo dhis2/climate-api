@@ -255,6 +255,15 @@
         }
       }
 
+      function buildPaletteLut(palette) {
+        const lut = new Array(256).fill("#000000");
+        for (const [value, color] of Object.entries(palette)) {
+          const idx = parseInt(value, 10);
+          if (idx >= 0 && idx < 256) lut[idx] = color;
+        }
+        return lut;
+      }
+
       // Resolve the temporal dimension key and step list from cube:dimensions.
       function getTimeDimKey(dimensions) {
         for (const [key, val] of Object.entries(dimensions ?? {})) {
@@ -339,8 +348,8 @@
           (_, i) => cm[Math.round((i * (cm.length - 1)) / 31)]
         );
         legendBar.style.background = `linear-gradient(to right, ${stops.join(", ")})`;
-        legendMin.textContent = clim[0];
-        legendMax.textContent = clim[1];
+        legendMin.textContent = clim ? clim[0] : "";
+        legendMax.textContent = clim ? clim[1] : "";
         legendUnits.textContent = units ? `(${units})` : "";
         legendEl.classList.remove("hidden");
       }
@@ -456,7 +465,8 @@
           return;
         }
 
-        const clim = renders.rescale?.[0] ?? [0, 100];
+        const palette = renders["climate_api:palette"] ?? null;
+        const clim = palette ? [0, 255] : (renders.rescale?.[0] ?? [0, 100]);
         const colormapName = renders.colormap_name ?? "viridis";
         const fillValue = renders.nodata ?? null;
         const variable =
@@ -492,7 +502,7 @@
 
         let cm;
         try {
-          cm = buildColormap(colormapName);
+          cm = palette ? buildPaletteLut(palette) : buildColormap(colormapName);
           const zarrVersion = zarr["zarr:zarr_format"] ?? null;
           const selector =
             timeStepCount() > 0 ? { [timeDimKey]: 0 } : {};
@@ -546,7 +556,7 @@
         metaUnits.textContent = units || "—";
         datasetMeta.classList.remove("hidden");
 
-        updateLegend(cm, clim, units);
+        updateLegend(cm, palette ? null : clim, units);
 
         setStatus("");
       }
