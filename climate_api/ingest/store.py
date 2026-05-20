@@ -162,6 +162,9 @@ def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
                 ds.close()
                 ds = xr.open_zarr(session.store, group="0")
             if "time" not in ds.coords:
+                # Timeless (static) store: if it has spatial data, treat as complete.
+                if ds.sizes and all(s > 0 for s in ds.sizes.values()):
+                    return {"static"}
                 return set()
             import pandas as pd
 
