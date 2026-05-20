@@ -300,7 +300,7 @@ def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.Monk
             download_end="2026-02-10",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-    
+
             publish=False,
         )
 
@@ -327,7 +327,7 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
             download_end="2026-02-11",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-    
+
             publish=False,
         )
 
