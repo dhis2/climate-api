@@ -204,7 +204,7 @@ class TestChirps3Plugin:
         assert isinstance(plugin, IngestionPlugin)
 
     def test_max_concurrency(self) -> None:
-        assert self._make_plugin().max_concurrency == 4
+        assert self._make_plugin().max_concurrency == 1
 
     def test_commit_batch_size(self) -> None:
         assert self._make_plugin().commit_batch_size == 30

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import time
 from datetime import date
 from typing import Any
 
@@ -47,7 +48,7 @@ class Chirps3Plugin:
             'sat' for prelim. Defaults to 'rnl' (final/rnl recommended).
     """
 
-    max_concurrency = 4
+    max_concurrency = 1
     commit_batch_size = 30
     rechunk_time = 30
 
@@ -91,7 +92,20 @@ class Chirps3Plugin:
         url = self._url_for_day(d)
         logger.info("Fetching CHIRPS3 %s: %s", period_id, url)
 
-        da = rioxarray.open_rasterio(url, chunks=None, masked=True, lock=False)
+        for attempt in range(3):
+            try:
+                da = rioxarray.open_rasterio(url, chunks=None, masked=True, lock=False)
+                break
+            except Exception as exc:
+                msg = str(exc)
+                if "429" in msg or "503" in msg:
+                    wait = 10 * (2**attempt)
+                    logger.warning("CHIRPS3 HTTP error (%s), retrying in %ds: %s", msg[:60], wait, url)
+                    time.sleep(wait)
+                    if attempt == 2:
+                        raise
+                else:
+                    raise
         if not isinstance(da, xr.DataArray):
             raise TypeError(f"rioxarray.open_rasterio returned {type(da).__name__!r}, expected DataArray")
         xmin, ymin, xmax, ymax = map(float, bbox)
