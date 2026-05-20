@@ -155,7 +155,10 @@ def _build_collection_template(
         extent=pystac.Extent(
             spatial=pystac.SpatialExtent([[spatial.xmin, spatial.ymin, spatial.xmax, spatial.ymax]]),
             temporal=pystac.TemporalExtent(
-                [[parse_period_string_to_datetime(temporal.start), parse_period_string_to_datetime(temporal.end)]]
+                [[
+                    parse_period_string_to_datetime(temporal.start) if temporal.start else None,
+                    parse_period_string_to_datetime(temporal.end) if temporal.end else None,
+                ]]
             ),
         ),
         title=artifact.dataset_name,
@@ -211,7 +214,10 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         ) from exc
     try:
         x_dimension, y_dimension = get_x_y_dims(ds)
-        time_dimension = get_time_dim(ds)
+        try:
+            time_dimension = get_time_dim(ds)
+        except ValueError:
+            time_dimension = None
         # Detect the actual data CRS so proj:code reflects the store's native coordinate
         # system rather than the deployment CRS. This matters when a dataset (e.g. WorldPop)
         # is stored in WGS84 while the deployment is configured for a projected CRS.
