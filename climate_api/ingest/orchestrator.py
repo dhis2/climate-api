@@ -1,8 +1,10 @@
 """Per-period Icechunk ingest orchestrator.
 
 The orchestrator is the only place that writes to the Icechunk store.
-Plugins implement three focused async methods (probe / periods / fetch_period)
-and never touch zarr directly.
+Plugins implement three focused sync methods (probe / periods / fetch_period)
+and never touch zarr directly. The orchestrator runs probe and fetch_period
+via asyncio.to_thread so I/O-bound plugins run in the thread pool without
+managing their own executor; periods() is called directly (pure computation).
 
 Crash recovery: every period is committed individually. The cursor is saved
 every commit_batch_size periods so that a restart resumes from the last

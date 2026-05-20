@@ -453,11 +453,13 @@ def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, object]:
 
             from climate_api.ingest.store import open_or_create_repo
 
-            repo = open_or_create_repo(Path(artifact_path))
-            session = repo.readonly_session("main")
-            root = zarr.open_group(session.store, mode="r")
-            if "multiscales" in root.attrs:
-                kwargs["group"] = "0"
+            icechunk_path = Path(artifact_path)
+            if icechunk_path.exists():
+                repo = open_or_create_repo(icechunk_path)
+                session = repo.readonly_session("main")
+                root = zarr.open_group(session.store, mode="r")
+                if "multiscales" in root.attrs:
+                    kwargs["group"] = "0"
         except Exception:
             pass
         return kwargs

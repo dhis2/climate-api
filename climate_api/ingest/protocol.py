@@ -16,8 +16,9 @@ if TYPE_CHECKING:
 class GridSpec:
     """Source grid metadata returned by a plugin probe.
 
-    The orchestrator uses this to fix the zarr chunk shape and write GeoZarr
-    attributes before the first period is written. Set time_dim=False for
+    The orchestrator uses this to write GeoZarr attributes (CRS, bbox, dtype,
+    nodata) before the first period is written. Shape is logged but chunking
+    is not currently applied from this value. Set time_dim=False for
     static (time-invariant) datasets — the orchestrator branches on this flag
     and issues a single write with no append dimension.
 
@@ -43,7 +44,7 @@ class IngestionPlugin(Protocol):
     """Minimal interface a plugin must implement for per-period Icechunk ingest.
 
     The climate-api layer owns the orchestration loop — plugins never touch
-    zarr or Icechunk directly. Implement the three async methods and declare
+    zarr or Icechunk directly. Implement the three sync methods and declare
     max_concurrency and commit_batch_size as class attributes.
 
     max_concurrency: maximum number of fetch_period calls in flight at once.

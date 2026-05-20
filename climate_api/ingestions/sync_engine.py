@@ -424,17 +424,20 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
             try:
                 import zarr
 
-                repo = open_or_create_repo(Path(latest_artifact.asset_paths[0]))
-                session = repo.readonly_session("main")
-                root = zarr.open_group(session.store, mode="r")
-                if "multiscales" in root.attrs:
-                    logger.warning(
-                        "Sync append is not supported for pyramid Icechunk dataset '%s'; falling back to rematerialize",
-                        source_dataset.get("id", "<unknown>"),
-                    )
-                    return False
+                icechunk_path = Path(latest_artifact.asset_paths[0])
+                if icechunk_path.exists():
+                    repo = open_or_create_repo(icechunk_path)
+                    session = repo.readonly_session("main")
+                    root = zarr.open_group(session.store, mode="r")
+                    if "multiscales" in root.attrs:
+                        logger.warning(
+                            "Sync append not supported for pyramid Icechunk dataset '%s'; "
+                            "falling back to rematerialize",
+                            source_dataset.get("id", "<unknown>"),
+                        )
+                        return False
             except Exception:
-                pass  # store missing or unreadable — let the ingest path handle it
+                pass  # store unreadable — let the ingest path handle it
         return True
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
