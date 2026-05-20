@@ -418,6 +418,29 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
     from climate_api.ingestions.schemas import ArtifactFormat
 
     if latest_artifact.format == ArtifactFormat.ICECHUNK:
+        # Pyramid Icechunk stores have data under group "0"; appending to root
+        # would create a second flat dataset instead of extending the pyramid.
+        # Fall back to rematerialize so the full pyramid is rebuilt.
+        artifact_path = latest_artifact.path
+        if artifact_path:
+            from pathlib import Path
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            try:
+                import zarr
+
+                repo = open_or_create_repo(Path(artifact_path))
+                session = repo.readonly_session("main")
+                root = zarr.open_group(session.store, mode="r")
+                if "multiscales" in root.attrs:
+                    logger.warning(
+                        "Sync append is not supported for pyramid Icechunk dataset '%s'; falling back to rematerialize",
+                        source_dataset.get("id", "<unknown>"),
+                    )
+                    return False
+            except Exception:
+                pass  # store missing or unreadable — let the ingest path handle it
         return True
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:

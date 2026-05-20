@@ -300,7 +300,7 @@ def _create_icechunk_artifact(
         extra_params["country_code"] = extent_country_code
     try:
         plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
-    except TypeError as exc:
+    except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Plugin configuration error: {exc}") from exc
 
     effective_start = ingest_start if ingest_start is not None else start

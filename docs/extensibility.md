@@ -56,7 +56,7 @@ import xarray as xr
 
 class MyPlugin:
     max_concurrency: int = 1    # parallel fetch limit
-    commit_batch_size: int = 1  # periods per Icechunk commit
+    commit_batch_size: int = 1  # cursor checkpoint interval (every period is committed)
 
     async def probe(self, bbox: list[float], **params) -> GridSpec:
         """Metadata-only source probe. Returns grid shape, CRS, dtype. No data transfer."""
@@ -92,7 +92,7 @@ Set `time_dim=False` for static (time-invariant) datasets — the orchestrator i
 2. Calls `periods()` once to get the full period list; filters against already-committed time coordinates.
 3. Creates all fetch tasks upfront so up to `max_concurrency` fetches are in flight simultaneously.
 4. Awaits tasks in chronological order so writes are always sequential.
-5. Commits to the Icechunk store after every `commit_batch_size` periods.
+5. Commits every period to the Icechunk store; checkpoints the job cursor every `commit_batch_size` periods so a restart resumes from the last checkpoint rather than the beginning.
 6. On restart, resumes from the last committed period — a crash loses at most one uncommitted batch.
 7. After all periods are written, runs a rechunk pass if the plugin declares `rechunk_time`, then expires intermediate Icechunk snapshots to prune history.
 

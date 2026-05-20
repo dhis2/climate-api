@@ -49,11 +49,12 @@ class IngestionPlugin(Protocol):
         Keep at 1 for sources with large per-period files or rate-limited APIs.
         Raise for sources where individual periods are small (< 50 MB).
 
-    commit_batch_size: how often the job cursor checkpoint is saved.
-        Every period is always committed individually to Icechunk; this
-        controls how frequently the orchestrator persists the cursor so that a
-        restart resumes from the last checkpoint rather than re-scanning the
-        store. Use 1 for monthly sources, ~30 for daily, ~720 for hourly.
+    commit_batch_size: cursor checkpoint interval.
+        Every period is always committed individually to Icechunk. This
+        attribute controls how frequently the orchestrator persists the job
+        cursor so that a restart resumes from the last checkpoint rather than
+        re-scanning the whole store. Use 1 for monthly sources, ~30 for daily,
+        ~720 for hourly.
 
     rechunk_time (optional class attribute): target time chunk size for the
         post-ingest rechunk. When set, the orchestrator rewrites the store after

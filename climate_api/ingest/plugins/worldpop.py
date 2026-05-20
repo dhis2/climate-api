@@ -49,7 +49,13 @@ class WorldPopPlugin:
     pyramid: bool = True
 
     def __init__(self, country_code: str = "", version: str = "global2") -> None:
-        self.country_code = country_code.upper()
+        cc = country_code.strip().upper()
+        if not cc:
+            raise ValueError(
+                "WorldPopPlugin requires a 3-letter ISO country code (e.g. 'NOR'). "
+                "Set extent.country_code or ingestion.params.country_code."
+            )
+        self.country_code = cc
         self.version = version
 
     # ------------------------------------------------------------------

@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+import rioxarray  # noqa: F401  — registers the .rio accessor used in test helpers
 import xarray as xr
 
 from climate_api.ingest.protocol import GridSpec, IngestionPlugin

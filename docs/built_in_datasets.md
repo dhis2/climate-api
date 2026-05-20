@@ -44,7 +44,7 @@ CHIRPS (Climate Hazards Group InfraRed Precipitation with Station data) v3 is a 
 
 ERA5-Land is a global atmospheric reanalysis produced by ECMWF. The 2 m temperature variable (`t2m`) represents the air temperature 2 metres above the land surface, including corrections for topography relative to the ERA5 pressure levels.
 
-**Ingest method** — the DestinE zarr store is opened lazily over HTTPS. Each monthly period is fetched as an hourly slice, aggregated to daily values (mean), and written directly to the Icechunk store — no intermediate files on disk. The source's 0–360° longitude range is converted to −180–180° before writing.
+**Ingest method** — the DestinE zarr store is opened lazily over HTTPS. Individual hourly periods are fetched and written directly to the Icechunk store — no intermediate files on disk. The source's 0–360° longitude range is converted to −180–180° before writing. `commit_batch_size = 720` checkpoints the cursor once per month of hourly data.
 
 **Sync behaviour** — new months are appended incrementally. ERA5-Land is published with a nominal 5-day lag; months closer than 120 hours to today are not requested.
 
@@ -67,7 +67,7 @@ ERA5-Land is a global atmospheric reanalysis produced by ECMWF. The 2 m temperat
 
 Total precipitation (`tp`) from ERA5-Land is an accumulated hourly value representing the sum of large-scale and convective precipitation falling onto the land surface. It is useful as a high-resolution complement to CHIRPS for countries outside CHIRPS's 50°N–50°S band, or for sub-daily analysis.
 
-**Ingest method** — same as ERA5-Land temperature: monthly periods fetched and aggregated, written directly to Icechunk.
+**Ingest method** — same as ERA5-Land temperature: individual hourly periods fetched from DestinE and written directly to Icechunk.
 
 **Sync behaviour** — same 5-day lag as ERA5-Land temperature; months are appended incrementally.
 
@@ -91,7 +91,7 @@ Total precipitation (`tp`) from ERA5-Land is an accumulated hourly value represe
 
 WorldPop Global2 provides gridded population estimates and projections at 100 m resolution. Each raster year represents estimated residential population counts. Years up to and including the present are backward-modelled estimates; years beyond the present are forward projections.
 
-**Ingest method** — each year is downloaded as a per-country GeoTIFF from WorldPop's HTTP server (typically 50–200 MB per file), clipped to the configured bbox, and written directly to the Icechunk store. The country code must be set in `ingestion.params.country_code` in the dataset template (e.g. `NOR`, `GHA`).
+**Ingest method** — each year is downloaded as a per-country GeoTIFF from WorldPop's HTTP server (typically 50–200 MB per file), clipped to the configured bbox, and written directly to the Icechunk store. A multiscale pyramid is built after the initial ingest. The country code is taken from `extent.country_code` in `climate-api.yaml` (preferred) or from `ingestion.params.country_code` in the dataset template.
 
 **Sync behaviour** — population data is released year by year. The API uses a `release`-kind sync that checks each calendar year separately. Future years (projections through 2030) are also requestable.
 

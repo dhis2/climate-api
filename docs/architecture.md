@@ -67,7 +67,7 @@ Orchestrator
     │  for each pending period:
     │    fetch_period() → xr.Dataset (in source CRS)
     │    to_zarr(icechunk_store, append_dim="time")
-    │    commit every commit_batch_size periods
+    │    commit every period; checkpoint cursor every commit_batch_size periods
     │  rechunk in-place (if rechunk_time is set)
     │  expire intermediate snapshots
     │  register ArtifactFormat.ICECHUNK artifact record
@@ -126,7 +126,7 @@ The platform has four extension points. Each one has a narrow contract — the f
 ```python
 class MyPlugin:
     max_concurrency: int = 1    # parallel fetch limit
-    commit_batch_size: int = 1  # periods per Icechunk commit
+    commit_batch_size: int = 1  # cursor checkpoint interval (every period is committed)
 
     async def probe(self, bbox: list[float], **params) -> GridSpec:
         """Metadata-only probe — no data transfer."""
@@ -141,7 +141,7 @@ class MyPlugin:
         ...
 ```
 
-The orchestrator calls `probe()` once, `periods()` once, then drives a bounded-concurrency fetch loop — writing each period directly to an Icechunk store and committing every `commit_batch_size` periods. Plugins never touch zarr or Icechunk directly.
+The orchestrator calls `probe()` once, `periods()` once, then drives a bounded-concurrency fetch loop — writing each period directly to an Icechunk store (one Icechunk commit per period) and checkpointing the job cursor every `commit_batch_size` periods. Plugins never touch zarr or Icechunk directly.
 
 See [Extensibility — Ingestion plugins](extensibility.md#ingestion-plugins) for the full protocol and `GridSpec` reference.
 
