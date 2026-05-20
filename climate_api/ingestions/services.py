@@ -550,11 +550,19 @@ def plan_sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    committed_end: str | None = None
+    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.asset_paths:
+        from climate_api.ingest.store import read_committed_period_ids
+
+        period_type = str(source_dataset.get("period_type", ""))
+        committed = read_committed_period_ids(Path(latest_artifact.asset_paths[0]), period_type)
+        committed_end = max(committed) if committed else None
     try:
         return plan_sync(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
+            current_end=committed_end,
         )
     except SyncConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

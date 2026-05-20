@@ -127,19 +127,13 @@ async def run_ingest(
         logger.info("No periods available for range %s..%s", start, end)
         return
 
-    # Determine pending periods: prefer cursor (fast) then fall back to store read.
-    cursor = load_cursor() if load_cursor else None
-    last_committed: str | None = cursor.get("last_committed") if cursor else None
-
-    if last_committed and last_committed in all_periods and store_path.exists():
-        idx = all_periods.index(last_committed) + 1
-        pending = all_periods[idx:]
-        logger.info("Resuming after %s: %d/%d periods remain", last_committed, len(pending), len(all_periods))
-    else:
-        present = read_committed_period_ids(store_path, period_type)
-        pending = [p for p in all_periods if p not in present]
-        already_done = len(all_periods) - len(pending)
-        logger.info("Periods: %d already committed, %d pending", already_done, len(pending))
+    # Always use the store as ground truth — the job cursor is a checkpoint that
+    # lags behind actual Icechunk commits by up to commit_batch_size periods, so
+    # trusting it directly would re-fetch already-committed periods after a crash.
+    present = read_committed_period_ids(store_path, period_type)
+    pending = [p for p in all_periods if p not in present]
+    already_done = len(all_periods) - len(pending)
+    logger.info("Periods: %d already committed, %d pending", already_done, len(pending))
 
     if not pending:
         logger.info("Store is current — nothing to ingest")
