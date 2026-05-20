@@ -255,6 +255,41 @@
         background: #f1f5f9;
         border-color: #94a3b8;
       }
+      .sync-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .progress-area {
+        margin-top: 1rem;
+        display: none;
+      }
+      .progress-area.active {
+        display: block;
+      }
+      .progress-bar-track {
+        background: #e2e8f0;
+        border-radius: 99px;
+        height: 6px;
+        overflow: hidden;
+        margin-bottom: 0.4rem;
+      }
+      .progress-bar-fill {
+        background: #0066cc;
+        height: 100%;
+        width: 0%;
+        border-radius: 99px;
+        transition: width 0.3s ease;
+      }
+      .progress-text {
+        font-size: 0.78rem;
+        color: #64748b;
+      }
+
+      button[type="submit"]:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
 
       .divider {
         border: none;
@@ -361,8 +396,12 @@
 
           <hr class="divider" />
           <div class="form-actions">
-            <button type="submit">Ingest</button>
-            <span class="note">Ingestion runs synchronously and may take several minutes.</span>
+            <button type="submit" id="ingest-btn">Ingest</button>
+            <span class="note" id="ingest-note">This may take several minutes.</span>
+          </div>
+          <div class="progress-area" id="ingest-progress">
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="ingest-bar"></div></div>
+            <div class="progress-text" id="ingest-status"></div>
           </div>
         </form>
         {% endif %}
@@ -401,8 +440,12 @@
                 <form method="post" action="{{ base }}/manage/sync" class="sync-form">
                   <input type="hidden" name="dataset_id" value="{{ ds.dataset_id }}" />
                   <input type="hidden" name="publish" value="on" />
-                  <button type="submit" class="sync-btn">Sync</button>
+                  <button type="submit" class="sync-btn" data-id="{{ ds.dataset_id }}">Sync</button>
                 </form>
+                <div class="progress-area" id="sync-progress-{{ ds.dataset_id }}">
+                  <div class="progress-bar-track"><div class="progress-bar-fill" id="sync-bar-{{ ds.dataset_id }}"></div></div>
+                  <div class="progress-text" id="sync-status-{{ ds.dataset_id }}"></div>
+                </div>
               </td>
             </tr>
             {% endfor %}
@@ -419,5 +462,96 @@
     <footer>
       <a href="https://github.com/dhis2/climate-api">dhis2/climate-api</a>
     </footer>
+
+    <script>
+      function runJob(form, { bar, status, progress, btn, note }) {
+        btn.disabled = true;
+        if (note) note.textContent = "Running…";
+        progress.classList.add("active");
+        status.textContent = "Starting…";
+
+        fetch(form.action, { method: "POST", body: new FormData(form) })
+          .then((resp) => {
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+
+            function pump() {
+              return reader.read().then(({ done, value }) => {
+                if (done) return;
+                buf += decoder.decode(value, { stream: true });
+                const parts = buf.split("\n\n");
+                buf = parts.pop();
+                for (const part of parts) {
+                  const line = part.trim();
+                  if (!line.startsWith("data:")) continue;
+                  let event;
+                  try { event = JSON.parse(line.slice(5).trim()); }
+                  catch { continue; }
+                  if (event.redirect) { window.location = event.redirect; return; }
+                  if (event.error) {
+                    progress.classList.remove("active");
+                    btn.disabled = false;
+                    if (note) note.textContent = "This may take several minutes.";
+                    const flash = document.createElement("div");
+                    flash.className = "flash flash-error";
+                    flash.textContent = event.error;
+                    form.closest(".card").prepend(flash);
+                    return;
+                  }
+                  if (event.total > 0) {
+                    const pct = Math.round((event.done / event.total) * 100);
+                    bar.style.width = pct + "%";
+                    status.textContent = `${event.done} / ${event.total} periods (${pct}%)`;
+                  } else {
+                    status.textContent = event.message || "Running…";
+                  }
+                }
+                return pump();
+              });
+            }
+            return pump();
+          })
+          .catch((err) => {
+            btn.disabled = false;
+            if (note) note.textContent = "This may take several minutes.";
+            progress.classList.remove("active");
+            const flash = document.createElement("div");
+            flash.className = "flash flash-error";
+            flash.textContent = String(err);
+            form.closest(".card").prepend(flash);
+          });
+      }
+
+      // Ingest form
+      const ingestForm = document.querySelector("form[action$='/manage/ingest']");
+      if (ingestForm) {
+        ingestForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          runJob(ingestForm, {
+            bar: document.getElementById("ingest-bar"),
+            status: document.getElementById("ingest-status"),
+            progress: document.getElementById("ingest-progress"),
+            btn: document.getElementById("ingest-btn"),
+            note: document.getElementById("ingest-note"),
+          });
+        });
+      }
+
+      // Sync forms (one per dataset row)
+      document.querySelectorAll("form[action$='/manage/sync']").forEach((form) => {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const id = form.querySelector("input[name='dataset_id']").value;
+          runJob(form, {
+            bar: document.getElementById(`sync-bar-${id}`),
+            status: document.getElementById(`sync-status-${id}`),
+            progress: document.getElementById(`sync-progress-${id}`),
+            btn: form.querySelector(".sync-btn"),
+            note: null,
+          });
+        });
+      });
+    </script>
   </body>
 </html>

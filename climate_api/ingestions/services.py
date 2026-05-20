@@ -490,6 +490,7 @@ def sync_dataset(
     dataset_id: str,
     end: str | None,
     publish: bool,
+    on_progress: Any | None = None,
 ) -> SyncResponse:
     """Resolve sync inputs and delegate managed-dataset sync to the sync engine.
 
@@ -528,6 +529,7 @@ def sync_dataset(
             create_artifact_fn=create_artifact,
             get_dataset_fn=get_dataset_or_404,
             current_end=committed_end,
+            on_progress=on_progress,
         )
     except SyncConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

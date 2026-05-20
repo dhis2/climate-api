@@ -171,6 +171,7 @@ def run_sync(
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
     current_end: str | None = None,
+    on_progress: Any | None = None,
 ) -> SyncResponse:
     """Plan and execute one sync operation for a managed dataset.
 
@@ -248,6 +249,7 @@ def run_sync(
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         overwrite=False,
         publish=publish,
+        on_progress=on_progress,
     )
     logger.info(
         "Sync completed for dataset '%s': artifact_id=%s action=%s",
