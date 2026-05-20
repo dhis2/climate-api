@@ -38,7 +38,6 @@ The two halves of the term map directly onto the choices described in this docum
 **Analysis-ready** means a consumer can open the data and start computing without preprocessing:
 
 - Dimension names are normalised to `(time, x, y)` regardless of the source convention.
-- All datasets in an instance share a single coordinate reference system.
 - Units are standardised by the transform pipeline (e.g. Kelvin → Celsius).
 
 **Cloud-optimized** means the data can be accessed efficiently over HTTP without downloading the whole file. The Zarr and GeoZarr formats provide all the necessary properties — chunk-level access, HTTP-native serving, multiscale pyramids, and cloud compatibility.
