@@ -17,13 +17,28 @@ from .templates import ROOT_RESPONSES, app_version, render_landing, render_manag
 router = APIRouter()
 
 
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+
+
 async def _sse_stream(
     task: asyncio.Task[None],
     queue: asyncio.Queue[dict[str, Any] | None],
 ) -> AsyncGenerator[str, None]:
-    """Yield SSE events from queue until the task sentinel (None) arrives."""
+    """Yield SSE events from queue until the task sentinel (None) arrives.
+
+    Sends a keepalive comment every 5 seconds so the connection is not
+    dropped and partial response buffers are flushed by the browser.
+    """
     while True:
-        event = await queue.get()
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=5.0)
+        except asyncio.TimeoutError:
+            yield ": keepalive\n\n"
+            continue
         if event is None:
             break
         yield f"data: {json.dumps(event)}\n\n"
@@ -114,7 +129,7 @@ async def manage_ingest(request: Request) -> Response:
             name = urllib.parse.quote(str(template.get("name", dataset_id)))
             yield f"data: {json.dumps({'redirect': f'{base}/manage?message=Ingested+{name}'})}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.post("/manage/sync", include_in_schema=False)
@@ -154,7 +169,7 @@ async def manage_sync(request: Request) -> Response:
         else:
             yield f"data: {json.dumps({'redirect': f'{base}/manage?message=Sync+completed'})}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.get("/health")
