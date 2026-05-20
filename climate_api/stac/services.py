@@ -446,8 +446,29 @@ def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     return metadata
 
 
-def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, bool | None]:
-    return {"consolidated": _zarr_consolidated_flag(_artifact_store_path(artifact))}
+def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, object]:
+    artifact_path = _artifact_store_path(artifact)
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        # Icechunk stores served over HTTP must use consolidated=False so that
+        # xarray reads zarr.json metadata directly rather than attempting HTTP
+        # directory listings (which our endpoint doesn't support).
+        # Pyramid stores also need group="0" — the root URL is exposed for
+        # zarr-layer zoom selection but data variables live under group "0".
+        kwargs: dict[str, object] = {"consolidated": False}
+        try:
+            import zarr
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            repo = open_or_create_repo(Path(artifact_path))
+            session = repo.readonly_session("main")
+            root = zarr.open_group(session.store, mode="r")
+            if "multiscales" in root.attrs:
+                kwargs["group"] = "0"
+        except Exception:
+            pass
+        return kwargs
+    return {"consolidated": _zarr_consolidated_flag(artifact_path)}
 
 
 def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> dict[str, Any] | None:

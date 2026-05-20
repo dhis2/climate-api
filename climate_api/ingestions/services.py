@@ -16,7 +16,7 @@ import portalocker
 import pyproj
 import xarray as xr
 from fastapi import HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.responses import Response
 
 from climate_api import config as api_config
@@ -738,6 +738,27 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
             "entries": entries,
         }
 
+    # Detect bare group-path requests (e.g. "0", "0/precip").
+    # fsspec HTTP _ls_real issues GET without a trailing slash; zarr chunk/metadata
+    # keys always contain a "." (zarr.json) or "/c/" (chunk coordinates), so anything
+    # that matches neither pattern must be a group path.  Return an HTML directory
+    # listing so fsspec can parse the children via <a href> links.
+    last_segment = key.rsplit("/", 1)[-1]
+    is_chunk_key = "/c/" in key or key.startswith("c/")
+    is_file_key = "." in last_segment
+    if not is_chunk_key and not is_file_key:
+        root: zarr.Group = zarr.open_group(session.store, mode="r")
+        try:
+            node: zarr.Group = root[key]  # type: ignore[assignment]
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
+        children = sorted(node.keys())
+        html_lines = ["<html><body>"]
+        for child in children:
+            html_lines.append(f'<a href="{child}/">{child}/</a>')
+        html_lines.append("</body></html>")
+        return HTMLResponse("\n".join(html_lines))
+
     try:
         import zarr.core.buffer
 
@@ -1145,6 +1166,8 @@ def _as_optional_str(value: object) -> str | None:
 
 def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
     """Backfill newer schema fields for records created before migrations existed."""
+    if item.get("format") == "remote_zarr":
+        item = {**item, "format": "zarr"}
     if "request_scope" not in item:
         coverage = item.get("coverage")
         if isinstance(coverage, dict):
