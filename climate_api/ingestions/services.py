@@ -780,7 +780,7 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
 def _load_records() -> list[ArtifactRecord]:
     ensure_store()
     raw = json.loads(ARTIFACTS_INDEX_PATH.read_text(encoding="utf-8"))
-    return [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in raw]
+    return [ArtifactRecord.model_validate(item) for item in raw]
 
 
 def _save_records(records: list[ArtifactRecord]) -> None:
@@ -885,7 +885,7 @@ def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) 
         portalocker.lock(handle, portalocker.LOCK_EX)
         handle.seek(0)
         raw = handle.read()
-        records = [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in json.loads(raw or "[]")]
+        records = [ArtifactRecord.model_validate(item) for item in json.loads(raw or "[]")]
         result = mutation(records)
         payload = [record.model_dump(mode="json") for record in records]
         handle.seek(0)
@@ -1162,44 +1162,3 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
 
 def _as_optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
-
-
-def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
-    """Backfill newer schema fields for records created before migrations existed."""
-    if item.get("format") == "remote_zarr":
-        item = {**item, "format": "zarr"}
-    if "request_scope" not in item:
-        coverage = item.get("coverage")
-        if isinstance(coverage, dict):
-            spatial = coverage.get("spatial")
-            temporal = coverage.get("temporal")
-            bbox: tuple[float, float, float, float] | None = None
-            if isinstance(spatial, dict):
-                xmin = spatial.get("xmin")
-                ymin = spatial.get("ymin")
-                xmax = spatial.get("xmax")
-                ymax = spatial.get("ymax")
-                if (
-                    isinstance(xmin, int | float)
-                    and isinstance(ymin, int | float)
-                    and isinstance(xmax, int | float)
-                    and isinstance(ymax, int | float)
-                ):
-                    bbox = (float(xmin), float(ymin), float(xmax), float(ymax))
-
-            start = ""
-            end: str | None = None
-            if isinstance(temporal, dict):
-                raw_start = temporal.get("start")
-                raw_end = temporal.get("end")
-                if isinstance(raw_start, str):
-                    start = raw_start
-                if isinstance(raw_end, str):
-                    end = raw_end
-
-            item["request_scope"] = {
-                "start": start,
-                "end": end,
-                "bbox": bbox,
-            }
-    return item
