@@ -222,6 +222,10 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
             reference_system = int(detected_crs.split(":")[-1]) if detected_crs else 4326
         except ValueError:
             reference_system = 4326
+        # xstac crashes on a scalar (0-d) time coordinate when computing
+        # min/max for the temporal extent. Expand to a 1-element array first.
+        if time_dimension and time_dimension in ds.coords and ds[time_dimension].ndim == 0:
+            ds = ds.expand_dims(time_dimension)
         result = xarray_to_stac(
             ds,
             template,
