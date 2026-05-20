@@ -261,10 +261,6 @@ def _cache_xstac_collection_payload(artifact_id: str, payload: dict[str, Any]) -
     _xstac_collection_cache[artifact_id] = deepcopy(payload)
 
 
-def _clear_xstac_collection_cache() -> None:
-    _xstac_collection_cache.clear()
-
-
 def _link_to_dict(link: pystac.Link) -> dict[str, Any]:
     target = link.target
     href = target if isinstance(target, str) else link.href
@@ -296,8 +292,6 @@ def _required_zarr_asset(template: pystac.Collection) -> pystac.Asset:
 
 
 def _artifact_store_path(artifact: ArtifactRecord) -> str:
-    if artifact.path:
-        return artifact.path
     if artifact.asset_paths:
         return artifact.asset_paths[0]
     raise HTTPException(

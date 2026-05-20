@@ -25,7 +25,7 @@ from climate_api.stac import services as stac_services
 
 @pytest.fixture(autouse=True)
 def _clear_xstac_collection_cache() -> None:
-    stac_services._clear_xstac_collection_cache()
+    stac_services._xstac_collection_cache.clear()
 
 
 def _artifact(
@@ -100,14 +100,13 @@ def test_catalog_self_link_reflects_request_path(client: TestClient, monkeypatch
     assert payload["links"][0]["href"].endswith("/stac")
 
 
-def test_catalog_excludes_unpublished_and_netcdf(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_excludes_unpublished(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         ingestion_services,
         "list_artifacts",
         lambda: SimpleNamespace(
             items=[
                 _artifact(artifact_id="a1", status=PublicationStatus.UNPUBLISHED),
-                _artifact(artifact_id="a2", format=ArtifactFormat.NETCDF),
             ]
         ),
     )

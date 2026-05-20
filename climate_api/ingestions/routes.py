@@ -3,7 +3,6 @@
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException
-from fastapi.responses import FileResponse
 from starlette.responses import Response
 
 from climate_api.data_registry.routes import _get_dataset_or_404
@@ -71,7 +70,6 @@ def create_ingestion(
         end=request.end,
         bbox=resolved_bbox,
         overwrite=request.overwrite,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
     return IngestionResponse(
@@ -105,20 +103,6 @@ def get_dataset(dataset_id: str) -> DatasetDetailRecord:
     return services.get_dataset_or_404(dataset_id)
 
 
-@datasets_router.get("/{dataset_id}/download")
-def download_artifact_file(dataset_id: str) -> FileResponse:
-    """Download the primary saved file for a dataset when available."""
-    artifact = services.get_latest_artifact_for_dataset_or_404(dataset_id)
-    if artifact.path is None or artifact.format.value == "zarr":
-        raise HTTPException(
-            status_code=409,
-            detail="Dataset is not a single downloadable file; use metadata and dataset assets instead",
-        )
-
-    media_type = "application/x-netcdf"
-    filename = f"{dataset_id}.nc"
-    return FileResponse(artifact.path, media_type=media_type, filename=filename)
-
 
 @zarr_router.api_route("/{dataset_id}", methods=["GET", "HEAD"])
 def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
@@ -127,7 +111,7 @@ def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
 
 
 @zarr_router.api_route("/{dataset_id}/{relative_path:path}", methods=["GET", "HEAD"], response_model=None)
-def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> FileResponse | Response | dict[str, object]:
+def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> Response | dict[str, object]:
     """Serve canonical Zarr store content for a managed dataset."""
     return services.get_dataset_zarr_store_file_or_404(dataset_id, relative_path)
 
@@ -138,7 +122,6 @@ def sync_dataset(dataset_id: str, request: SyncDatasetRequest) -> SyncResponse:
     return services.sync_dataset(
         dataset_id=dataset_id,
         end=request.end,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
 

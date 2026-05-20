@@ -197,7 +197,6 @@ def create_artifact(
     end: str | None,
     bbox: list[float] | None,
     overwrite: bool,
-    prefer_zarr: bool,
     publish: bool,
     download_start: str | None = None,
     download_end: str | None = None,
@@ -231,7 +230,6 @@ def create_artifact(
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr,
     )
     if existing is not None and not overwrite:
         logger.info(
@@ -479,7 +477,6 @@ def store_materialized_zarr_artifact(
         variable=str(dataset["variable"]),
         period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
         format=ArtifactFormat.ZARR,
-        path=str(zarr_path.resolve()),
         asset_paths=[str(zarr_path.resolve())],
         variables=[str(dataset["variable"])],
         request_scope=request_scope,
@@ -487,7 +484,7 @@ def store_materialized_zarr_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored_record = _upsert_artifact_record(record, prefer_zarr=True, publish=publish, overwrite=overwrite)
+    stored_record = _upsert_artifact_record(record, publish=publish, overwrite=overwrite)
     if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
@@ -497,7 +494,6 @@ def sync_dataset(
     *,
     dataset_id: str,
     end: str | None,
-    prefer_zarr: bool,
     publish: bool,
 ) -> SyncResponse:
     """Resolve sync inputs and delegate managed-dataset sync to the sync engine.
@@ -515,11 +511,11 @@ def sync_dataset(
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
     committed_end: str | None = None
-    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.path:
+    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.asset_paths:
         from climate_api.ingest.store import read_committed_period_ids
 
         period_type = str(source_dataset.get("period_type", ""))
-        committed = read_committed_period_ids(Path(latest_artifact.path), period_type)
+        committed = read_committed_period_ids(Path(latest_artifact.asset_paths[0]), period_type)
         committed_end = max(committed) if committed else None
         logger.info(
             "Icechunk store-based current_end for '%s': %s (artifact record had: %s)",
@@ -533,7 +529,6 @@ def sync_dataset(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
-            prefer_zarr=prefer_zarr,
             publish=publish,
             create_artifact_fn=create_artifact,
             get_dataset_fn=get_dataset_or_404,
@@ -598,7 +593,7 @@ def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str,
 
     from climate_api.ingest.store import open_or_create_repo
 
-    store_path = Path(artifact.path or artifact.asset_paths[0])
+    store_path = Path(artifact.asset_paths[0])
     if not store_path.exists():
         raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
 
@@ -707,7 +702,7 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
 
     from climate_api.ingest.store import open_or_create_repo
 
-    store_path = Path(artifact.path or artifact.asset_paths[0])
+    store_path = Path(artifact.asset_paths[0])
     if not store_path.exists():
         raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
 
@@ -792,7 +787,6 @@ def _save_records(records: list[ArtifactRecord]) -> None:
 def _store_artifact_record(
     record: ArtifactRecord,
     *,
-    prefer_zarr: bool,
     publish: bool,
 ) -> ArtifactRecord:
     """Persist a newly created artifact record while avoiding lost updates."""
@@ -802,7 +796,6 @@ def _store_artifact_record(
             records=records,
             dataset_id=record.dataset_id,
             request_scope=record.request_scope,
-            prefer_zarr=prefer_zarr,
         )
         if existing is not None:
             if publish and existing.publication.status != PublicationStatus.PUBLISHED:
@@ -825,7 +818,7 @@ def _upsert_icechunk_artifact_record(record: ArtifactRecord) -> ArtifactRecord:
 
     def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
         for i, existing in enumerate(records):
-            if existing.dataset_id == record.dataset_id and existing.path == record.path:
+            if existing.dataset_id == record.dataset_id and existing.asset_paths == record.asset_paths:
                 replacement = record.model_copy(
                     update={
                         "artifact_id": existing.artifact_id,
@@ -843,20 +836,18 @@ def _upsert_icechunk_artifact_record(record: ArtifactRecord) -> ArtifactRecord:
 def _upsert_artifact_record(
     record: ArtifactRecord,
     *,
-    prefer_zarr: bool,
     publish: bool,
     overwrite: bool,
 ) -> ArtifactRecord:
     """Persist a new or replacement artifact record for the same logical request scope."""
     if not overwrite:
-        return _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+        return _store_artifact_record(record, publish=publish)
 
     def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
         existing = _find_existing_artifact_in_records(
             records=records,
             dataset_id=record.dataset_id,
             request_scope=record.request_scope,
-            prefer_zarr=prefer_zarr,
         )
         if existing is None:
             records.append(record)
@@ -902,7 +893,7 @@ def _get_zarr_root_or_409(artifact: ArtifactRecord) -> Path:
     if artifact.format != ArtifactFormat.ZARR:
         raise HTTPException(status_code=409, detail="Artifact is not a Zarr store")
 
-    store_root = Path(artifact.path or artifact.asset_paths[0]).resolve()
+    store_root = Path(artifact.asset_paths[0]).resolve()
     if not store_root.exists() or not store_root.is_dir():
         raise HTTPException(status_code=404, detail="Zarr store path does not exist on disk")
     return store_root
@@ -946,14 +937,12 @@ def _find_existing_artifact(
     *,
     dataset_id: str,
     request_scope: ArtifactRequestScope,
-    prefer_zarr: bool,
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request when possible."""
     return _find_existing_artifact_in_records(
         records=_load_records(),
         dataset_id=dataset_id,
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr,
     )
 
 
@@ -1019,7 +1008,6 @@ def _find_existing_artifact_in_records(
     records: list[ArtifactRecord],
     dataset_id: str,
     request_scope: ArtifactRequestScope,
-    prefer_zarr: bool,
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request from a provided record set."""
     for record in reversed(records):
@@ -1043,8 +1031,6 @@ def _find_existing_artifact_in_records(
                 record.request_scope.end,
             )
             continue
-        if prefer_zarr and record.format not in (ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK):
-            continue
         return record
     return None
 
@@ -1067,14 +1053,9 @@ def _materialized_records(records: list[ArtifactRecord]) -> list[ArtifactRecord]
 
 def _artifact_storage_exists(record: ArtifactRecord) -> bool:
     """Return whether an artifact's on-disk backing files are still present."""
-    paths: list[str] = []
-    if record.path is not None:
-        paths.append(record.path)
-    if record.asset_paths:
-        paths.extend(record.asset_paths)
-    if not paths:
+    if not record.asset_paths:
         return False
-    return all(Path(path).exists() for path in paths)
+    return all(Path(path).exists() for path in record.asset_paths)
 
 
 def _temporal_coverage_matches_request_scope(
@@ -1146,13 +1127,8 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
-    zarr_formats = {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}
-    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format in zarr_formats:
+    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
         links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
-    if latest.format == ArtifactFormat.NETCDF:
-        links.append(
-            DatasetAccessLink(href=f"/datasets/{dataset_id}/download", rel="download", title="Download NetCDF")
-        )
     if latest.publication.pygeoapi_path is not None:
         links.append(
             DatasetAccessLink(href=latest.publication.pygeoapi_path, rel="ogc-collection", title="OGC collection")

@@ -73,7 +73,6 @@ async def manage_ingest(request: Request) -> RedirectResponse:
             end=end,
             bbox=resolved_bbox,
             overwrite=overwrite,
-            prefer_zarr=True,
             publish=publish,
         )
         name = urllib.parse.quote(template.get("name", dataset_id))
@@ -99,7 +98,7 @@ async def manage_sync(request: Request) -> RedirectResponse:
         dataset_id = str(form.get("dataset_id", ""))
         publish = "publish" in form
 
-        sync_dataset(dataset_id=dataset_id, end=None, prefer_zarr=True, publish=publish)
+        sync_dataset(dataset_id=dataset_id, end=None, publish=publish)
         return RedirectResponse(f"{base}/manage?message=Sync+completed", status_code=303)
     except HTTPException as exc:
         msg = urllib.parse.quote(str(exc.detail))

@@ -76,7 +76,6 @@ def materialize_resampled_artifact(
     existing = ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(start=start, end=resolved_end),
-        prefer_zarr=True,
     )
     if existing is not None and not overwrite:
         if publish and existing.publication.status != PublicationStatus.PUBLISHED:
@@ -94,7 +93,7 @@ def materialize_resampled_artifact(
     target_managed_dataset_id = managed_dataset_id_for_scope(target_dataset_id)
     zarr_path = DERIVED_DATA_DIR / f"{target_managed_dataset_id}.zarr"
 
-    source_path = source_artifact.path or source_artifact.asset_paths[0]
+    source_path = source_artifact.asset_paths[0]
     if source_artifact.format == ArtifactFormat.ICECHUNK:
         source_ds = open_icechunk_dataset(source_path)
     else:
@@ -238,7 +237,6 @@ def _find_existing_resampled_artifact(
     return ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(start=start, end=realized_end),
-        prefer_zarr=True,
     )
 
 

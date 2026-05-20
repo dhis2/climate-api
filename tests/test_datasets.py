@@ -134,17 +134,13 @@ def test_dataset_links_include_stac_for_published_icechunk() -> None:
     assert any(link.rel == "stac" and link.href == "/stac/collections/chirps3_precipitation_daily" for link in links)
 
 
-def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
+def test_dataset_links_omit_stac_for_unpublished() -> None:
     unpublished = _artifact(artifact_id="a1")
     unpublished.publication.status = PublicationStatus.UNPUBLISHED
-    netcdf = _artifact(artifact_id="a2")
-    netcdf.format = ArtifactFormat.NETCDF
 
     unpublished_links = services._dataset_links("chirps3_precipitation_daily", unpublished)
-    netcdf_links = services._dataset_links("chirps3_precipitation_daily", netcdf)
 
     assert all(link.rel != "stac" for link in unpublished_links)
-    assert all(link.rel != "stac" for link in netcdf_links)
 
 
 def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,7 +209,7 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
         records=[stale_artifact, valid_artifact],
         dataset_id="chirps3_precipitation_daily",
         request_scope=request_scope,
-        prefer_zarr=True,
+
     )
 
     assert result == valid_artifact
@@ -237,7 +233,7 @@ def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyP
         records=[stale_artifact, valid_artifact],
         dataset_id="chirps3_precipitation_daily",
         request_scope=request_scope,
-        prefer_zarr=True,
+
     )
 
     assert result == valid_artifact
@@ -304,7 +300,7 @@ def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.Monk
             download_end="2026-02-10",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-            prefer_zarr=True,
+    
             publish=False,
         )
 
@@ -331,7 +327,7 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
             download_end="2026-02-11",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-            prefer_zarr=True,
+    
             publish=False,
         )
 
@@ -424,13 +420,3 @@ def test_get_zarr_store_file_dispatches_to_icechunk_for_icechunk_artifact(
     assert served_keys == ["t2m/zarr.json"]
 
 
-def test_get_zarr_store_info_raises_409_for_netcdf_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
-    netcdf = _artifact(artifact_id="a1")
-    netcdf = netcdf.model_copy(update={"format": ArtifactFormat.NETCDF})
-
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: netcdf)
-
-    with pytest.raises(services.HTTPException) as exc_info:
-        services.get_dataset_zarr_store_info_or_404("chirps3_precipitation_daily")
-
-    assert exc_info.value.status_code == 409

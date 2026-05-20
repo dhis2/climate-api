@@ -39,7 +39,6 @@ def execute_ingest(
         end=end,
         bbox=resolved_bbox,
         overwrite=overwrite,
-        prefer_zarr=False,
         publish=publish,
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,

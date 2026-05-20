@@ -47,7 +47,7 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     from climate_api.ingestions.services import list_artifacts
 
     collection_id = managed_dataset_id_for(record)
-    data_path = record.path or record.asset_paths[0]
+    data_path = record.asset_paths[0]
     is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
     is_icechunk = record.format == ArtifactFormat.ICECHUNK
     published_record = record.model_copy(
@@ -71,7 +71,7 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         active = published_record if artifact.artifact_id == record.artifact_id else artifact
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
-        data_path = active.path or active.asset_paths[0]
+        data_path = active.asset_paths[0]
         if active.format == ArtifactFormat.ICECHUNK:
             continue  # icechunk: not served via pygeoapi, use /zarr endpoint instead
         if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():
@@ -120,7 +120,7 @@ def _build_collection_resource(record: ArtifactRecord) -> dict[str, Any]:
     provider: dict[str, Any] = {
         "type": "coverage",
         "name": "xarray",
-        "data": record.path or record.asset_paths[0],
+        "data": record.asset_paths[0],
         "x_field": x_field,
         "y_field": y_field,
         "time_field": time_field,
@@ -164,7 +164,7 @@ def _provider_format(artifact_format: ArtifactFormat) -> dict[str, str]:
 
 def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
     """Inspect an artifact and return provider axis field names."""
-    data_path = record.path or record.asset_paths[0]
+    data_path = record.asset_paths[0]
     if record.format == ArtifactFormat.ICECHUNK:
         ds = open_icechunk_dataset(data_path)
     elif record.format == ArtifactFormat.ZARR:

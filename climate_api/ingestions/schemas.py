@@ -10,7 +10,6 @@ class ArtifactFormat(StrEnum):
     """Supported stored artifact formats."""
 
     ZARR = "zarr"
-    NETCDF = "netcdf"
     ICECHUNK = "icechunk"
 
 
@@ -99,7 +98,6 @@ class ArtifactRecord(BaseModel):
     variable: str
     period_type: str | None = None
     format: ArtifactFormat
-    path: str | None = None
     asset_paths: list[str] = Field(default_factory=list)
     variables: list[str] = Field(default_factory=list)
     request_scope: ArtifactRequestScope
@@ -117,10 +115,6 @@ class CreateIngestionRequest(BaseModel):
     overwrite: bool = Field(
         default=False,
         description="Whether to force regeneration of an existing matching artifact.",
-    )
-    prefer_zarr: bool = Field(
-        default=True,
-        description="Whether to prefer GeoZarr materialization when available.",
     )
     publish: bool = Field(
         default=True,
@@ -273,7 +267,6 @@ class SyncDatasetRequest(BaseModel):
     """Request payload for syncing a managed dataset forward."""
 
     end: str | None = Field(default=None, description="Optional end period to sync through.")
-    prefer_zarr: bool = Field(default=True, description="Whether to prefer GeoZarr materialization when syncing.")
     publish: bool = Field(default=True, description="Whether to publish the resulting dataset version.")
 
 

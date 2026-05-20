@@ -168,7 +168,6 @@ def run_sync(
     latest_artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
     requested_end: str | None,
-    prefer_zarr: bool,
     publish: bool,
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
@@ -249,7 +248,6 @@ def run_sync(
         download_end=sync_detail.delta_end if download_start is not None else None,
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         overwrite=False,
-        prefer_zarr=prefer_zarr,
         publish=publish,
     )
     logger.info(
@@ -421,8 +419,7 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
         # Pyramid Icechunk stores have data under group "0"; appending to root
         # would create a second flat dataset instead of extending the pyramid.
         # Fall back to rematerialize so the full pyramid is rebuilt.
-        artifact_path = latest_artifact.path
-        if artifact_path:
+        if latest_artifact.asset_paths:
             from pathlib import Path
 
             from climate_api.ingest.store import open_or_create_repo
@@ -430,7 +427,7 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
             try:
                 import zarr
 
-                repo = open_or_create_repo(Path(artifact_path))
+                repo = open_or_create_repo(Path(latest_artifact.asset_paths[0]))
                 session = repo.readonly_session("main")
                 root = zarr.open_group(session.store, mode="r")
                 if "multiscales" in root.attrs:
@@ -447,13 +444,14 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
         return False
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
-    from pathlib import Path
+    if latest_artifact.asset_paths:
+        from pathlib import Path
 
-    artifact_path = latest_artifact.path
-    if artifact_path and "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
-        logger.warning(
-            "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
-            source_dataset.get("id", "<unknown>"),
-        )
-        return False
+        artifact_path = latest_artifact.asset_paths[0]
+        if "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
+            logger.warning(
+                "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
+                source_dataset.get("id", "<unknown>"),
+            )
+            return False
     return True
