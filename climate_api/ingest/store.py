@@ -95,6 +95,8 @@ def build_pyramid_store(store_path: Path, *, x_dim: str = "x", y_dim: str = "y")
     if not store_path.exists():
         return
 
+    import zarr
+
     repo = open_or_create_repo(store_path)
     read_session = repo.readonly_session("main")
     ds = xr.open_zarr(read_session.store)
@@ -109,9 +111,27 @@ def build_pyramid_store(store_path: Path, *, x_dim: str = "x", y_dim: str = "y")
     finally:
         ds.close()
 
+    # topozarr requires xproj CRS on the dataset. Read it from the GeoZarr
+    # root attribute written by the orchestrator (proj:code = "EPSG:<n>").
+    try:
+        import xproj  # noqa: F401 — registers .proj accessor
+
+        root = zarr.open_group(read_session.store, mode="r")
+        proj_code = root.attrs.get("proj:code", "EPSG:4326")
+        epsg = int(proj_code.split(":")[1]) if ":" in proj_code else 4326
+        ds_loaded = ds_loaded.proj.assign_crs({"EPSG": epsg})
+    except Exception:
+        logger.warning("Could not assign CRS for pyramid build on %s; proceeding without xproj", store_path)
+
     pyramid = create_pyramid(ds_loaded, levels=levels, x_dim=x_dim, y_dim=y_dim)
+    # Strip "shards" from topozarr encoding: sharding_indexed codec isn't supported
+    # by zarr-layer (JS) client, causing a render loop in the map viewer.
+    no_shard_encoding = {
+        level: {var: {k: v for k, v in enc.items() if k != "shards"} for var, enc in vars_.items()}
+        for level, vars_ in pyramid.encoding.items()
+    }
     write_session = repo.writable_session("main")
-    pyramid.dt.to_zarr(write_session.store, mode="w", encoding=pyramid.encoding, zarr_format=3)
+    pyramid.dt.to_zarr(write_session.store, mode="w", encoding=no_shard_encoding, zarr_format=3)
     write_session.commit(f"pyramid: {levels} levels")
     logger.info("Built %d-level pyramid for %s (%dx%d)", levels, store_path, nx, ny)
 
