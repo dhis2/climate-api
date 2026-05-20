@@ -207,11 +207,13 @@ def create_artifact(
     """Ingest a dataset via its plugin, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end", is_end=True)
     download_start = _normalize_optional_request_period(
         download_start, period_type=period_type, field_name="download_start"
     )
-    download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
+    download_end = _normalize_optional_request_period(
+        download_end, period_type=period_type, field_name="download_end", is_end=True
+    )
     _validate_download_scope(
         start=start,
         end=end,
@@ -445,7 +447,7 @@ def store_materialized_zarr_artifact(
     """Store metadata for a locally materialized Zarr artifact."""
     period_type = str(dataset["period_type"])
     normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end", is_end=True)
     request_scope = ArtifactRequestScope(
         start=normalized_start,
         end=normalized_end,
@@ -951,10 +953,10 @@ def _find_existing_artifact(
     )
 
 
-def _normalize_request_period(value: str, *, period_type: str, field_name: str) -> str:
+def _normalize_request_period(value: str, *, period_type: str, field_name: str, is_end: bool = False) -> str:
     """Normalize a required request period or raise a clear client error."""
     try:
-        return normalize_period_string(value, period_type)
+        return normalize_period_string(value, period_type, is_end=is_end)
     except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
@@ -962,11 +964,13 @@ def _normalize_request_period(value: str, *, period_type: str, field_name: str) 
         ) from exc
 
 
-def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
+def _normalize_optional_request_period(
+    value: str | None, *, period_type: str, field_name: str, is_end: bool = False
+) -> str | None:
     """Normalize an optional request period or raise a clear client error."""
     if value is None:
         return None
-    return _normalize_request_period(value, period_type=period_type, field_name=field_name)
+    return _normalize_request_period(value, period_type=period_type, field_name=field_name, is_end=is_end)
 
 
 def _default_request_end(period_type: str) -> str:

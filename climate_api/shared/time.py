@@ -132,11 +132,20 @@ def parse_weekly_period_string(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def normalize_period_string(value: str, period_type: str) -> str:
-    """Normalize an input period string to the dataset-native period format."""
+def normalize_period_string(value: str, period_type: str, *, is_end: bool = False) -> str:
+    """Normalize an input period string to the dataset-native period format.
+
+    When is_end=True and period_type='hourly', a date-only input (YYYY-MM-DD)
+    is treated as the last hour of that day (T23) rather than T00.
+    """
     if period_type == "hourly":
         try:
-            return datetime_to_period_string(parse_hourly_period_string(value), period_type)
+            dt = parse_hourly_period_string(value)
+            # A bare date with no time component defaults to midnight; for an end
+            # bound that means the user intended the last hour of the day.
+            if is_end and len(value) == 10:
+                dt = dt.replace(hour=23)
+            return datetime_to_period_string(dt, period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
     if period_type == "daily":
