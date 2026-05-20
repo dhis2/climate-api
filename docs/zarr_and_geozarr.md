@@ -104,7 +104,7 @@ A plain Zarr store has no concept of spatial coordinates. A map viewer opening i
 | `proj:code`        | `EPSG:4326`               | CRS of the stored coordinates  |
 | `zarr_conventions` | `[{...}]`                 | Convention declarations        |
 
-These attributes are computed from the actual coordinate bounds of the written data and the instance CRS. They are always written by the framework after transforms and reprojection have run. This guarantees they always reflect the final stored data.
+These attributes are computed from the actual coordinate bounds of the written data and the CRS declared by the plugin in `GridSpec.crs`. They are written by the framework after the first period is committed. This guarantees they always reflect the final stored data.
 
 `zarr_conventions` for a flat store contains the base GeoZarr convention declaration. For pyramid stores it also includes a multiscales entry that declares the level structure.
 
@@ -120,7 +120,7 @@ extent:
   crs: EPSG:32633 # optional; defaults to EPSG:4326
 ```
 
-Datasets are always stored in the instance CRS. During ingestion, data is reprojected from its source CRS (declared as `source_crs` in the template, default `EPSG:4326`) to the instance CRS. The stored `spatial:bbox` is therefore in the instance CRS — UTM eastings and northings for a UTM instance, degrees for a WGS84 instance.
+Datasets are stored in whatever CRS the plugin returns. The plugin declares this via `GridSpec.crs` in its `probe()` response, and the framework writes `proj:code` from that value. No automatic reprojection occurs — if CRS conversion is needed, declare `reproject_to_instance_crs` as an explicit transform in the dataset template. The stored `spatial:bbox` is in the plugin's native CRS.
 
 STAC metadata also stores the WGS84 bounding box alongside the native bbox, so catalogue clients that expect geographic coordinates always get one regardless of the instance CRS.
 

@@ -172,15 +172,14 @@ Processes are named operations triggered via `POST /processes/{id}/execution`. T
 
 Transforms are applied at a consistent point in the ingestion lifecycle:
 
-1. ingestion function writes raw NetCDF files to disk
-2. framework reads and normalises the data into an xarray Dataset
-3. `_run_transforms(ds, dataset)` applies each declared transform in order
-4. result is reprojected to instance CRS
-5. zarr store is written with auto-computed chunking
-6. framework writes GeoZarr root attributes
-7. framework computes coverage from the zarr
+1. plugin fetches one period of raw data as an xarray Dataset in the source CRS
+2. `_run_transforms(ds, dataset)` applies each declared transform in order
+3. orchestrator writes the period to the Icechunk store
+4. framework writes GeoZarr root attributes after the first period is committed
 
-Transforms see post-download, pre-reproject data. They should only modify data values and variable-level attributes. The framework writes dataset-level attributes (GeoZarr) after the transform pipeline completes.
+Transforms see raw fetched values in the source CRS and source units. They should only modify data values and variable-level attributes. The framework writes dataset-level attributes (GeoZarr) after the first write completes.
+
+No automatic reprojection occurs. Data is stored in whatever CRS the plugin returns (declared via `GridSpec.crs` in `probe()`). If CRS conversion is needed, declare `reproject_to_instance_crs` as an explicit transform in the `transforms` list.
 
 ---
 
@@ -194,13 +193,24 @@ Every zarr artifact must have GeoZarr root attributes for map rendering to work 
 
 The map viewer reads `spatial:bbox` and `proj:code` to determine where to position tiles on the map.
 
-**The framework writes these attributes — plugins do not.** They are written in `build_dataset_zarr` after transforms and reprojection, using the actual coordinate bounds of the final written data and the instance CRS.
+**The framework writes these attributes — plugins do not.** They are written by the orchestrator after the first period is committed, using the actual coordinate bounds of the written data and the CRS declared in `GridSpec.crs`.
 
 ---
 
 ## CRS handling
 
-The instance CRS is configured in `climate-api.yaml`:
+Datasets are stored in whatever CRS the plugin returns. The plugin declares this via `GridSpec.crs` in its `probe()` response, and the framework writes `proj:code` accordingly. No automatic reprojection occurs.
+
+If you need to reproject data to a specific CRS, declare `reproject_to_instance_crs` as an explicit transform in the dataset template:
+
+```yaml
+transforms:
+  - function: climate_api.transforms.reproject_to_instance_crs
+    params:
+      source_crs: EPSG:32633
+```
+
+The instance CRS (used as the reprojection target when `reproject_to_instance_crs` is declared) is configured in `climate-api.yaml`:
 
 ```yaml
 extent:
@@ -208,10 +218,6 @@ extent:
   bbox: [3.0, 57.0, 32.0, 72.5]
   crs: EPSG:32633 # optional; defaults to EPSG:4326
 ```
-
-Downloaded data is reprojected from the source CRS (`source_crs` in the template, default `EPSG:4326`) to the instance CRS during ingestion. The stored zarr is always in the instance CRS.
-
-If no `crs` is set in the config, data is stored in `EPSG:4326` (WGS84). This is the correct default for instances that do not need a metric CRS.
 
 ---
 
@@ -235,11 +241,10 @@ Plugin code (ingestion functions, transforms, processes) can rely on the followi
 
 | Concern                                               | Where handled                               |
 | ----------------------------------------------------- | ------------------------------------------- |
-| Coordinate name normalisation (`lat` → `y`, etc.)     | `build_dataset_zarr`                        |
-| Reprojection to instance CRS                          | `reproject_to_instance_crs`                 |
-| Zarr chunking (auto-sized from `extents.temporal.resolution`) | `_compute_time_space_chunks`         |
-| Multiscale pyramid generation (when dims > 2048×2048) | `build_dataset_zarr`                        |
-| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | `build_dataset_zarr`                        |
+| Coordinate name normalisation (`lat` → `y`, etc.)     | Plugin (returns canonical `x`/`y`/`time`)   |
+| Zarr chunk sizing (time: 1 per period → rechunk pass) | `rechunk_store` (if `rechunk_time` set)     |
+| Multiscale pyramid generation (when dims > 2048×2048) | `build_pyramid_store` (if `pyramid=True`)   |
+| GeoZarr root attributes (`spatial:bbox`, `proj:code`) | Orchestrator after first period commit      |
 | Artifact coverage computation                         | `_coverage_from_dataset`                    |
 | Artifact record persistence                           | `_store_artifact`                           |
 | pygeoapi publication                                  | `publish_artifact_record` if `publish=true` |
@@ -265,6 +270,6 @@ For **legacy ZARR datasets** (downloader-based, no `ingestion.plugin`), `append`
 
 For **plugin-path** datasets, `append` compares the pending period list against the already-committed time coordinates in the Icechunk store and fetches only the missing periods. The Icechunk store itself is the source of truth — no separate download cache. A crash leaves the store at the last committed period; restart resumes from there without any additional recovery logic.
 
-### Transforms run after download, before reproject
+### Transforms run per period, before the zarr write
 
-Transforms see raw downloaded values in the source CRS and source units. The order is: download → transform → reproject → write zarr.
+Transforms see raw fetched values in the plugin's source CRS and units. The order per period is: fetch → transform → write zarr.
