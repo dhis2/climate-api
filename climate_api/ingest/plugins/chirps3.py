@@ -92,6 +92,7 @@ class Chirps3Plugin:
         url = self._url_for_day(d)
         logger.info("Fetching CHIRPS3 %s: %s", period_id, url)
 
+        da = None
         for attempt in range(3):
             try:
                 da = rioxarray.open_rasterio(url, chunks=None, masked=True, lock=False)
