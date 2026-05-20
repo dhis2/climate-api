@@ -366,8 +366,12 @@ def store_materialized_zarr_artifact(
     record = ArtifactRecord(
         artifact_id=str(uuid4()),
         dataset_id=str(dataset["id"]),
+        source_dataset_id=(
+            str(dataset.get("source_dataset_id")) if dataset.get("source_dataset_id") is not None else None
+        ),
         dataset_name=str(dataset["name"]),
         variable=str(dataset["variable"]),
+        period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
         format=ArtifactFormat.ZARR,
         path=str(zarr_path.resolve()),
         asset_paths=[str(zarr_path.resolve())],
@@ -822,11 +826,11 @@ def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> D
     source_dataset = registry_datasets.get_dataset(latest.dataset_id) or {}
     return DatasetRecord(
         dataset_id=dataset_id,
-        source_dataset_id=latest.dataset_id,
+        source_dataset_id=latest.source_dataset_id or latest.dataset_id,
         dataset_name=latest.dataset_name,
         short_name=_as_optional_str(source_dataset.get("short_name")),
         variable=latest.variable,
-        period_type=_as_optional_str(source_dataset.get("period_type")) or "unknown",
+        period_type=_as_optional_str(source_dataset.get("period_type")) or latest.period_type or "unknown",
         units=_as_optional_str(source_dataset.get("units")),
         resolution=_as_optional_str(source_dataset.get("resolution")),
         source=_as_optional_str(source_dataset.get("source")),

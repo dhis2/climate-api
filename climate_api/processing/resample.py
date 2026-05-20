@@ -121,6 +121,7 @@ def materialize_resampled_artifact(
 
     target_dataset: dict[str, object] = {
         "id": target_dataset_id,
+        "source_dataset_id": source_dataset_id,
         "name": target_dataset_id,
         "variable": source_dataset.get("variable", "value"),
         "period_type": _frequency_to_period_type(frequency),
@@ -191,7 +192,8 @@ def _drop_incomplete_edge_periods(
         return result
 
     first_output_start = _coerce_numpy_datetime(result[time_dim].values[0])
-    if source_start > first_output_start:
+    normalized_source_start = _normalize_source_period_start(source_start, source_period_type=source_period_type)
+    if normalized_source_start > first_output_start:
         result = result.isel({time_dim: slice(1, None)})
         if result.sizes.get(time_dim, 0) == 0:
             return result
@@ -200,9 +202,25 @@ def _drop_incomplete_edge_periods(
     offset = pd.tseries.frequencies.to_offset(frequency)
     next_target_start = (pd.Timestamp(last_output_start) + offset).to_pydatetime().replace(tzinfo=None)
     required_source_end = _previous_source_period_start(next_target_start, source_period_type=source_period_type)
-    if source_end < required_source_end:
+    normalized_source_end = _normalize_source_period_start(source_end, source_period_type=source_period_type)
+    if normalized_source_end < required_source_end:
         return result.isel({time_dim: slice(0, -1)})
     return result
+
+
+def _normalize_source_period_start(value: datetime, *, source_period_type: str) -> datetime:
+    if source_period_type == "hourly":
+        return value.replace(minute=0, second=0, microsecond=0)
+    if source_period_type == "daily":
+        return value.replace(hour=0, minute=0, second=0, microsecond=0)
+    if source_period_type == "weekly":
+        start = value - timedelta(days=value.weekday())
+        return start.replace(hour=0, minute=0, second=0, microsecond=0)
+    if source_period_type == "monthly":
+        return value.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if source_period_type == "yearly":
+        return value.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    raise HTTPException(status_code=400, detail=f"Unsupported source period_type '{source_period_type}' for resampling")
 
 
 def _find_existing_resampled_artifact(

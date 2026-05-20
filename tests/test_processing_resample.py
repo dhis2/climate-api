@@ -394,6 +394,63 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
     finally:
         result.close()
 
+    summary = ingestion_services.get_dataset_summary_for_artifact_or_404(artifact.artifact_id)
+    assert summary.period_type == "monthly"
+    assert summary.source_dataset_id == "chirps3_precipitation_daily"
+
+
+def test_materialize_resampled_artifact_keeps_complete_week_for_daily_non_midnight_timestamps(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_daily_non_midnight_weekly.zarr"
+    time = np.array("2026-01-05T06", dtype="datetime64[h]") + np.arange(7) * np.timedelta64(24, "h")
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.ones((7, 1, 1), dtype=float))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(source_path, mode="w", consolidated=True)
+
+    source_artifact = _artifact(
+        artifact_id="source-daily-non-midnight",
+        dataset_id="senorge_temperature_daily",
+        managed_dataset_id="senorge_temperature_daily_sle",
+        path=source_path,
+        start="2026-01-05",
+        end="2026-01-11",
+    )
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "daily"} if dataset_id == "senorge_temperature_daily" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        source_dataset_id="senorge_temperature_daily",
+        frequency="W-MON",
+        method="sum",
+        start="2026-01-05",
+        end="2026-01-05",
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.coverage.temporal.start == "2026-W02"
+    assert artifact.coverage.temporal.end == "2026-W02"
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [7.0]
+    finally:
+        result.close()
+
 
 def test_materialize_resampled_artifact_reuses_existing_artifact_when_overwrite_is_false(
     monkeypatch: pytest.MonkeyPatch,
