@@ -53,8 +53,12 @@ class CoverageSpatial(BaseModel):
 class CoverageTemporal(BaseModel):
     """Temporal extent summary."""
 
-    start: str | None = Field(description="First covered time period in dataset-native string form. None for static (timeless) datasets.")
-    end: str | None = Field(description="Last covered time period in dataset-native string form. None for static (timeless) datasets.")
+    start: str | None = Field(
+        description="First covered time period in dataset-native string form. None for static (timeless) datasets."
+    )
+    end: str | None = Field(
+        description="Last covered time period in dataset-native string form. None for static (timeless) datasets."
+    )
 
 
 class ArtifactCoverage(BaseModel):

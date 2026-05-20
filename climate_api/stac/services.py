@@ -155,10 +155,12 @@ def _build_collection_template(
         extent=pystac.Extent(
             spatial=pystac.SpatialExtent([[spatial.xmin, spatial.ymin, spatial.xmax, spatial.ymax]]),
             temporal=pystac.TemporalExtent(
-                [[
-                    parse_period_string_to_datetime(temporal.start) if temporal.start else None,
-                    parse_period_string_to_datetime(temporal.end) if temporal.end else None,
-                ]]
+                [
+                    [
+                        parse_period_string_to_datetime(temporal.start) if temporal.start else None,
+                        parse_period_string_to_datetime(temporal.end) if temporal.end else None,
+                    ]
+                ]
             ),
         ),
         title=artifact.dataset_name,
@@ -327,7 +329,6 @@ def _public_zarr_asset_href(
     artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
 ) -> str:
-    artifact_path = _artifact_store_path(artifact)
     return _abs_url(request, f"/zarr/{dataset_id}")
 
 
