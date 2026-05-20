@@ -401,7 +401,6 @@ def _create_icechunk_artifact(
         dataset_name=str(dataset["name"]),
         variable=str(dataset["variable"]),
         format=ArtifactFormat.ICECHUNK,
-        path=str(store_path.resolve()),
         asset_paths=[str(store_path.resolve())],
         variables=[str(dataset["variable"])],
         request_scope=request_scope,

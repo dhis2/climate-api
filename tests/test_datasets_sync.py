@@ -38,7 +38,6 @@ def _artifact(
         dataset_name="CHIRPS3 precipitation",
         variable="precip",
         format=ArtifactFormat.ZARR,
-        path=path,
         asset_paths=[path],
         variables=["precip"],
         request_scope=ArtifactRequestScope(
@@ -795,7 +794,6 @@ def _icechunk_artifact(
         dataset_name="2m temperature (ERA5-Land)",
         variable="t2m",
         format=ArtifactFormat.ICECHUNK,
-        path=path,
         asset_paths=[path],
         variables=["t2m"],
         request_scope=ArtifactRequestScope(

@@ -49,7 +49,6 @@ def _artifact(
         dataset_name=dataset_name,
         variable=variable,
         format=format,
-        path=path,
         asset_paths=[path] if asset_paths is None and path is not None else (asset_paths or []),
         variables=[variable],
         request_scope=ArtifactRequestScope(

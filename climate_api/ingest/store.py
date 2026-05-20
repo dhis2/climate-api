@@ -114,7 +114,7 @@ def build_pyramid_store(store_path: Path, *, x_dim: str = "x", y_dim: str = "y")
     # topozarr requires xproj CRS on the dataset. Read it from the GeoZarr
     # root attribute written by the orchestrator (proj:code = "EPSG:<n>").
     try:
-        import xproj  # noqa: F401 — registers .proj accessor
+        import xproj  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
         root = zarr.open_group(read_session.store, mode="r")
         proj_code = str(root.attrs.get("proj:code", "EPSG:4326"))

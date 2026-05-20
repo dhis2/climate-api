@@ -74,7 +74,6 @@ def test_build_collection_resource_keeps_singleton_time_dimension_for_zarr(
         dataset_name="CHIRPS monthly total precipitation",
         variable="precip",
         format=ArtifactFormat.ZARR,
-        path="/tmp/chirps3_precipitation_daily_ms_sum.zarr",
         asset_paths=["/tmp/chirps3_precipitation_daily_ms_sum.zarr"],
         variables=["precip"],
         request_scope=ArtifactRequestScope(start="2024-01-01", end="2024-01-31"),
