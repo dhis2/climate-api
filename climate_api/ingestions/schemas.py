@@ -93,8 +93,10 @@ class ArtifactRecord(BaseModel):
 
     artifact_id: str
     dataset_id: str
+    source_dataset_id: str | None = None
     dataset_name: str
     variable: str
+    period_type: str | None = None
     format: ArtifactFormat
     path: str | None = None
     asset_paths: list[str] = Field(default_factory=list)
