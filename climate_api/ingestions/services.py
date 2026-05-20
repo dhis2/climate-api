@@ -581,7 +581,7 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
-        "format": artifact.format,
+        "format": "zarr",
         "path": ".",
         "crs": crs,
         "proj4": _crs_to_proj4(crs),
@@ -620,7 +620,7 @@ def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str,
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
-        "format": artifact.format,
+        "format": "zarr",
         "path": ".",
         "crs": crs,
         "proj4": _crs_to_proj4(crs),
