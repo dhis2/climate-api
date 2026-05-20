@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from climate_api.config import DEFAULT_CRS, get_config, get_crs, get_data_dir
+from climate_api.config import DEFAULT_CRS, DEFAULT_NAME, get_config, get_crs, get_data_dir, get_name
 from climate_api.data_registry.services import datasets as dataset_registry
 from climate_api.extents import services as extent_services
 
@@ -141,6 +141,41 @@ def test_get_crs_raises_for_unknown_epsg_code(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
     with pytest.raises(ValueError, match="not a valid CRS"):
         get_crs()
+
+
+def test_get_name_defaults_to_open_climate_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
+    assert get_name() == DEFAULT_NAME
+
+
+def test_get_name_reads_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nname: Nepal Climate Service\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    assert get_name() == "Nepal Climate Service"
+
+
+def test_get_name_trims_whitespace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nname: '  My Service  '\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    assert get_name() == "My Service"
+
+
+def test_get_name_raises_for_non_string(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nname: 42\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="name in CLIMATE_API_CONFIG must be a non-empty string"):
+        get_name()
+
+
+def test_get_name_raises_for_blank_string(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-api.yaml"
+    config_file.write_text("data_dir: ./data\nname: '   '\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_API_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="name in CLIMATE_API_CONFIG must be a non-empty string"):
+        get_name()
 
 
 def test_templates_dir_raises_with_migration_hint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
