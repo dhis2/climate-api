@@ -319,7 +319,6 @@ def _is_pyramid_zarr(artifact_path: str) -> bool:
     return (Path(artifact_path) / "0").is_dir()
 
 
-
 def _abs_url(request: Request, path: str) -> str:
     base_url = os.getenv("CLIMATE_API_BASE_URL")
     if base_url:

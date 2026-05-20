@@ -103,7 +103,6 @@ def get_dataset(dataset_id: str) -> DatasetDetailRecord:
     return services.get_dataset_or_404(dataset_id)
 
 
-
 @zarr_router.api_route("/{dataset_id}", methods=["GET", "HEAD"])
 def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
     """Return canonical Zarr store listing for a managed dataset."""

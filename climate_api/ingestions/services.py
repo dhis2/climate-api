@@ -1135,10 +1135,10 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
-    is_published_store = (
-        latest.publication.status == PublicationStatus.PUBLISHED
-        and latest.format in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}
-    )
+    is_published_store = latest.publication.status == PublicationStatus.PUBLISHED and latest.format in {
+        ArtifactFormat.ZARR,
+        ArtifactFormat.ICECHUNK,
+    }
     if is_published_store:
         links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
     if latest.publication.pygeoapi_path is not None:

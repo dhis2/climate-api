@@ -36,6 +36,7 @@ _CHIRPS3_RES_DEG = 0.05
 # After the 20th of a month, the previous month is considered complete
 _COMPLETE_AFTER_DAY = 20
 
+
 class Chirps3Plugin:
     """IngestionPlugin for CHIRPS v3 daily precipitation.
 

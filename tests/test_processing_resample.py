@@ -183,7 +183,6 @@ def test_materialize_resampled_artifact_returns_404_when_source_dataset_template
         )
 
 
-
 def test_materialize_resampled_artifact_reads_icechunk_source(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

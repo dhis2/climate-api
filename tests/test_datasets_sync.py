@@ -770,7 +770,6 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
             latest_artifact=latest_artifact,
             source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
             requested_end="2026-02-11",
-
             publish=True,
             create_artifact_fn=lambda **_: pytest.fail("create_artifact should not be called"),
             get_dataset_fn=lambda _: pytest.fail("get_dataset should not be called"),

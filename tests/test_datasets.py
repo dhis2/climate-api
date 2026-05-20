@@ -209,7 +209,6 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
         records=[stale_artifact, valid_artifact],
         dataset_id="chirps3_precipitation_daily",
         request_scope=request_scope,
-
     )
 
     assert result == valid_artifact
@@ -233,7 +232,6 @@ def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyP
         records=[stale_artifact, valid_artifact],
         dataset_id="chirps3_precipitation_daily",
         request_scope=request_scope,
-
     )
 
     assert result == valid_artifact
@@ -300,7 +298,6 @@ def test_create_artifact_rejects_partial_download_scope(monkeypatch: pytest.Monk
             download_end="2026-02-10",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-
             publish=False,
         )
 
@@ -327,7 +324,6 @@ def test_create_artifact_rejects_download_scope_outside_request_scope(monkeypatc
             download_end="2026-02-11",
             bbox=[1.0, 2.0, 3.0, 4.0],
             overwrite=False,
-
             publish=False,
         )
 
@@ -418,5 +414,3 @@ def test_get_zarr_store_file_dispatches_to_icechunk_for_icechunk_artifact(
     services.get_dataset_zarr_store_file_or_404("chirps3_precipitation_daily", "t2m/zarr.json")
 
     assert served_keys == ["t2m/zarr.json"]
-
-

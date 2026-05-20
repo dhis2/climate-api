@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 # WorldPop Global2 at 100m: 3 arc-seconds = 1/1200 degree per pixel
 _WORLDPOP_RES_DEG = 1.0 / 1200
 
+
 class WorldPopPlugin:
     """IngestionPlugin for WorldPop yearly population count data.
 
