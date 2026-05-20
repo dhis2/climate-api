@@ -192,25 +192,22 @@ For sources that need streaming access or resumable long ingests, implement an `
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
-from climate_api.ingest.protocol import GridSpec
-
-_executor = ThreadPoolExecutor(max_workers=2)
+from climate_api.ingest.protocol import GridSpec, enumerate_periods
 
 
 class MyPlugin:
     max_concurrency = 2   # fetch this many periods in parallel
-    commit_batch_size = 1  # commit every N periods
+    commit_batch_size = 1  # cursor checkpoint interval
 
     def __init__(self, variable: str) -> None:
         self.variable = variable
 
-    async def probe(self, bbox: list[float], **_: Any) -> GridSpec:
+    def probe(self, bbox: list[float], **_: Any) -> GridSpec:
         """Return grid shape and CRS without downloading data."""
         # Derive shape from known resolution, or open a small metadata request.
         xmin, ymin, xmax, ymax = bbox
@@ -220,19 +217,15 @@ class MyPlugin:
         ny = max(1, math.ceil((ymax - ymin) / res))
         return GridSpec(shape=(ny, nx), crs=4326, dtype=np.dtype("float32"), nodata=-9999.0)
 
-    async def periods(self, start: str, end: str) -> list[str]:
+    def periods(self, start: str, end: str) -> list[str]:
         """Return the ordered list of period IDs to fetch."""
-        # Return ISO date strings, month strings, year strings, etc.
-        return ["2024-01-01", "2024-01-02"]  # replace with real logic
+        # enumerate_periods handles daily/hourly/monthly/yearly enumeration and
+        # optional availability cutoff clamping.
+        return enumerate_periods(start, end, "daily")
 
-    async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
+    def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
         """Fetch one period. Must return a Dataset with a 'time' dimension."""
-        return await asyncio.get_running_loop().run_in_executor(
-            _executor, self._fetch_sync, period_id, bbox
-        )
-
-    def _fetch_sync(self, period_id: str, bbox: list[float]) -> xr.Dataset:
-        # Blocking I/O in thread pool — download, clip to bbox, return Dataset.
+        # Blocking I/O is fine — the orchestrator runs this in asyncio.to_thread.
         ...
 ```
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -76,19 +77,20 @@ class IngestionPlugin(Protocol):
     max_concurrency: int
     commit_batch_size: int
 
-    async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
+    def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         """Metadata-only source probe. Returns grid spec. No data transfer."""
         ...
 
-    async def periods(self, start: str, end: str) -> list[str]:
+    def periods(self, start: str, end: str) -> list[str]:
         """Return the ordered list of available period IDs from start to end.
 
         May query the upstream source to confirm which periods are published.
         The orchestrator uses the length of this list for progress reporting.
+        Use enumerate_periods() as a helper for standard daily/hourly/yearly types.
         """
         ...
 
-    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> "xr.Dataset":
+    def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> "xr.Dataset":
         """Fetch one period. Return a dataset in the source CRS.
 
         The returned dataset must have a 'time' dimension with a single
@@ -96,3 +98,68 @@ class IngestionPlugin(Protocol):
         The orchestrator handles zarr writes — never call to_zarr here.
         """
         ...
+
+
+def enumerate_periods(start: str, end: str, period_type: str, cutoff: date | None = None) -> list[str]:
+    """Generate ordered period IDs for [start, end], optionally clamped to cutoff.
+
+    period_type values and ID formats:
+      'daily'   → YYYY-MM-DD
+      'hourly'  → YYYY-MM-DDTHH
+      'monthly' → YYYY-MM
+      'yearly'  → YYYY
+
+    cutoff clips the end of the range to the last period on or before that date.
+    For 'hourly', the cutoff is inclusive through the final hour of the cutoff date.
+    """
+    if period_type == "daily":
+        s = date.fromisoformat(start[:10])
+        e = date.fromisoformat(end[:10])
+        if cutoff:
+            e = min(e, cutoff)
+        result: list[str] = []
+        cur = s
+        while cur <= e:
+            result.append(cur.isoformat())
+            cur += timedelta(days=1)
+        return result
+
+    if period_type == "hourly":
+        cap = f"{cutoff.isoformat()}T23" if cutoff else None
+        eff_end = min(end, cap) if cap else end
+        if start > eff_end:
+            return []
+        result = []
+        cur = date.fromisoformat(start[:10])
+        end_date = date.fromisoformat(eff_end[:10])
+        while cur <= end_date:
+            for h in range(24):
+                p = f"{cur.isoformat()}T{h:02d}"
+                if p < start or p > eff_end:
+                    continue
+                result.append(p)
+            cur += timedelta(days=1)
+        return result
+
+    if period_type == "monthly":
+        sy, sm = int(start[:4]), int(start[5:7]) if len(start) >= 7 else 1
+        ey, em = int(end[:4]), int(end[5:7]) if len(end) >= 7 else 12
+        if cutoff:
+            ey, em = min((ey, em), (cutoff.year, cutoff.month))
+        result = []
+        y, m = sy, sm
+        while (y, m) <= (ey, em):
+            result.append(f"{y:04d}-{m:02d}")
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+        return result
+
+    if period_type == "yearly":
+        sy = int(start[:4])
+        ey = int(end[:4])
+        if cutoff:
+            ey = min(ey, cutoff.year)
+        return [str(y) for y in range(sy, ey + 1)]
+
+    raise ValueError(f"Unknown period_type: {period_type!r}")

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header
 from starlette.responses import Response
 
 from climate_api.data_registry.routes import _get_dataset_or_404

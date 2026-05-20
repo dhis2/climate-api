@@ -50,13 +50,13 @@ class FakePlugin:
         self._periods = periods
         self.fetched: list[str] = []
 
-    async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
+    def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         return GridSpec(shape=(4, 4), crs=4326, dtype=np.dtype("float32"), nodata=None)
 
-    async def periods(self, start: str, end: str) -> list[str]:
+    def periods(self, start: str, end: str) -> list[str]:
         return [p for p in self._periods if start <= p <= end]
 
-    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+    def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
         self.fetched.append(period_id)
         return _make_monthly_dataset(period_id)
 
@@ -134,7 +134,7 @@ def test_run_ingest_is_idempotent(tmp_path: Path) -> None:
         )
 
     # Second run fetched nothing new.
-    assert plugin.fetched == ["2024-01", "2024-02"]
+    assert sorted(plugin.fetched) == ["2024-01", "2024-02"]
     committed = read_committed_period_ids(store_path, "monthly")
     assert committed == {"2024-01", "2024-02"}
 
@@ -339,27 +339,27 @@ def test_read_committed_period_ids_empty_when_no_store(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_era5land_build_periods_respects_hour_component() -> None:
+def test_era5land_periods_respects_hour_component() -> None:
     from climate_api.ingest.plugins.era5_land import Era5LandPlugin
 
     plugin = Era5LandPlugin(variable="t2m")
-    periods = plugin._build_periods("2024-01-01T06", "2024-01-01T08")
+    periods = plugin.periods("2024-01-01T06", "2024-01-01T08")
     assert periods == ["2024-01-01T06", "2024-01-01T07", "2024-01-01T08"]
 
 
-def test_era5land_build_periods_single_hour() -> None:
+def test_era5land_periods_single_hour() -> None:
     from climate_api.ingest.plugins.era5_land import Era5LandPlugin
 
     plugin = Era5LandPlugin(variable="t2m")
-    periods = plugin._build_periods("2024-01-01T00", "2024-01-01T00")
+    periods = plugin.periods("2024-01-01T00", "2024-01-01T00")
     assert periods == ["2024-01-01T00"]
 
 
-def test_era5land_build_periods_spans_months() -> None:
+def test_era5land_periods_spans_months() -> None:
     from climate_api.ingest.plugins.era5_land import Era5LandPlugin
 
     plugin = Era5LandPlugin(variable="t2m")
-    periods = plugin._build_periods("2024-01-31T23", "2024-02-01T01")
+    periods = plugin.periods("2024-01-31T23", "2024-02-01T01")
     assert periods == ["2024-01-31T23", "2024-02-01T00", "2024-02-01T01"]
 
 
@@ -515,10 +515,10 @@ def test_era5land_plugin_declares_rechunk_time() -> None:
 class FakeStaticPlugin(FakePlugin):
     """FakePlugin variant whose probe returns time_dim=False (static dataset)."""
 
-    async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
+    def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         return GridSpec(shape=(4, 4), crs=4326, dtype=np.dtype("float32"), nodata=None, time_dim=False)
 
-    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+    def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
         self.fetched.append(period_id)
         return xr.Dataset(
             {"elevation": xr.DataArray(np.zeros((4, 4), dtype="float32"), dims=["y", "x"])},

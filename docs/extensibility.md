@@ -58,15 +58,15 @@ class MyPlugin:
     max_concurrency: int = 1    # parallel fetch limit
     commit_batch_size: int = 1  # cursor checkpoint interval (every period is committed)
 
-    async def probe(self, bbox: list[float], **params) -> GridSpec:
+    def probe(self, bbox: list[float], **params) -> GridSpec:
         """Metadata-only source probe. Returns grid shape, CRS, dtype. No data transfer."""
         ...
 
-    async def periods(self, start: str, end: str) -> list[str]:
+    def periods(self, start: str, end: str) -> list[str]:
         """Return the ordered list of available period IDs from start to end."""
         ...
 
-    async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+    def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
         """Fetch one period. Return a dataset with a 'time' dimension in source CRS."""
         ...
 ```

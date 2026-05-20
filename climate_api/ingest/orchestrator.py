@@ -119,10 +119,10 @@ async def run_ingest(
     concurrently. Writes are always sequential: tasks are awaited in
     chronological order so the time axis stays sorted.
     """
-    spec: GridSpec = await plugin.probe(bbox, **params)
+    spec: GridSpec = await asyncio.to_thread(plugin.probe, bbox, **params)
     logger.info("Probe: shape=%s crs=EPSG:%d time_dim=%s", spec.shape, spec.crs, spec.time_dim)
 
-    all_periods = await plugin.periods(start, end)
+    all_periods = plugin.periods(start, end)
     if not all_periods:
         logger.info("No periods available for range %s..%s", start, end)
         return
@@ -162,7 +162,7 @@ async def run_ingest(
 
     async def _fetch(period_id: str) -> xr.Dataset:
         async with semaphore:
-            return await plugin.fetch_period(period_id, bbox, **params)
+            return await asyncio.to_thread(plugin.fetch_period, period_id, bbox, **params)
 
     # Create all tasks upfront so up to max_concurrency fetches start immediately.
     # Await in chronological order so writes are always sequential.

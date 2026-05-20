@@ -18,17 +18,15 @@ URL layout (prelim):
 
 from __future__ import annotations
 
-import asyncio
 import calendar
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
-from climate_api.ingest.protocol import GridSpec
+from climate_api.ingest.protocol import GridSpec, enumerate_periods
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +35,6 @@ _CHIRPS3_NODATA = -9999.0
 _CHIRPS3_RES_DEG = 0.05
 # After the 20th of a month, the previous month is considered complete
 _COMPLETE_AFTER_DAY = 20
-
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chirps3")
-
 
 class Chirps3Plugin:
     """IngestionPlugin for CHIRPS v3 daily precipitation.
@@ -69,33 +64,25 @@ class Chirps3Plugin:
     # Protocol implementation
     # ------------------------------------------------------------------
 
-    async def probe(self, bbox: list[float], **_: Any) -> GridSpec:
-        """Estimate grid spec from known CHIRPS3 resolution — no data transfer."""
-        return self._probe_estimate(bbox)
+    def probe(self, bbox: list[float], **_: Any) -> GridSpec:
+        """Derive GridSpec from CHIRPS3's known 0.05° resolution — no data transfer."""
+        import math
 
-    async def periods(self, start: str, end: str) -> list[str]:
-        return self._build_periods(start, end)
-
-    async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
-        return await asyncio.get_running_loop().run_in_executor(_executor, self._fetch_sync, period_id, bbox)
-
-    # ------------------------------------------------------------------
-    # Sync helpers (run inside the thread pool)
-    # ------------------------------------------------------------------
-
-    def _url_for_day(self, d: date) -> str:
-        if self.stage == "final":
-            return (
-                f"https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/final/"
-                f"{self.flavor}/cogs/{d.year}/"
-                f"chirps-v3.0.{self.flavor}.{d.year}.{d.month:02d}.{d.day:02d}.cog"
-            )
-        return (
-            f"https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/prelim/sat/"
-            f"{d.year}/chirps-v3.0.prelim.{d.year}.{d.month:02d}.{d.day:02d}.tif"
+        xmin, ymin, xmax, ymax = map(float, bbox)
+        nx = max(1, math.ceil((xmax - xmin) / _CHIRPS3_RES_DEG))
+        ny = max(1, math.ceil((ymax - ymin) / _CHIRPS3_RES_DEG))
+        return GridSpec(
+            shape=(ny, nx),
+            crs=4326,
+            dtype=np.dtype("float32"),
+            nodata=_CHIRPS3_NODATA,
+            time_dim=True,
         )
 
-    def _fetch_sync(self, period_id: str, bbox: list[float]) -> xr.Dataset:
+    def periods(self, start: str, end: str) -> list[str]:
+        return enumerate_periods(start, end, "daily", cutoff=self._availability_cutoff())
+
+    def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
         """Fetch one day via COG range request, clip to bbox, return as Dataset."""
         import rioxarray
 
@@ -116,24 +103,21 @@ class Chirps3Plugin:
         ds = da.to_dataset(name="precip")
         return ds.expand_dims(time=[np.datetime64(period_id, "D")])  # type: ignore[no-any-return]
 
-    def _probe_estimate(self, bbox: list[float]) -> GridSpec:
-        """Derive GridSpec from CHIRPS3's known 0.05° resolution."""
-        import math
+    # ------------------------------------------------------------------
+    # URL construction and availability
+    # ------------------------------------------------------------------
 
-        xmin, ymin, xmax, ymax = map(float, bbox)
-        nx = max(1, math.ceil((xmax - xmin) / _CHIRPS3_RES_DEG))
-        ny = max(1, math.ceil((ymax - ymin) / _CHIRPS3_RES_DEG))
-        return GridSpec(
-            shape=(ny, nx),
-            crs=4326,
-            dtype=np.dtype("float32"),
-            nodata=_CHIRPS3_NODATA,
-            time_dim=True,
+    def _url_for_day(self, d: date) -> str:
+        if self.stage == "final":
+            return (
+                f"https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/final/"
+                f"{self.flavor}/cogs/{d.year}/"
+                f"chirps-v3.0.{self.flavor}.{d.year}.{d.month:02d}.{d.day:02d}.cog"
+            )
+        return (
+            f"https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/prelim/sat/"
+            f"{d.year}/chirps-v3.0.prelim.{d.year}.{d.month:02d}.{d.day:02d}.tif"
         )
-
-    # ------------------------------------------------------------------
-    # Period generation
-    # ------------------------------------------------------------------
 
     def _availability_cutoff(self) -> date:
         """Return the last day of the most recent complete published month."""
@@ -146,17 +130,3 @@ class Chirps3Plugin:
                 m, y = 12, y - 1
         last_day = calendar.monthrange(y, m)[1]
         return date(y, m, last_day)
-
-    def _build_periods(self, start: str, end: str) -> list[str]:
-        """Return daily ISO-date strings from start to end, clamped to availability."""
-        cutoff = self._availability_cutoff()
-        start_date = date.fromisoformat(start[:10])
-        end_date = min(date.fromisoformat(end[:10]), cutoff)
-        if start_date > end_date:
-            return []
-        periods: list[str] = []
-        current = start_date
-        while current <= end_date:
-            periods.append(current.isoformat())
-            current += timedelta(days=1)
-        return periods

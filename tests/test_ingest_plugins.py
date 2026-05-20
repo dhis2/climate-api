@@ -7,7 +7,6 @@ monkeypatching to replace the network/rioxarray layer with a minimal stub.
 
 from __future__ import annotations
 
-import asyncio
 import math
 from datetime import date
 from typing import Any
@@ -83,40 +82,40 @@ class TestWorldPopPlugin:
 
     def test_build_periods_global2_basic(self) -> None:
         plugin = self._make_plugin(version="global2")
-        periods = plugin._build_periods("2018", "2020")
+        periods = plugin.periods("2018", "2020")
         assert periods == ["2018", "2019", "2020"]
 
     def test_build_periods_single_year(self) -> None:
         plugin = self._make_plugin(version="global2")
-        assert plugin._build_periods("2023", "2023") == ["2023"]
+        assert plugin.periods("2023", "2023") == ["2023"]
 
     def test_build_periods_clamps_to_global2_range(self) -> None:
         plugin = self._make_plugin(version="global2")
-        periods = plugin._build_periods("2010", "2035")
+        periods = plugin.periods("2010", "2035")
         assert periods[0] == "2015"
         assert periods[-1] == "2030"
 
     def test_build_periods_clamps_to_global1_range(self) -> None:
         plugin = self._make_plugin(version="global1")
-        periods = plugin._build_periods("1995", "2025")
+        periods = plugin.periods("1995", "2025")
         assert periods[0] == "2000"
         assert periods[-1] == "2020"
 
     def test_build_periods_empty_when_out_of_range(self) -> None:
         plugin = self._make_plugin(version="global2")
-        assert plugin._build_periods("2031", "2035") == []
+        assert plugin.periods("2031", "2035") == []
 
     def test_build_periods_uses_year_prefix_only(self) -> None:
         # period strings like "2024-01-01" should be handled by stripping to year
         plugin = self._make_plugin(version="global2")
-        periods = plugin._build_periods("2024-01-01", "2025-12-31")
+        periods = plugin.periods("2024-01-01", "2025-12-31")
         assert periods == ["2024", "2025"]
 
     # probe / GridSpec
 
-    def test_probe_estimate_returns_gridspec(self) -> None:
+    def test_probe_returns_gridspec(self) -> None:
         plugin = self._make_plugin()
-        spec = plugin._probe_estimate([4.0, 57.5, 31.5, 71.5])
+        spec = plugin.probe([4.0, 57.5, 31.5, 71.5])
         assert isinstance(spec, GridSpec)
         assert spec.crs == 4326
         assert spec.time_dim is True
@@ -124,21 +123,12 @@ class TestWorldPopPlugin:
         assert spec.nodata is not None and math.isnan(spec.nodata)
         assert spec.shape[0] > 0 and spec.shape[1] > 0
 
-    def test_probe_estimate_shape_proportional_to_bbox(self) -> None:
+    def test_probe_shape_proportional_to_bbox(self) -> None:
         plugin = self._make_plugin()
-        small = plugin._probe_estimate([0.0, 0.0, 1.0, 1.0])
-        large = plugin._probe_estimate([0.0, 0.0, 10.0, 10.0])
+        small = plugin.probe([0.0, 0.0, 1.0, 1.0])
+        large = plugin.probe([0.0, 0.0, 10.0, 10.0])
         # 10x wider bbox should yield ~10x more columns
         assert large.shape[1] > small.shape[1] * 5
-
-    def test_probe_is_async_and_returns_gridspec(self) -> None:
-        plugin = self._make_plugin()
-
-        async def run() -> GridSpec:
-            return await plugin.probe([4.0, 57.5, 31.5, 71.5])
-
-        spec = asyncio.run(run())
-        assert isinstance(spec, GridSpec)
 
     # fetch_period (mocked network)
 
@@ -165,7 +155,7 @@ class TestWorldPopPlugin:
         fake_resp.content = b""
 
         with patch("requests.get", return_value=fake_resp), patch("rioxarray.open_rasterio", return_value=fake_da):
-            ds = WorldPopPlugin(country_code="NOR")._fetch_sync(2024, [4.0, 57.5, 31.5, 71.5])
+            ds = WorldPopPlugin(country_code="NOR").fetch_period("2024", [4.0, 57.5, 31.5, 71.5])
 
         assert "pop_total" in ds.data_vars
         assert "time" in ds.dims
@@ -182,7 +172,7 @@ class TestWorldPopPlugin:
         fake_resp.content = b""
 
         with patch("requests.get", return_value=fake_resp), patch("rioxarray.open_rasterio", return_value=fake_da):
-            ds = WorldPopPlugin(country_code="NOR")._fetch_sync(2024, [4.0, 57.5, 31.5, 71.5])
+            ds = WorldPopPlugin(country_code="NOR").fetch_period("2024", [4.0, 57.5, 31.5, 71.5])
 
         assert "time" in ds.dims
         assert ds.sizes["time"] == 1
@@ -262,69 +252,69 @@ class TestChirps3Plugin:
 
     # Period generation
 
-    def test_build_periods_returns_daily_dates(self) -> None:
+    def test_periods_returns_daily_dates(self) -> None:
         plugin = self._make_plugin()
         # Use a fixed cutoff by patching today
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 3, 25)  # day > 20 → cutoff = end of Feb
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-02-01", "2024-03-31")
+            periods = plugin.periods("2024-02-01", "2024-03-31")
         # Cutoff: end of February 2024 (29 days — 2024 is leap)
         assert periods[0] == "2024-02-01"
         assert periods[-1] == "2024-02-29"
         assert len(periods) == 29
 
-    def test_build_periods_respects_lag_before_threshold_day(self) -> None:
+    def test_periods_respects_lag_before_threshold_day(self) -> None:
         plugin = self._make_plugin()
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 3, 10)  # day <= 20 → cutoff = end of Jan
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-01-01", "2024-03-31")
+            periods = plugin.periods("2024-01-01", "2024-03-31")
         assert periods[-1] == "2024-01-31"
 
-    def test_build_periods_empty_when_start_after_cutoff(self) -> None:
+    def test_periods_empty_when_start_after_cutoff(self) -> None:
         plugin = self._make_plugin()
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 3, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-03-01", "2024-03-31")
+            periods = plugin.periods("2024-03-01", "2024-03-31")
         assert periods == []
 
-    def test_build_periods_consecutive(self) -> None:
+    def test_periods_consecutive(self) -> None:
         plugin = self._make_plugin()
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 4, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-03-01", "2024-03-05")
+            periods = plugin.periods("2024-03-01", "2024-03-05")
         assert periods == ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]
 
-    def test_build_periods_single_day(self) -> None:
+    def test_periods_single_day(self) -> None:
         plugin = self._make_plugin()
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 4, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-03-01", "2024-03-01")
+            periods = plugin.periods("2024-03-01", "2024-03-01")
         assert periods == ["2024-03-01"]
 
-    def test_build_periods_spans_months(self) -> None:
+    def test_periods_spans_months(self) -> None:
         plugin = self._make_plugin()
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
             mock_date.today.return_value = date(2024, 5, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin._build_periods("2024-03-30", "2024-04-02")
+            periods = plugin.periods("2024-03-30", "2024-04-02")
         assert periods == ["2024-03-30", "2024-03-31", "2024-04-01", "2024-04-02"]
 
     # probe / GridSpec
 
-    def test_probe_estimate_returns_gridspec(self) -> None:
+    def test_probe_returns_gridspec(self) -> None:
         plugin = self._make_plugin()
-        spec = plugin._probe_estimate([-180.0, -50.0, 180.0, 50.0])
+        spec = plugin.probe([-180.0, -50.0, 180.0, 50.0])
         assert isinstance(spec, GridSpec)
         assert spec.crs == 4326
         assert spec.time_dim is True
@@ -332,20 +322,11 @@ class TestChirps3Plugin:
         assert spec.nodata == -9999.0
         assert spec.shape[0] > 0 and spec.shape[1] > 0
 
-    def test_probe_estimate_shape_matches_chirps3_global_extent(self) -> None:
+    def test_probe_shape_matches_chirps3_global_extent(self) -> None:
         plugin = self._make_plugin()
         # CHIRPS3 full extent: 360° × 100° at 0.05° → 7200 × 2000
-        spec = plugin._probe_estimate([-180.0, -50.0, 180.0, 50.0])
+        spec = plugin.probe([-180.0, -50.0, 180.0, 50.0])
         assert spec.shape == (2000, 7200)
-
-    def test_probe_is_async_and_returns_gridspec(self) -> None:
-        plugin = self._make_plugin()
-
-        async def run() -> GridSpec:
-            return await plugin.probe([-180.0, -50.0, 180.0, 50.0])
-
-        spec = asyncio.run(run())
-        assert isinstance(spec, GridSpec)
 
     # fetch_period (mocked network)
 
@@ -367,7 +348,7 @@ class TestChirps3Plugin:
 
         fake_da = self._make_fake_chirps_da()
         with patch("rioxarray.open_rasterio", return_value=fake_da):
-            ds = Chirps3Plugin()._fetch_sync("2024-03-15", [-5.0, 5.0, 5.0, 10.0])
+            ds = Chirps3Plugin().fetch_period("2024-03-15", [-5.0, 5.0, 5.0, 10.0])
 
         assert "precip" in ds.data_vars
         assert "time" in ds.dims
@@ -384,7 +365,7 @@ class TestChirps3Plugin:
         da = da.rio.write_crs("EPSG:4326")
 
         with patch("rioxarray.open_rasterio", return_value=da):
-            ds = Chirps3Plugin()._fetch_sync("2024-01-01", [0.0, 1.0, 1.0, 2.0])
+            ds = Chirps3Plugin().fetch_period("2024-01-01", [0.0, 1.0, 1.0, 2.0])
 
         precip = ds["precip"].values
         assert np.isnan(precip).any(), "nodata pixels should be NaN"
@@ -395,7 +376,7 @@ class TestChirps3Plugin:
 
         fake_da = self._make_fake_chirps_da()
         with patch("rioxarray.open_rasterio", return_value=fake_da):
-            ds = Chirps3Plugin()._fetch_sync("2024-03-15", [-5.0, 5.0, 5.0, 10.0])
+            ds = Chirps3Plugin().fetch_period("2024-03-15", [-5.0, 5.0, 5.0, 10.0])
 
         assert "time" in ds.dims
         assert ds.sizes["time"] == 1
