@@ -49,12 +49,47 @@ The Climate API targets the same access pattern at country scale for arbitrary s
 
 ## Store layout on disk
 
-Each managed dataset has exactly one Zarr store on disk, stored under `{data_dir}/downloads/{dataset_id}.zarr`. The store is either:
+Each managed dataset has exactly one Icechunk repository on disk, stored under `{data_dir}/downloads/{dataset_id}.icechunk`. The zarr content inside the repository is either:
 
-- **Flat** — a single-resolution Zarr store with dimensions `(time, x, y)`
-- **Pyramid** — a multi-resolution Zarr store with levels `0/`, `1/`, `2/`, … where `0/` is the full resolution
+- **Flat** — a single-resolution store with dimensions `(time, x, y)`
+- **Pyramid** — a multi-resolution store with levels `0/`, `1/`, `2/`, … where `0/` is the full resolution
 
-The flat vs. pyramid decision is made at build time based on spatial size (see [Multiscale pyramids](#multiscale-pyramids) below).
+The flat vs. pyramid decision is made at ingest time based on spatial size (see [Multiscale pyramids](#multiscale-pyramids) below).
+
+---
+
+## Icechunk — versioned Zarr storage
+
+[Icechunk](https://icechunk.io) is a transactional storage layer that sits between the application and the underlying Zarr v3 data. It exposes a standard Zarr store interface to writers and readers, but adds **MVCC (multi-version concurrency control)**: every write is committed as an immutable snapshot, and readers always see a consistent view of the data regardless of concurrent writes.
+
+### Why Icechunk
+
+Plain Zarr on disk is a directory of independent chunk files — there is no transaction boundary. If an ingest is interrupted mid-write, some chunks for a new time step may be written and others not, leaving the store in an inconsistent state with no way to roll back.
+
+The Climate API ingests one period at a time, committing each as a separate Icechunk snapshot. This gives three concrete properties:
+
+- **Safe resume** — if a job is cancelled or the server restarts, the next run reads the list of committed snapshots and skips periods that are already present. No partial writes are ever visible to readers.
+- **Snapshot isolation** — a read session opened at the start of a request sees a consistent snapshot even if a concurrent ingest is writing new periods. Readers are never blocked by writers.
+- **Prunable history** — intermediate per-period snapshots accumulate during ingest. After the rechunk and pyramid passes complete, `expire_snapshots()` prunes all but the latest, keeping disk usage proportional to data size rather than ingest history.
+
+### Snapshot lifecycle
+
+A typical WorldPop ingest produces snapshots roughly like this:
+
+```
+snapshot 1:  write period 2015
+snapshot 2:  write period 2016
+...
+snapshot 16: write period 2030
+snapshot 17: rechunk: time=1
+snapshot 18: pyramid: 6 levels
+→ expire_snapshots() prunes snapshots 1–17
+snapshot 18: (the only surviving snapshot — full pyramid, correctly chunked)
+```
+
+### Serving from Icechunk
+
+Zarr keys are read directly from the Icechunk session store rather than from files on disk. The HTTP surface is identical — the same `/zarr/{dataset_id}/` routes — but the backend resolves each key through the Icechunk MVCC layer instead of a `FileResponse`.
 
 ---
 
@@ -128,7 +163,7 @@ STAC metadata also stores the WGS84 bounding box alongside the native bbox, so c
 
 ## How Zarr stores are served
 
-The `/zarr/{dataset_id}/` endpoint serves individual files from the Zarr store directory using FastAPI's `FileResponse`. The ZarrLayer client issues one HTTP request per chunk file it needs.
+The `/zarr/{dataset_id}/` endpoint serves Zarr keys from the Icechunk repository. The ZarrLayer client issues one HTTP request per key it needs:
 
 ```
 GET /zarr/{dataset_id}/zarr.json          → root metadata (JSON)
@@ -136,9 +171,9 @@ GET /zarr/{dataset_id}/precip/c/0/0/0     → chunk at time=0, x=0, y=0
 GET /zarr/{dataset_id}/time/c/0           → time coordinate chunk
 ```
 
-Metadata files (`zarr.json`) are returned as `application/json`. All other files — chunk data — are returned as `application/octet-stream`. Directory paths return a JSON listing of their contents.
+Each request opens a readonly Icechunk session pinned to the latest committed snapshot, resolves the zarr key through the MVCC layer, and returns the raw bytes. Metadata files (`zarr.json`) are returned as `application/json`; chunk data as `application/octet-stream`; directory paths as a JSON listing.
 
-This design means the zarr store is served by ordinary file serving — there is no zarr-specific server middleware.
+The HTTP surface is identical to serving files from disk — ZarrLayer and other zarr clients require no changes — but correctness and consistency are guaranteed by Icechunk's snapshot model rather than filesystem state.
 
 ---
 
