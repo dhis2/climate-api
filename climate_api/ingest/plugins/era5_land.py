@@ -11,6 +11,7 @@ periods share a consistent coordinate system.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, timedelta
 from typing import Any
 
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 _DESTINE_ZARR_URL = "https://data.earthdatahub.destine.eu/era5/reanalysis-era5-land-no-antartica-v0.zarr"
 _STORAGE_OPTIONS = {"client_kwargs": {"trust_env": True}}
 
+# ERA5-Land native resolution: 0.1° × 0.1° (~9 km at equator).
+_ERA5_LAND_RES_DEG = 0.1
 # ERA5-Land on DestinE has roughly a 15-day publication lag.
 _LAG_DAYS = 15
 
@@ -47,17 +50,15 @@ class Era5LandPlugin:
     # ------------------------------------------------------------------
 
     def probe(self, bbox: list[float], **_: Any) -> GridSpec:
-        """Open the remote zarr metadata-only and return the grid spec for bbox."""
-        ds = self._open_remote()
-        ds = self._correct_longitude(ds)
-        ds = self._select_bbox(ds, bbox)
-        da = ds[self.variable]
-        ny = da.sizes["latitude"]
-        nx = da.sizes["longitude"]
+        """Derive GridSpec from ERA5-Land's known 0.1° resolution — no data transfer."""
+        xmin, ymin, xmax, ymax = map(float, bbox)
+        # _select_bbox pads by one pixel in each direction so probe matches fetch shape.
+        nx = max(1, math.ceil((xmax - xmin + 2 * _ERA5_LAND_RES_DEG) / _ERA5_LAND_RES_DEG))
+        ny = max(1, math.ceil((ymax - ymin + 2 * _ERA5_LAND_RES_DEG) / _ERA5_LAND_RES_DEG))
         return GridSpec(
             shape=(ny, nx),
             crs=4326,
-            dtype=np.dtype(da.dtype),
+            dtype=np.dtype("float32"),
             nodata=None,
             time_dim=True,
             x_dim="x",
@@ -107,9 +108,8 @@ class Era5LandPlugin:
 
     def _select_bbox(self, ds: xr.Dataset, bbox: list[float]) -> xr.Dataset:
         xmin, ymin, xmax, ymax = map(float, bbox)
-        lon_res = float(abs(ds.longitude.diff("longitude").median()))
-        lat_res = float(abs(ds.latitude.diff("latitude").median()))
+        pad = _ERA5_LAND_RES_DEG
         return ds.sel(
-            longitude=slice(xmin - lon_res, xmax + lon_res),
-            latitude=slice(ymax + lat_res, ymin - lat_res),
+            longitude=slice(xmin - pad, xmax + pad),
+            latitude=slice(ymax + pad, ymin - pad),
         )

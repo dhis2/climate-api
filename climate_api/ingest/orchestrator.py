@@ -106,16 +106,14 @@ async def run_ingest(
     on_progress: Callable[..., None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
-    load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
     apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
     pyramid: bool = False,
 ) -> None:
     """Probe the source then stream per-period data into an Icechunk store.
 
-    On the first run creates the store. On resume continues from the last
-    committed period recorded in the job cursor (falling back to reading the
-    store's committed time coordinates when no cursor is present).
+    On the first run creates the store. On resume, reads committed period IDs
+    directly from the Icechunk store and ingests only the missing periods.
 
     Memory usage is bounded by plugin.max_concurrency datasets held in flight
     concurrently. Writes are always sequential: tasks are awaited in
@@ -141,14 +139,13 @@ async def run_ingest(
         logger.info("Store is current — nothing to ingest")
         return
 
-    done_offset = len(all_periods) - len(pending)
     if on_progress:
-        on_progress(done=done_offset, total=len(all_periods), message=f"{len(pending)} periods pending")
+        on_progress(done=already_done, total=len(all_periods), message=f"{len(pending)} periods pending")
 
     # True when no periods have been committed yet — handles both a brand-new
     # store and a store directory that exists as an empty skeleton from a
     # previous failed initialisation (where append_dim would fail on an empty store).
-    is_first_write = done_offset == 0
+    is_first_write = already_done == 0
     # Capture before any commits so expire_snapshots only marks snapshots that
     # were created during this run, not the pre-existing HEAD.
     ingest_started_at = datetime.now(tz=timezone.utc)
@@ -205,7 +202,7 @@ async def run_ingest(
             logger.debug("Committed: %s (%d/%d)", period_id, i + 1, len(pending))
 
             if on_progress:
-                on_progress(done=done_offset + i + 1, total=len(all_periods), message=f"Wrote {period_id}")
+                on_progress(done=already_done + i + 1, total=len(all_periods), message=f"Wrote {period_id}")
 
             if not spec.time_dim:
                 for t in tasks[i + 1 :]:
@@ -252,12 +249,17 @@ def run_ingest_sync(
     on_progress: Callable[..., None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
-    load_cursor: Callable[[], dict[str, Any] | None] | None = None,
     rechunk_time: int | None = None,
     apply_transforms: Callable[[xr.Dataset], xr.Dataset] | None = None,
     pyramid: bool = False,
 ) -> None:
-    """Synchronous wrapper around run_ingest for use in threaded job workers."""
+    """Synchronous wrapper around run_ingest for use in threaded job workers.
+
+    Must be called from a thread with no running event loop (e.g. a FastAPI
+    background task dispatched via the job framework's thread pool).
+    asyncio.run() creates a new event loop and will raise RuntimeError if one
+    is already running in the calling thread.
+    """
     asyncio.run(
         run_ingest(
             plugin=plugin,
@@ -270,7 +272,6 @@ def run_ingest_sync(
             on_progress=on_progress,
             is_cancel_requested=is_cancel_requested,
             save_cursor=save_cursor,
-            load_cursor=load_cursor,
             rechunk_time=rechunk_time,
             apply_transforms=apply_transforms,
             pyramid=pyramid,

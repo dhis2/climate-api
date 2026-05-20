@@ -61,11 +61,11 @@ class IngestionPlugin(Protocol):
     rechunk_time (optional class attribute): target time chunk size for the
         post-ingest rechunk. When set, the orchestrator rewrites the store after
         all periods are committed so the time axis uses chunks of this size
-        instead of the per-period chunk-of-1. Declare as a class attribute
-        (``rechunk_time: int | None = None``) to skip rechunking, or set to a
-        positive int (30 for daily, 720 for hourly). This attribute is read via
-        ``getattr`` and is intentionally excluded from the Protocol so that
-        plugins that omit it still pass the ``isinstance`` check.
+        instead of the per-period chunk-of-1. Set to a positive int (30 for
+        daily, 720 for hourly) to enable rechunking. Omitting the attribute
+        entirely is equivalent to ``None`` — the orchestrator uses
+        ``getattr(plugin, "rechunk_time", None)`` so plugins that omit it still
+        pass the ``isinstance`` check.
 
     pyramid (optional class attribute): when ``True``, the orchestrator builds
         a multiscale pyramid after ingest completes. Level count is derived
@@ -85,8 +85,10 @@ class IngestionPlugin(Protocol):
     def periods(self, start: str, end: str) -> list[str]:
         """Return the ordered list of available period IDs from start to end.
 
-        May query the upstream source to confirm which periods are published.
-        The orchestrator uses the length of this list for progress reporting.
+        Must be pure computation — no I/O. The orchestrator calls periods()
+        directly (not via asyncio.to_thread), so blocking here stalls the event
+        loop. Apply any availability cutoff inside this method using today's date
+        and a fixed lag constant rather than querying the upstream source.
         Use enumerate_periods() as a helper for standard daily/hourly/yearly types.
         """
         ...

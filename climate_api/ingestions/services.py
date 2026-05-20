@@ -203,7 +203,6 @@ def create_artifact(
     on_progress: Any | None = None,
     is_cancel_requested: Any | None = None,
     save_cursor: Any | None = None,
-    load_cursor: Any | None = None,
 ) -> ArtifactRecord:
     """Ingest a dataset via its plugin, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
@@ -255,7 +254,6 @@ def create_artifact(
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
         save_cursor=save_cursor,
-        load_cursor=load_cursor,
     )
 
 
@@ -272,7 +270,6 @@ def _create_icechunk_artifact(
     on_progress: Any | None = None,
     is_cancel_requested: Any | None = None,
     save_cursor: Any | None = None,
-    load_cursor: Any | None = None,
 ) -> ArtifactRecord:
     """Run per-period Icechunk ingest and register the resulting store as an artifact.
 
@@ -346,7 +343,6 @@ def _create_icechunk_artifact(
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
         save_cursor=save_cursor,
-        load_cursor=load_cursor,
     )
 
     if not store_path.exists():

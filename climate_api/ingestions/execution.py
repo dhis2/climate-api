@@ -21,12 +21,11 @@ def execute_ingest(
     on_progress: Any | None = None,
     is_cancel_requested: Any | None = None,
     save_cursor: Any | None = None,
-    load_cursor: Any | None = None,
 ) -> dict[str, Any]:
     """Ingest one dataset for the configured extent and return a result summary.
 
     Accepts optional job-framework callbacks (on_progress, is_cancel_requested,
-    save_cursor, load_cursor) so that progress is visible when run as an async job.
+    save_cursor) so that progress is visible when run as an async job.
     """
     dataset = registry_datasets.get_dataset(dataset_id)
     if dataset is None:
@@ -43,7 +42,6 @@ def execute_ingest(
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
         save_cursor=save_cursor,
-        load_cursor=load_cursor,
     )
     return {
         "status": "completed",

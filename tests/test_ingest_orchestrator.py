@@ -139,12 +139,11 @@ def test_run_ingest_is_idempotent(tmp_path: Path) -> None:
     assert committed == {"2024-01", "2024-02"}
 
 
-def test_run_ingest_resumes_from_cursor(tmp_path: Path) -> None:
-    """Simulate a crash after the first batch (2024-01, 2024-02) and resume."""
+def test_run_ingest_resumes_from_store(tmp_path: Path) -> None:
+    """A second run reads committed period IDs from the store and only fetches missing ones."""
     plugin = FakePlugin(["2024-01", "2024-02", "2024-03", "2024-04"])
     store_path = tmp_path / "test.icechunk"
 
-    # First run writes all four periods but we stop with a cursor pointing at batch 1.
     asyncio.run(
         run_ingest(
             plugin=plugin,
@@ -158,10 +157,7 @@ def test_run_ingest_resumes_from_cursor(tmp_path: Path) -> None:
     )
     assert read_committed_period_ids(store_path, "monthly") == {"2024-01", "2024-02"}
 
-    # Resume: provide a cursor pointing at the last committed period.
-    cursor: dict[str, Any] = {"last_committed": "2024-02"}
     plugin2 = FakePlugin(["2024-01", "2024-02", "2024-03", "2024-04"])
-
     asyncio.run(
         run_ingest(
             plugin=plugin2,
@@ -171,11 +167,10 @@ def test_run_ingest_resumes_from_cursor(tmp_path: Path) -> None:
             end="2024-04",
             store_path=store_path,
             period_type="monthly",
-            load_cursor=lambda: cursor,
         )
     )
 
-    # Only the two new periods were fetched.
+    # Only the two new periods were fetched; pre-existing ones were skipped.
     assert sorted(plugin2.fetched) == ["2024-03", "2024-04"]
     committed = read_committed_period_ids(store_path, "monthly")
     assert committed == {"2024-01", "2024-02", "2024-03", "2024-04"}
@@ -279,6 +274,54 @@ def test_run_ingest_cancels_on_request(tmp_path: Path) -> None:
                 is_cancel_requested=cancel_after_two,
             )
         )
+
+
+def test_run_ingest_preserves_committed_periods_on_fetch_error(tmp_path: Path) -> None:
+    """Periods committed before a fetch_period exception are retained in the store."""
+    store_path = tmp_path / "test.icechunk"
+
+    # Ingest 2024-01 and 2024-02 successfully.
+    seed_plugin = FakePlugin(["2024-01", "2024-02"])
+    asyncio.run(
+        run_ingest(
+            plugin=seed_plugin,
+            params={},
+            bbox=[-180, -90, 180, 90],
+            start="2024-01",
+            end="2024-02",
+            store_path=store_path,
+            period_type="monthly",
+        )
+    )
+
+    # Now try to extend with 2024-03 through 2024-05; 2024-04 will raise.
+    class FailOnPeriod(FakePlugin):
+        def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+            if period_id == "2024-04":
+                raise RuntimeError("simulated fetch failure")
+            return super().fetch_period(period_id, bbox, **params)
+
+    failing_plugin = FailOnPeriod(["2024-01", "2024-02", "2024-03", "2024-04", "2024-05"])
+    with pytest.raises(RuntimeError, match="simulated fetch failure"):
+        asyncio.run(
+            run_ingest(
+                plugin=failing_plugin,
+                params={},
+                bbox=[-180, -90, 180, 90],
+                start="2024-01",
+                end="2024-05",
+                store_path=store_path,
+                period_type="monthly",
+            )
+        )
+
+    # The store must be valid: pre-existing + 2024-03 committed; 2024-04 and 2024-05 not.
+    committed = read_committed_period_ids(store_path, "monthly")
+    assert "2024-01" in committed
+    assert "2024-02" in committed
+    assert "2024-03" in committed
+    assert "2024-04" not in committed
+    assert "2024-05" not in committed
 
 
 # ---------------------------------------------------------------------------

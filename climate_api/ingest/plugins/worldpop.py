@@ -37,6 +37,14 @@ class WorldPopPlugin:
             upper-case for directory names, lower-case for filenames).
         version: Dataset version — 'global2' (2015–2030, default) or
             'global1' (2000–2020).
+
+    Each country GeoTIFF is downloaded in full (~100–500 MB) and clipped to
+    the bbox in memory. max_concurrency=1 is required to bound peak memory.
+
+    Sync behaviour: WorldPop stores are pyramid stores (pyramid=True). The
+    orchestrator cannot append to pyramid stores, so each sync triggers a
+    full rematerialization — all years are re-fetched and the pyramid is
+    rebuilt from scratch. This is expected and intentional.
     """
 
     max_concurrency = 1
