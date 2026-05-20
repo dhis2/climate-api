@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Manage — DHIS2 Climate API</title>
+    <title>Manage — {{ name }}</title>
     <style>
       *,
       *::before,
@@ -36,22 +36,17 @@
         font-weight: 600;
         letter-spacing: -0.01em;
       }
+      header h1 a {
+        color: inherit;
+        text-decoration: none;
+      }
+      header h1 a:hover {
+        text-decoration: underline;
+      }
       header .subtitle {
         font-size: 0.825rem;
         color: #8fa3b8;
       }
-      header nav {
-        margin-left: auto;
-      }
-      header nav a {
-        color: #8fa3b8;
-        text-decoration: none;
-        font-size: 0.825rem;
-      }
-      header nav a:hover {
-        color: #fff;
-      }
-
       main {
         max-width: 860px;
         margin: 2.5rem auto;
@@ -311,9 +306,8 @@
   </head>
   <body>
     <header>
-      <h1>Climate API</h1>
+      <h1><a href="{{ base }}/">{{ name }}</a></h1>
       <span class="subtitle">Manage</span>
-      <nav><a href="{{ base }}/">Overview</a></nav>
     </header>
 
     <main>

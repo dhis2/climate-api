@@ -10,6 +10,7 @@ from typing import Any
 import jinja2
 from fastapi import Request
 
+from climate_api import config as api_config
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.services import list_datasets
@@ -98,7 +99,7 @@ def wants_json(request: Request) -> bool:
 
 def render_maps(base: str) -> str:
     """Render the map viewer page."""
-    return get_template("map-viewer.html").render(base=base)
+    return get_template("map-viewer.html").render(base=base, name=api_config.get_name())
 
 
 def _load_extent() -> dict[str, Any] | None:
@@ -132,6 +133,7 @@ def render_landing(version: str, base: str) -> str:
     return get_template("landing_page.html").render(
         version=version,
         base=base,
+        name=api_config.get_name(),
         extent=_load_extent(),
         datasets=_load_datasets(),
         templates=_load_templates(),
@@ -145,6 +147,7 @@ def render_manage(version: str, base: str, message: str | None = None, error: st
     return get_template("manage.html").render(
         version=version,
         base=base,
+        name=api_config.get_name(),
         extent=_load_extent(),
         templates=_load_templates(),
         datasets=_load_datasets(),
