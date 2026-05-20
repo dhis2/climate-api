@@ -602,13 +602,13 @@ def test_plugin_latest_available_period_returns_last_period() -> None:
         commit_batch_size = 1
         rechunk_time = None
 
-        async def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+        def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
             raise NotImplementedError
 
-        async def periods(self, start: str, end: str) -> list[str]:
+        def periods(self, start: str, end: str) -> list[str]:
             return [d for d in ["2026-02-07", "2026-02-08", "2026-02-09"] if start <= d <= end]
 
-        async def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+        def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
             raise NotImplementedError
 
     import climate_api.ingest.orchestrator as orch_mod
@@ -636,13 +636,13 @@ def test_plugin_latest_available_period_returns_current_end_when_empty() -> None
         commit_batch_size = 1
         rechunk_time = None
 
-        async def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+        def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
             raise NotImplementedError
 
-        async def periods(self, start: str, end: str) -> list[str]:
+        def periods(self, start: str, end: str) -> list[str]:
             return []
 
-        async def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+        def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
             raise NotImplementedError
 
     import climate_api.ingest.orchestrator as orch_mod
