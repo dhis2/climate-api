@@ -320,7 +320,22 @@ def _is_pyramid_zarr(artifact_path: str) -> bool:
     """Return True if artifact_path is a multiscale pyramid zarr store."""
     if "://" in artifact_path:
         return False
-    return (Path(artifact_path) / "0").is_dir()
+    path = Path(artifact_path)
+    if (path / "0").is_dir():
+        return True
+    if path.suffix == ".icechunk":
+        try:
+            import zarr
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            repo = open_or_create_repo(path)
+            session = repo.readonly_session("main")
+            root = zarr.open_group(session.store, mode="r")
+            return "0" in root
+        except Exception:
+            return False
+    return False
 
 
 def _abs_url(request: Request, path: str) -> str:
