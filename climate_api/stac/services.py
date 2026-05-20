@@ -504,15 +504,21 @@ def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> 
         return None
     colormap_name = display.get("colormap")
     value_range = display.get("range")
-    if not isinstance(colormap_name, str) or not isinstance(value_range, list) or len(value_range) != 2:
-        return None
+    palette = display.get("palette")
+
     render: dict[str, Any] = {
         "title": artifact.dataset_name,
         "assets": ["zarr"],
-        "rescale": [[float(value_range[0]), float(value_range[1])]],
-        "colormap_name": colormap_name,
         "climate_api:variable": artifact.variable,
     }
+
+    if isinstance(palette, dict) and palette:
+        render["climate_api:palette"] = {str(k): str(v) for k, v in palette.items()}
+    elif isinstance(colormap_name, str) and isinstance(value_range, list) and len(value_range) == 2:
+        render["colormap_name"] = colormap_name
+        render["rescale"] = [[float(value_range[0]), float(value_range[1])]]
+    else:
+        return None
     nodata = display.get("nodata")
     if nodata is not None:
         render["nodata"] = float(nodata)
