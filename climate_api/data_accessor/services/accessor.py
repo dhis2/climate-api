@@ -145,6 +145,8 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str 
 
     x_dim, y_dim = get_x_y_dims(ds)
 
+    start: str | None
+    end: str | None
     try:
         time_dim = get_time_dim(ds)
         start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]

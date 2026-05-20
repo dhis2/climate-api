@@ -77,6 +77,8 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
+    if current_end is None:
+        raise ValueError(f"Cannot plan sync for {sync_kind.value} dataset with no existing temporal coverage")
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None

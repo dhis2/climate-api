@@ -392,11 +392,12 @@ def _override_spatial_extent_from_artifact(collection: dict[str, Any], artifact:
 
 def _override_temporal_extent_from_artifact(collection: dict[str, Any], artifact: ArtifactRecord) -> None:
     temporal = artifact.coverage.temporal
-    if temporal.start is None and temporal.end is None:
-        collection["extent"]["temporal"]["interval"] = [[None, None]]
-        return
-    start = parse_period_string_to_datetime(temporal.start).isoformat().replace("+00:00", "Z")
-    end = parse_period_string_to_datetime(temporal.end).isoformat().replace("+00:00", "Z")
+
+    def _fmt(period: str | None) -> str | None:
+        return parse_period_string_to_datetime(period).isoformat().replace("+00:00", "Z") if period else None
+
+    start = _fmt(temporal.start)
+    end = _fmt(temporal.end)
     collection["extent"]["temporal"]["interval"] = [[start, end]]
     dimensions = collection.setdefault("cube:dimensions", {})
     for key, value in dimensions.items():
