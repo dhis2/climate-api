@@ -71,9 +71,8 @@ class Client:
         """Open a published dataset as an xarray Dataset.
 
         Fetches the STAC collection for ``dataset_id``, reads the Zarr asset
-        metadata, and returns the opened dataset. Spatial coordinate names
-        reflect the plugin's native convention (e.g. ``x``/``y`` for raster
-        sources, ``longitude``/``latitude`` for ERA5-style sources).
+        metadata, and returns the opened dataset. Spatial dimensions are always
+        named ``x`` and ``y``; the time dimension, when present, is ``time``.
         """
         response = self._http.get(f"{self.base_url}/stac/collections/{dataset_id}")
         response.raise_for_status()
