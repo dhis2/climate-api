@@ -46,17 +46,6 @@ The Climate API targets the same access pattern at country scale for arbitrary s
 
 ---
 
-## Store layout on disk
-
-Each managed dataset has exactly one Icechunk repository on disk, stored under `{data_dir}/downloads/{dataset_id}.icechunk`. The zarr content inside the repository is either:
-
-- **Flat** — a single-resolution store with dimensions `(time, x, y)`
-- **Pyramid** — a multi-resolution store with levels `0/`, `1/`, `2/`, … where `0/` is the full resolution
-
-The flat vs. pyramid decision is made at ingest time based on spatial size (see [Multiscale pyramids](#multiscale-pyramids) below).
-
----
-
 ## Icechunk — versioned Zarr storage
 
 [Icechunk](https://icechunk.io) is a transactional storage layer that sits between the application and the underlying Zarr v3 data. It exposes a standard Zarr store interface to writers and readers, but adds **MVCC (multi-version concurrency control)**: every write is committed as an immutable snapshot, and readers always see a consistent view of the data regardless of concurrent writes.
@@ -89,6 +78,17 @@ snapshot 18: (the only surviving snapshot — full pyramid, correctly chunked)
 ### Serving from Icechunk
 
 Zarr keys are read directly from the Icechunk session store rather than from files on disk. The HTTP surface is identical — the same `/zarr/{dataset_id}/` routes — but the backend resolves each key through the Icechunk MVCC layer instead of a `FileResponse`.
+
+---
+
+## Store layout on disk
+
+Each managed dataset has exactly one Icechunk repository on disk, stored under `{data_dir}/downloads/{dataset_id}.icechunk`. The zarr content inside the repository is either:
+
+- **Flat** — a single-resolution store with dimensions `(time, x, y)`
+- **Pyramid** — a multi-resolution store with levels `0/`, `1/`, `2/`, … where `0/` is the full resolution
+
+The flat vs. pyramid decision is made at ingest time based on spatial size (see [Multiscale pyramids](#multiscale-pyramids) below).
 
 ---
 
