@@ -9,7 +9,7 @@ def test_root_returns_html_by_default(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "DHIS2 Climate API" in response.text
+    assert "Open Climate Service" in response.text
 
 
 def test_root_html_shows_extent(client: TestClient) -> None:

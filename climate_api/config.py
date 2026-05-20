@@ -59,6 +59,21 @@ def _load_config() -> dict[str, Any]:
 
 
 DEFAULT_CRS = "EPSG:4326"
+DEFAULT_NAME = "Open Climate Service"
+
+
+def get_name() -> str:
+    """Return the instance display name from CLIMATE_API_CONFIG.
+
+    Set `name: My Climate Service` in climate-api.yaml to customise the title
+    shown in the web UI. Defaults to 'Open Climate Service' when unset.
+    """
+    raw = get_config().get("name")
+    if raw is None:
+        return DEFAULT_NAME
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"name in CLIMATE_API_CONFIG must be a non-empty string, got {type(raw).__name__}")
+    return raw.strip()
 
 
 def get_crs() -> str:
