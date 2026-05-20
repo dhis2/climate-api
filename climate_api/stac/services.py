@@ -328,8 +328,6 @@ def _public_zarr_asset_href(
     source_dataset: dict[str, Any],
 ) -> str:
     artifact_path = _artifact_store_path(artifact)
-    if _is_pyramid_zarr(artifact_path):
-        return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
 
 
