@@ -153,7 +153,7 @@ Published Zarr-backed managed datasets appear there as one STAC Collection per d
 
 Current STAC details:
 
-- pyramid Zarr stores (detected by the presence of a `0/` level on disk) expose `/zarr/{dataset_id}/0` as the canonical asset href
+- Icechunk pyramid stores (detected by `multiscales` in root attrs) expose the root `/zarr/{dataset_id}` as the asset href so `@carbonplan/zarr-layer` can read the `multiscales` metadata and select the appropriate zoom level automatically; regular flat-Zarr pyramid stores (legacy) expose `/zarr/{dataset_id}/0`
 - temporal extents are normalized to RFC 3339 in both STAC and Datacube temporal extent fields
 - STAC collection `license` currently defaults to `various`
 - spatial `step` values are rounded for readability while preserving axis direction
