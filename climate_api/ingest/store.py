@@ -117,7 +117,7 @@ def build_pyramid_store(store_path: Path, *, x_dim: str = "x", y_dim: str = "y")
         import xproj  # noqa: F401 — registers .proj accessor
 
         root = zarr.open_group(read_session.store, mode="r")
-        proj_code = root.attrs.get("proj:code", "EPSG:4326")
+        proj_code = str(root.attrs.get("proj:code", "EPSG:4326"))
         epsg = int(proj_code.split(":")[1]) if ":" in proj_code else 4326
         ds_loaded = ds_loaded.proj.assign_crs({"EPSG": epsg})
     except Exception:

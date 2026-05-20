@@ -11,7 +11,6 @@ and keeps future scheduler-driven sync jobs on the same code path.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
@@ -368,8 +367,6 @@ def _plugin_latest_available_period(
     - str: the last available period in the range (may equal current_end when nothing new)
     - None: plugin could not be instantiated (caller falls back to legacy availability logic)
 
-    Calls asyncio.run() which requires no running event loop — plan_sync is synchronous
-    and FastAPI runs sync handlers in a thread pool, so this is safe.
     """
     ingestion = source_dataset.get("ingestion")
     if not isinstance(ingestion, dict):
@@ -394,7 +391,7 @@ def _plugin_latest_available_period(
         return None
 
     try:
-        periods = asyncio.run(plugin.periods(next_period_start, requested_end))
+        periods: list[str] = plugin.periods(next_period_start, requested_end)
     except Exception as exc:
         logger.debug("plugin.periods() failed during availability check for '%s': %s", plugin_path, exc)
         return None

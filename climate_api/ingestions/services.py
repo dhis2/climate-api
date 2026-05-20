@@ -750,9 +750,9 @@ def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path
     is_chunk_key = "/c/" in key or key.startswith("c/")
     is_file_key = "." in last_segment
     if not is_chunk_key and not is_file_key:
-        root: zarr.Group = zarr.open_group(session.store, mode="r")
+        root = zarr.open_group(session.store, mode="r")
         try:
-            node: zarr.Group = root[key]  # type: ignore[assignment]
+            node = root[key]  # type: ignore[assignment]
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
         children = sorted(node.keys())
