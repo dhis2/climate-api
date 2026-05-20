@@ -1,6 +1,8 @@
 """Routes for EO ingestion, datasets, and sync operations."""
 
-from fastapi import APIRouter, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
@@ -24,9 +26,42 @@ zarr_router = APIRouter()
 sync_router = APIRouter()
 
 
-@ingestions_router.post("", response_model=IngestionResponse)
-def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
-    """Create or update a managed dataset from a dataset template and configured extent."""
+def _prefer_respond_async(prefer: str | None) -> bool:
+    if prefer is None:
+        return False
+    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
+    return "respond-async" in directives
+
+
+@ingestions_router.post("", response_model=None)
+def create_ingestion(
+    request: CreateIngestionRequest,
+    response: Response,
+    prefer: str | None = Header(default=None),
+) -> Any:
+    """Create or update a managed dataset from a dataset template and configured extent.
+
+    Send ``Prefer: respond-async`` to run the ingest as a background job and
+    receive HTTP 202 with a ``Location: /jobs/{job_id}`` header immediately.
+    Poll ``GET /jobs/{job_id}`` for progress and completion status.
+    """
+    if _prefer_respond_async(prefer):
+        from climate_api.jobs.service import get_job_service
+
+        job = get_job_service().submit_process_job(
+            process_id="ingest",
+            request={
+                "dataset_id": request.dataset_id,
+                "start": request.start,
+                "end": request.end,
+                "overwrite": request.overwrite,
+                "publish": request.publish,
+            },
+        )
+        response.status_code = 202
+        response.headers["Location"] = f"/jobs/{job.job_id}"
+        return job
+
     dataset = _get_dataset_or_404(request.dataset_id)
     extent = get_extent_or_404()
     resolved_bbox = list(extent["bbox"])

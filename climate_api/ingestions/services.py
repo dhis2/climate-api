@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import os
 from collections.abc import Callable
+from typing import Any
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -200,6 +201,10 @@ def create_artifact(
     publish: bool,
     download_start: str | None = None,
     download_end: str | None = None,
+    on_progress: Any | None = None,
+    is_cancel_requested: Any | None = None,
+    save_cursor: Any | None = None,
+    load_cursor: Any | None = None,
 ) -> ArtifactRecord:
     """Ingest a dataset via its plugin, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
@@ -249,6 +254,10 @@ def create_artifact(
         overwrite=overwrite,
         publish=publish,
         ingest_start=download_start,
+        on_progress=on_progress,
+        is_cancel_requested=is_cancel_requested,
+        save_cursor=save_cursor,
+        load_cursor=load_cursor,
     )
 
 
@@ -262,6 +271,10 @@ def _create_icechunk_artifact(
     overwrite: bool = False,
     publish: bool,
     ingest_start: str | None = None,
+    on_progress: Any | None = None,
+    is_cancel_requested: Any | None = None,
+    save_cursor: Any | None = None,
+    load_cursor: Any | None = None,
 ) -> ArtifactRecord:
     """Run per-period Icechunk ingest and register the resulting store as an artifact.
 
@@ -332,6 +345,10 @@ def _create_icechunk_artifact(
         rechunk_time=rechunk_time,
         apply_transforms=apply_transforms,
         pyramid=pyramid,
+        on_progress=on_progress,
+        is_cancel_requested=is_cancel_requested,
+        save_cursor=save_cursor,
+        load_cursor=load_cursor,
     )
 
     if not store_path.exists():
@@ -343,6 +360,11 @@ def _create_icechunk_artifact(
 
     try:
         ds = xr.open_zarr(session.store)
+        # For pyramid stores the data and time live under group "0"; root has
+        # only multiscales metadata with empty coordinates.
+        if "time" not in ds.coords and "multiscales" in ds.attrs:
+            ds.close()
+            ds = xr.open_zarr(session.store, group="0")
     except Exception as exc:
         raise HTTPException(status_code=409, detail="Ingest produced no readable data for the requested range") from exc
     from climate_api import config as api_config
