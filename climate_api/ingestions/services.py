@@ -79,20 +79,34 @@ def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) 
 
 
 def _read_crs_from_spatial_ref(ds: xr.Dataset) -> str | None:
-    """Return 'EPSG:<n>' from a dataset's spatial_ref coordinate, or None."""
-    if "spatial_ref" not in ds.coords:
-        return None
-    try:
-        import pyproj
+    """Return an EPSG CRS string from a dataset, or None if undetectable.
 
-        attrs = dict(ds["spatial_ref"].attrs)
-        wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
-        if not wkt:
-            return None
-        epsg = pyproj.CRS.from_wkt(str(wkt)).to_epsg()
-        return f"EPSG:{epsg}" if epsg else None
-    except Exception:
-        return None
+    Checks spatial_ref WKT first, then falls back to dimension units/standard_name
+    so that datasets like ERA5-Land (no spatial_ref, but degrees_east/north units)
+    are not misidentified as projected.
+    """
+    if "spatial_ref" in ds.coords:
+        try:
+            import pyproj
+
+            attrs = dict(ds["spatial_ref"].attrs)
+            wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+            if wkt:
+                epsg = pyproj.CRS.from_wkt(str(wkt)).to_epsg()
+                if epsg:
+                    return f"EPSG:{epsg}"
+        except Exception:
+            pass
+    for dim in set(ds.dims):
+        if dim not in ds.coords:
+            continue
+        attrs = dict(ds[dim].attrs)
+        if attrs.get("units") in ("degrees_east", "degrees_north") or attrs.get("standard_name") in (
+            "longitude",
+            "latitude",
+        ):
+            return "EPSG:4326"
+    return None
 
 
 def _resolve_artifacts_dir() -> Path:

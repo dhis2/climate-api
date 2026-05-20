@@ -515,23 +515,35 @@ def _zarr_consolidated_flag(artifact_path: str) -> bool | None:
 
 
 def _detect_dataset_crs(ds: Any) -> str | None:
-    """Read the EPSG CRS code from a dataset's spatial_ref coordinate, if present.
+    """Read the EPSG CRS code from a dataset, or None if undetectable.
 
-    Returns a string like 'EPSG:4326' or None if undetectable. Used to override
-    the deployment-wide proj:code with the actual native CRS of the data so that
-    datasets stored in WGS84 (e.g. WorldPop) are not misidentified as projected.
+    Checks (in order): spatial_ref WKT coordinate, then dimension units/standard_name.
+    Used to override the deployment-wide proj:code with the actual native CRS of the
+    data so that datasets stored in WGS84 (e.g. ERA5-Land, WorldPop) are not
+    misidentified as projected.
     """
-    if not hasattr(ds, "coords") or "spatial_ref" not in ds.coords:
+    if not hasattr(ds, "coords"):
         return None
-    try:
-        import pyproj
+    if "spatial_ref" in ds.coords:
+        try:
+            import pyproj
 
-        attrs = dict(ds["spatial_ref"].attrs)
-        wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
-        if not wkt:
-            return None
-        crs = pyproj.CRS.from_wkt(str(wkt))
-        epsg = crs.to_epsg()
-        return f"EPSG:{epsg}" if epsg else None
-    except Exception:
-        return None
+            attrs = dict(ds["spatial_ref"].attrs)
+            wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+            if wkt:
+                crs = pyproj.CRS.from_wkt(str(wkt))
+                epsg = crs.to_epsg()
+                if epsg:
+                    return f"EPSG:{epsg}"
+        except Exception:
+            pass
+    for dim in set(getattr(ds, "dims", {})):
+        if dim not in ds.coords:
+            continue
+        attrs = dict(ds[dim].attrs)
+        if attrs.get("units") in ("degrees_east", "degrees_north") or attrs.get("standard_name") in (
+            "longitude",
+            "latitude",
+        ):
+            return "EPSG:4326"
+    return None
