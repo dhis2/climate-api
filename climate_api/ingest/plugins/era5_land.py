@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from datetime import date, timedelta
 from typing import Any
 
@@ -44,6 +45,8 @@ class Era5LandPlugin:
 
     def __init__(self, variable: str) -> None:
         self.variable = variable
+        self._cache_ds: xr.Dataset | None = None
+        self._cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Protocol implementation
@@ -75,10 +78,13 @@ class Era5LandPlugin:
         hour = int(period_id[-2:]) if len(period_id) > 10 else 0
         date_part = period_id[:10]
 
-        ds = self._open_remote()
-        ds = self._correct_longitude(ds)
-        ds = self._select_bbox(ds, bbox)
-        ds = ds.sel(valid_time=f"{date_part}T{hour:02d}")
+        if self._cache_ds is None:
+            with self._cache_lock:
+                if self._cache_ds is None:
+                    logger.info("Opening ERA5-Land remote store: %s", _DESTINE_ZARR_URL)
+                    self._cache_ds = self._correct_longitude(self._open_remote())
+        ds = self._cache_ds
+        ds = self._select_bbox(ds, bbox).sel(valid_time=f"{date_part}T{hour:02d}")
 
         # Ensure a length-1 time dimension so append_dim="time" works correctly.
         if "valid_time" in ds.dims:
