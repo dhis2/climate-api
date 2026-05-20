@@ -228,9 +228,20 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
             reference_system = int(detected_crs.split(":")[-1]) if detected_crs else 4326
         except ValueError:
             reference_system = 4326
+        if time_dimension is None:
+            # xstac requires a temporal dimension; skip it for timeless (static)
+            # stores and build only spatial cube:dimensions by hand.
+            payload = template.to_dict(include_self_link=False)
+            payload["cube:dimensions"] = {
+                x_dimension: {"type": "spatial", "axis": "x", "reference_system": reference_system},
+                y_dimension: {"type": "spatial", "axis": "y", "reference_system": reference_system},
+            }
+            _cache_xstac_collection_payload(artifact.artifact_id, payload)
+            return deepcopy(payload)
+
         # xstac crashes on a scalar (0-d) time coordinate when computing
         # min/max for the temporal extent. Expand to a 1-element array first.
-        if time_dimension and hasattr(ds, "coords") and time_dimension in ds.coords and ds[time_dimension].ndim == 0:
+        if hasattr(ds, "coords") and time_dimension in ds.coords and ds[time_dimension].ndim == 0:
             ds = ds.expand_dims(time_dimension)
         result = xarray_to_stac(
             ds,
@@ -246,7 +257,7 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         # clear xstac/pystac-owned links before serialization to avoid root-link
         # resolution attempts during to_dict().
         result.clear_links()
-        payload: dict[str, Any] = result.to_dict(include_self_link=False)
+        payload = result.to_dict(include_self_link=False)
         _cache_xstac_collection_payload(artifact.artifact_id, payload)
         return deepcopy(payload)
     except HTTPException:
