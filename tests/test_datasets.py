@@ -441,7 +441,6 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
         "on_progress": None,
         "is_cancel_requested": None,
         "save_cursor": None,
-        "load_cursor": None,
     }
     assert artifact.format == ArtifactFormat.ICECHUNK
     assert artifact.path == str(store_path.resolve())
@@ -529,6 +528,8 @@ def test_create_artifact_allows_streaming_coverage_clamped_to_source_availabilit
 
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-01-31"
+    assert artifact.request_scope.start == "2026-01-01"
+    assert artifact.request_scope.end == "2026-01-31"
 
 
 def test_create_artifact_rejects_streaming_coverage_with_late_start(

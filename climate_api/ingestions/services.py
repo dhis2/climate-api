@@ -164,7 +164,6 @@ def create_artifact(
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, object]], None] | None = None,
-    load_cursor: Callable[[], dict[str, object] | None] | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
@@ -207,7 +206,6 @@ def create_artifact(
             on_progress=on_progress,
             is_cancel_requested=is_cancel_requested,
             save_cursor=save_cursor,
-            load_cursor=load_cursor,
         )
 
     existing = _find_existing_artifact(
@@ -360,7 +358,6 @@ def _create_streaming_artifact(
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, object]], None] | None = None,
-    load_cursor: Callable[[], dict[str, object] | None] | None = None,
 ) -> ArtifactRecord:
     """Create or update one plugin-backed Icechunk artifact for initial ingest.
 
@@ -409,7 +406,6 @@ def _create_streaming_artifact(
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
         save_cursor=save_cursor,
-        load_cursor=load_cursor,
     )
     if result.periods_written == 0 and not store_path.exists():
         raise HTTPException(status_code=409, detail="Source has no data for the requested temporal scope")
@@ -433,6 +429,8 @@ def _create_streaming_artifact(
                 f"request={request_scope.start}..{request_scope.end}"
             ),
         )
+
+    request_scope = request_scope.model_copy(update={"end": coverage.temporal.end})
 
     record = ArtifactRecord(
         artifact_id=str(uuid4()),

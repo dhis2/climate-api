@@ -44,6 +44,5 @@ def execute_ingestion(
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
         save_cursor=save_cursor,
-        load_cursor=load_cursor,
     )
     return services.get_ingestion_or_404(artifact.artifact_id)

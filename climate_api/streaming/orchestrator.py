@@ -75,14 +75,11 @@ async def run_streaming_ingest(
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
-    load_cursor: Callable[[], dict[str, Any] | None] | None = None,
 ) -> StreamingIngestResult:
     """Stream one dataset into a flat Zarr v3 store one period at a time.
 
     Resume policy:
     - committed store state is authoritative
-    - job cursor state is only treated as a narrowing hint when it matches a
-      committed period already present in the store
 
     This avoids replaying already-committed periods after crashes that happen
     between a store commit and a later cursor write.
@@ -183,9 +180,11 @@ async def run_streaming_ingest(
             if next_period is not None:
                 in_flight.append((next_period, asyncio.create_task(_fetch(next_period))))
     finally:
-        for _, task in in_flight:
-            if not task.done():
-                task.cancel()
+        tasks_to_cancel = [task for _, task in in_flight if not task.done()]
+        for task in tasks_to_cancel:
+            task.cancel()
+        if tasks_to_cancel:
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
     return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=written)
 
@@ -202,7 +201,6 @@ def run_streaming_ingest_sync(
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
-    load_cursor: Callable[[], dict[str, Any] | None] | None = None,
 ) -> StreamingIngestResult:
     """Synchronous wrapper for threaded job execution.
 
@@ -229,6 +227,5 @@ def run_streaming_ingest_sync(
             on_progress=on_progress,
             is_cancel_requested=is_cancel_requested,
             save_cursor=save_cursor,
-            load_cursor=load_cursor,
         )
     )

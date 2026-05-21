@@ -103,7 +103,6 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
         period_type="daily",
         on_progress=lambda done, total, message: progress_updates.append((done, total, message)),
         save_cursor=lambda cursor: cursor_saves.append(cursor),
-        load_cursor=lambda: {"last_committed": "2026-01-02"},
     )
 
     assert result.periods_written == 3
@@ -130,7 +129,6 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
         period_type="daily",
         on_progress=lambda done, total, message: progress_updates.append((done, total, message)),
         save_cursor=lambda cursor: cursor_saves.append(cursor),
-        load_cursor=lambda: {"last_committed": "2026-01-02"},
     )
 
     second = xr.open_zarr(store_path, consolidated=None)
@@ -227,7 +225,6 @@ def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
         end="2026-01-03",
         store_path=store_path,
         period_type="daily",
-        load_cursor=lambda: {"last_committed": "2026-01-02"},
     )
 
     assert result.periods_written == 2
@@ -295,7 +292,6 @@ def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path
         end="2026-01-03",
         store_path=store_path,
         period_type="daily",
-        load_cursor=lambda: {"last_committed": "2026-01-02"},
     )
 
     assert rerun.periods_written == 0
