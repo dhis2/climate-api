@@ -54,6 +54,8 @@ the new per-period streaming ingest contract:
 ```yaml
 ingestion:
   plugin: mypackage.sources.chirps3.CHIRPS3DailyPlugin
+  default_params:
+    stage: final
 ```
 
 The class must expose:
@@ -72,6 +74,14 @@ class MyStreamingPlugin:
     async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
         ...
 ```
+
+`ingestion.default_params` are applied in two places:
+
+- they are passed to the plugin constructor as configuration kwargs
+- they are also forwarded into `probe(...)` and `fetch_period(...)` as `**params`
+
+Plugin authors may therefore keep source configuration in constructor state,
+per-call kwargs, or both.
 
 Streaming plugins are source adapters, not framework replacements. They should
 know how to enumerate and fetch source periods, while the framework handles

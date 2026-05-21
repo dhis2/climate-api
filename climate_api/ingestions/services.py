@@ -459,7 +459,13 @@ def _create_streaming_artifact(
 
 
 def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> IngestionPlugin:
-    """Load and instantiate one streaming plugin class from a dotted import path."""
+    """Load and instantiate one streaming plugin class from a dotted import path.
+
+    Template-defined `ingestion.default_params` are treated as plugin
+    configuration and passed to the constructor here. The same params are also
+    forwarded later to `probe(...)` and `fetch_period(...)` so plugins may keep
+    configuration in constructor state, per-call kwargs, or both.
+    """
     module_path, _, attr_name = plugin_path.rpartition(".")
     if not module_path or not attr_name:
         raise HTTPException(status_code=500, detail=f"Invalid ingestion.plugin path '{plugin_path}'")
