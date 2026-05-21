@@ -47,7 +47,7 @@ class StreamingIngestResult:
     periods_written: int
 
 
-def _strip_cf_encoding(ds: xr.Dataset, period_type: str) -> None:
+def _strip_cf_encoding(ds: xr.Dataset, period_type: str, *, time_dim: str) -> None:
     """Normalize xarray encodings so repeated zarr appends remain stable.
 
     Source datasets frequently carry CF encoding hints that are useful for
@@ -58,9 +58,9 @@ def _strip_cf_encoding(ds: xr.Dataset, period_type: str) -> None:
     for name in list(ds.data_vars) + list(ds.coords):
         ds[name].encoding.clear()
         ds[name].attrs = {key: value for key, value in ds[name].attrs.items() if key not in cf_keys}
-    if "time" in ds.coords:
+    if time_dim in ds.coords:
         units = "hours since 1970-01-01" if period_type == "hourly" else "days since 1970-01-01"
-        ds["time"].encoding.update({"units": units, "dtype": "int32"})
+        ds[time_dim].encoding.update({"units": units, "dtype": "int32"})
 
 
 async def run_streaming_ingest(
@@ -136,7 +136,7 @@ async def run_streaming_ingest(
 
             period_id, task = in_flight.popleft()
             ds = await task
-            _strip_cf_encoding(ds, period_type)
+            _strip_cf_encoding(ds, period_type, time_dim=spec.time_dim)
             try:
                 spatial_shape = (int(ds.sizes[spec.y_dim]), int(ds.sizes[spec.x_dim]))
             except KeyError as exc:
@@ -159,7 +159,7 @@ async def run_streaming_ingest(
                 ds.to_zarr(session.store, mode="w", zarr_format=3)
                 is_first_write = False
             else:
-                ds.to_zarr(session.store, append_dim="time")
+                ds.to_zarr(session.store, append_dim=spec.time_dim, zarr_format=3)
             # Root attrs are rewritten on every commit so later append sessions
             # preserve GeoZarr metadata even if the underlying store layer only
             # touches array content for the new period.

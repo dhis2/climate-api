@@ -24,7 +24,6 @@ def execute_ingestion(
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, Any]], None] | None = None,
-    load_cursor: Callable[[], dict[str, Any] | None] | None = None,
 ) -> IngestionResponse:
     """Execute one managed-dataset ingestion using the configured extent."""
     dataset = registry_datasets.get_dataset(dataset_id)

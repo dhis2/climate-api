@@ -125,7 +125,7 @@ class CHIRPS3DailyPlugin:
         import rioxarray
 
         day = date.fromisoformat(period_id)
-        da = rioxarray.open_rasterio(self._url_for_day(day), chunks=None, masked=True, lock=False)
+        da = rioxarray.open_rasterio(self._url_for_day(day), chunks=None, masked=True)
         if not isinstance(da, xr.DataArray):
             raise TypeError(f"Expected DataArray from CHIRPS3 raster read, got {type(da).__name__}")
         xmin, ymin, xmax, ymax = map(float, bbox)
