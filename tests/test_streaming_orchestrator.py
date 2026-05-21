@@ -104,6 +104,8 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
 
     root = zarr.open_group(store_path, mode="r")
     assert root.attrs["proj:code"] == "EPSG:4326"
+    assert root.attrs["spatial:dimensions"] == ["y", "x"]
+    assert root.attrs["spatial:shape"] == [1, 1]
 
     run_streaming_ingest_sync(
         plugin=_FakePlugin(),

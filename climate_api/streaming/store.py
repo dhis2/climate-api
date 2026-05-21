@@ -74,7 +74,7 @@ def write_geozarr_attrs(store: Any, *, spec: Any, bbox: list[float]) -> None:
     import zarr
 
     attrs = create_geozarr_attrs(
-        dimensions=[spec.x_dim, spec.y_dim],
+        dimensions=[spec.y_dim, spec.x_dim],
         crs=f"EPSG:{spec.crs}",
         bbox=bbox,
         shape=spec.shape,
