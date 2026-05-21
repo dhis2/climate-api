@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from fastapi import HTTPException
+
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent_or_404
 from climate_api.ingestions import services
@@ -27,7 +29,7 @@ def execute_ingestion(
     """Execute one managed-dataset ingestion using the configured extent."""
     dataset = registry_datasets.get_dataset(dataset_id)
     if dataset is None:
-        raise ValueError(f"Unknown dataset '{dataset_id}'")
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found")
 
     extent = get_extent_or_404()
     artifact = services.create_artifact(

@@ -15,9 +15,10 @@ state, artifact records, or store mutation beyond returning one dataset.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import calendar
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -28,7 +29,22 @@ from climate_api.streaming.protocol import GridSpec
 _CHIRPS3_NODATA = -9999.0
 _CHIRPS3_RES_DEG = 0.05
 _COMPLETE_AFTER_DAY = 20
-_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chirps3")
+_EXECUTOR: ThreadPoolExecutor | None = None
+
+
+def _shutdown_executor() -> None:
+    global _EXECUTOR
+    if _EXECUTOR is not None:
+        _EXECUTOR.shutdown(wait=False, cancel_futures=True)
+        _EXECUTOR = None
+
+
+def _get_executor() -> ThreadPoolExecutor:
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chirps3")
+        atexit.register(_shutdown_executor)
+    return _EXECUTOR
 
 
 class CHIRPS3DailyPlugin:
@@ -78,11 +94,11 @@ class CHIRPS3DailyPlugin:
 
     async def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
         """Fetch one day, clip it to the requested bbox, and return a one-step dataset."""
-        return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, self._fetch_sync, period_id, bbox)
+        return await asyncio.get_running_loop().run_in_executor(_get_executor(), self._fetch_sync, period_id, bbox)
 
     def _availability_cutoff(self) -> date:
         """Return the last day of the latest month treated as complete by this plugin."""
-        today = date.today()
+        today = datetime.now(UTC).date()
         months_back = 1 if today.day > _COMPLETE_AFTER_DAY else 2
         year, month = today.year, today.month
         for _ in range(months_back):

@@ -289,6 +289,19 @@ def test_temporal_coverage_matches_request_scope_allows_open_ended_reuse() -> No
     )
 
 
+def test_temporal_coverage_matches_streaming_request_scope_requires_exact_start() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    assert not services._temporal_coverage_matches_streaming_request_scope(
+        CoverageTemporal(start="2026-01-03", end="2026-01-31"),
+        request_scope,
+    )
+
+
 def test_create_artifact_computes_coverage_from_created_artifact_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -374,7 +387,7 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
 
     def fake_run_streaming_ingest_sync(**kwargs: object) -> object:
         captured["run"] = kwargs
-        return object()
+        return type("Result", (), {"periods_written": 1})()
 
     monkeypatch.setattr(services, "run_streaming_ingest_sync", fake_run_streaming_ingest_sync)
 
@@ -419,7 +432,7 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
     assert captured["netcdf_paths"] is None
     assert captured["run"] == {
         "plugin": plugin,
-        "params": {},
+        "params": {"stage": "final"},
         "bbox": [1.0, 2.0, 3.0, 4.0],
         "start": "2026-01-01",
         "end": "2026-01-03",
@@ -433,6 +446,206 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
     assert artifact.format == ArtifactFormat.ICECHUNK
     assert artifact.path == str(store_path.resolve())
     assert artifact.asset_paths == [str(store_path.resolve())]
+
+
+def test_create_artifact_allows_streaming_coverage_clamped_to_source_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {
+            "plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+        },
+    }
+    store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
+    store_path.mkdir()
+
+    monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
+    monkeypatch.setattr(services.downloader, "get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr(
+        services,
+        "run_streaming_ingest_sync",
+        lambda **kwargs: type("Result", (), {"periods_written": 1})(),
+    )
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(services, "_upsert_artifact_record", lambda record, **_: record)
+
+    def fake_get_data_coverage_for_paths(
+        dataset_arg: dict[str, object],
+        *,
+        zarr_path: str | None = None,
+        icechunk_path: str | None = None,
+        netcdf_paths: list[str] | None = None,
+    ) -> dict[str, object]:
+        assert dataset_arg["id"] == "chirps3_precipitation_daily"
+        assert zarr_path is None
+        assert icechunk_path == str(store_path.resolve())
+        assert netcdf_paths is None
+        return {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-01-31"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        }
+
+    monkeypatch.setattr(services, "get_data_coverage_for_paths", fake_get_data_coverage_for_paths)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-02-03",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=True,
+        publish=False,
+    )
+
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-01-31"
+
+
+def test_create_artifact_rejects_streaming_coverage_with_late_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {
+            "plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+        },
+    }
+    store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
+    store_path.mkdir()
+
+    monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
+    monkeypatch.setattr(services.downloader, "get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr(
+        services,
+        "run_streaming_ingest_sync",
+        lambda **kwargs: type("Result", (), {"periods_written": 1})(),
+    )
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(services, "_upsert_artifact_record", lambda record, **_: record)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *args, **kwargs: {
+            "coverage": {
+                "temporal": {"start": "2026-01-03", "end": "2026-01-31"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+
+    with pytest.raises(services.HTTPException, match="coverage does not match the requested scope"):
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-01-01",
+            end="2026-02-03",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+
+def test_create_artifact_returns_409_when_streaming_plugin_has_no_periods(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {
+            "plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+        },
+    }
+    store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
+
+    monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
+    monkeypatch.setattr(services.downloader, "get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr(
+        services,
+        "run_streaming_ingest_sync",
+        lambda **kwargs: type("Result", (), {"periods_written": 0})(),
+    )
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+
+    with pytest.raises(services.HTTPException, match="Source has no data for the requested temporal scope"):
+        services.create_artifact(
+            dataset=dataset,
+            start="2026-02-01",
+            end="2026-02-03",
+            bbox=[1.0, 2.0, 3.0, 4.0],
+            country_code=None,
+            overwrite=False,
+            prefer_zarr=True,
+            publish=False,
+        )
+
+
+def test_create_artifact_overwrite_resets_existing_icechunk_store(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {
+            "plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+        },
+    }
+    store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
+    store_path.mkdir()
+    (store_path / "stale").write_text("old", encoding="utf-8")
+
+    monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
+    monkeypatch.setattr(services.downloader, "get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(services, "_upsert_artifact_record", lambda record, **_: record)
+
+    def fake_run_streaming_ingest_sync(**kwargs: object) -> object:
+        assert not store_path.exists()
+        store_path.mkdir()
+        return type("Result", (), {"periods_written": 1})()
+
+    monkeypatch.setattr(services, "run_streaming_ingest_sync", fake_run_streaming_ingest_sync)
+    monkeypatch.setattr(
+        services,
+        "get_data_coverage_for_paths",
+        lambda *args, **kwargs: {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-01-03"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        },
+    )
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-01-03",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=True,
+        prefer_zarr=True,
+        publish=False,
+    )
+
+    assert artifact.path == str(store_path.resolve())
 
 
 def test_create_artifact_normalizes_request_scope_to_dataset_period(

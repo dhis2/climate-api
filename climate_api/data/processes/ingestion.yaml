@@ -32,7 +32,7 @@
       type: boolean
       required: false
       default: true
-      description: Prefer a chunked store when the ingestion path supports it.
+      description: Prefer a chunked store when the ingestion path supports it. Plugin-backed streaming ingestion currently ignores this flag and materializes Icechunk-backed datasets.
     publish:
       type: boolean
       required: false

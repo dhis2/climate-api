@@ -266,6 +266,27 @@ def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(
     assert "does not cover this extent" in str(exc_info.value.detail)
 
 
+def test_download_dataset_returns_409_for_plugin_only_templates() -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=[-10.0, -10.0, 10.0, 10.0],
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "legacy download path" in str(exc_info.value.detail)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

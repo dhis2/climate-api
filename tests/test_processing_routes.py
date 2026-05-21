@@ -234,6 +234,27 @@ def test_post_ingest_execution_honors_respond_async(
     assert response.headers["Location"].startswith("/jobs/")
 
 
+def test_post_ingest_execution_returns_404_for_unknown_dataset(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.registry_datasets.get_dataset",
+        lambda dataset_id: None,
+    )
+
+    response = client.post(
+        "/processes/ingestion/execution",
+        json={
+            "dataset_id": "unknown_dataset",
+            "start": "2026-01-01",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dataset 'unknown_dataset' not found"
+
+
 def test_post_process_execution_rejects_async_when_process_is_sync_only(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

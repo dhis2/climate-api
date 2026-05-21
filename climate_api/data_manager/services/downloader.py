@@ -54,7 +54,15 @@ def download_dataset(
     """
     _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
     ingestion = dataset["ingestion"]
-    eo_download_func_path = ingestion["function"]
+    eo_download_func_path = ingestion.get("function")
+    if eo_download_func_path is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Dataset '{dataset['id']}' does not expose the legacy download path. "
+                "Use the plugin-backed ingestion process instead."
+            ),
+        )
     eo_download_func = _get_dynamic_function(eo_download_func_path)
     before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 

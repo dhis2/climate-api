@@ -6,6 +6,7 @@ import json
 import logging
 import mimetypes
 import os
+import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
@@ -392,9 +393,15 @@ def _create_streaming_artifact(
 
     plugin = _load_streaming_plugin(plugin_path, params=params)
     store_path = downloader.get_icechunk_path(dataset)
-    run_streaming_ingest_sync(
+    if overwrite and store_path.exists():
+        if store_path.is_dir():
+            shutil.rmtree(store_path)
+        else:
+            store_path.unlink()
+
+    result = run_streaming_ingest_sync(
         plugin=plugin,
-        params={},
+        params=params,
         bbox=bbox,
         start=start,
         end=end,
@@ -405,6 +412,8 @@ def _create_streaming_artifact(
         save_cursor=save_cursor,
         load_cursor=load_cursor,
     )
+    if result.periods_written == 0 and not store_path.exists():
+        raise HTTPException(status_code=409, detail="Source has no data for the requested temporal scope")
 
     coverage_data = get_data_coverage_for_paths(dataset, icechunk_path=str(store_path.resolve()))
     if not coverage_data.get("has_data", True):
@@ -416,7 +425,7 @@ def _create_streaming_artifact(
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
         spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
     )
-    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
+    if not _temporal_coverage_matches_streaming_request_scope(coverage.temporal, request_scope):
         raise HTTPException(
             status_code=409,
             detail=(
@@ -969,6 +978,29 @@ def _temporal_coverage_matches_request_scope(
     if request_scope.end is not None and temporal.end != request_scope.end:
         return False
     return True
+
+
+def _temporal_coverage_matches_streaming_request_scope(
+    temporal: CoverageTemporal,
+    request_scope: ArtifactRequestScope,
+) -> bool:
+    """Return whether streaming coverage is compatible with the requested scope.
+
+    Plugin-backed streaming ingest may legitimately clamp the realized end of an
+    artifact to the source's latest available period. That should still be
+    treated as a successful ingest as long as the coverage starts where
+    requested and does not extend beyond the requested temporal end.
+
+    Start handling remains strict by design. A later-than-requested start
+    indicates the realized dataset does not cover the requested opening period
+    at all, while a shorter realized end can be a normal consequence of source
+    availability clamping.
+    """
+    if temporal.start != request_scope.start:
+        return False
+    if request_scope.end is not None and temporal.end is not None and temporal.end > request_scope.end:
+        return False
+    return temporal.end is not None
 
 
 def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:

@@ -182,6 +182,13 @@ def run_streaming_ingest_sync(
     ingestion service exposes this sync wrapper and lets the orchestrator keep
     its async internal structure.
     """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("run_streaming_ingest_sync cannot be called from a running event loop")
+
     return asyncio.run(
         run_streaming_ingest(
             plugin=plugin,
