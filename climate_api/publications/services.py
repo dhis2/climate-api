@@ -71,6 +71,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
         active = published_record if artifact.artifact_id == record.artifact_id else artifact
         if active.publication.status != PublicationStatus.PUBLISHED:
             continue
+        if active.format == ArtifactFormat.ICECHUNK:
+            continue
         if active.publication.collection_id == collection_id and published_record.publication.pygeoapi_path is None:
             continue
         data_path = active.path or active.asset_paths[0]

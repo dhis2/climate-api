@@ -110,7 +110,8 @@ async def run_streaming_ingest(
     repo = open_or_create_repo(store_path)
     period_queue = iter(pending)
     in_flight: deque[tuple[str, asyncio.Task[xr.Dataset]]] = deque()
-    max_parallel = max(1, plugin.max_concurrency)
+    max_parallel = max(1, int(plugin.max_concurrency))
+    commit_batch_size = max(1, int(plugin.commit_batch_size))
 
     async def _fetch(period_id: str) -> xr.Dataset:
         return await plugin.fetch_period(period_id, bbox, **params)
@@ -154,7 +155,7 @@ async def run_streaming_ingest(
             session.commit(f"ingest: {period_id}")
 
             written += 1
-            if save_cursor and (written % plugin.commit_batch_size == 0 or written == len(pending)):
+            if save_cursor and (written % commit_batch_size == 0 or written == len(pending)):
                 save_cursor({"last_committed": period_id})
             if on_progress:
                 on_progress(

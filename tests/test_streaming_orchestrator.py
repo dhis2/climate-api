@@ -153,3 +153,38 @@ def test_orchestrator_refuses_destructive_first_write_when_existing_store_is_not
             store_path=store_path,
             period_type="daily",
         )
+
+
+def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class _InvalidPlugin(_FakePlugin):
+        max_concurrency = 0
+        commit_batch_size = 0
+
+    store_path = tmp_path / "streaming-store.zarr"
+    repo = _FakeRepo(str(store_path))
+    cursor_saves: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
+    monkeypatch.setattr(
+        streaming_orchestrator,
+        "read_committed_period_ids",
+        lambda path, period_type: _read_committed_periods_from_zarr(path, period_type),
+    )
+    monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
+
+    result = run_streaming_ingest_sync(
+        plugin=_InvalidPlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+        save_cursor=lambda cursor: cursor_saves.append(cursor),
+    )
+
+    assert result.periods_written == 3
+    assert cursor_saves[-1] == {"last_committed": "2026-01-03"}
