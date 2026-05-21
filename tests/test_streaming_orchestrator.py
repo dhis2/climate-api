@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import icechunk
 import numpy as np
 import pytest
 import xarray as xr
@@ -188,3 +189,43 @@ def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
 
     assert result.periods_written == 3
     assert cursor_saves[-1] == {"last_committed": "2026-01-03"}
+
+
+def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path) -> None:
+    store_path = tmp_path / "streaming-store.icechunk"
+
+    result = run_streaming_ingest_sync(
+        plugin=_FakePlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+    )
+
+    assert result.periods_written == 3
+    assert store_path.exists()
+
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+    ds = xr.open_zarr(session.store)
+    try:
+        assert ds["precip"].values[:, 0, 0].tolist() == [1.0, 2.0, 3.0]
+        assert {str(item)[:10] for item in ds["time"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
+    finally:
+        ds.close()
+
+    rerun = run_streaming_ingest_sync(
+        plugin=_FakePlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+        load_cursor=lambda: {"last_committed": "2026-01-02"},
+    )
+
+    assert rerun.periods_written == 0

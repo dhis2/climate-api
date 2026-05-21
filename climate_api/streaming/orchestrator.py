@@ -107,6 +107,15 @@ async def run_streaming_ingest(
     if on_progress:
         on_progress(len(all_periods) - len(pending), len(all_periods), f"{len(pending)} periods pending")
 
+    if committed:
+        is_first_write = False
+    elif is_store_empty(store_path):
+        is_first_write = True
+    else:
+        raise RuntimeError(
+            f"Existing store at {store_path} is not empty, but committed periods could not be determined safely"
+        )
+
     repo = open_or_create_repo(store_path)
     period_queue = iter(pending)
     in_flight: deque[tuple[str, asyncio.Task[xr.Dataset]]] = deque()
@@ -126,15 +135,6 @@ async def run_streaming_ingest(
         if period_id is None:
             break
         in_flight.append((period_id, asyncio.create_task(_fetch(period_id))))
-
-    if committed:
-        is_first_write = False
-    elif is_store_empty(store_path):
-        is_first_write = True
-    else:
-        raise RuntimeError(
-            f"Existing store at {store_path} is not empty, but committed periods could not be determined safely"
-        )
     written = 0
     try:
         while in_flight:
