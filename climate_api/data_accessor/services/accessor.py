@@ -144,7 +144,7 @@ def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
     repo = icechunk.Repository.open(storage)
     session = repo.readonly_session("main")
     root = zarr.open_group(session.store, mode="r")
-    group: str | None = "0" if "multiscales" in root.attrs else None
+    group: str | None = "0" if not list(root.array_keys()) and "0" in root.group_keys() else None
     return xr.open_zarr(session.store, group=group)  # type: ignore[no-any-return]
 
 

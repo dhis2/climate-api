@@ -221,6 +221,32 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     assert result == valid_artifact
 
 
+def test_find_existing_artifact_reuses_clamped_icechunk_artifact_for_later_requested_end() -> None:
+    request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-02-10",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+    clamped = _artifact(artifact_id="icechunk", end="2026-01-31")
+    clamped.format = ArtifactFormat.ICECHUNK
+    clamped.path = "/tmp/chirps3_precipitation_daily.icechunk"
+    clamped.asset_paths = [clamped.path]
+    clamped.request_scope = ArtifactRequestScope(
+        start="2026-01-01",
+        end="2026-01-31",
+        bbox=(1.0, 2.0, 3.0, 4.0),
+    )
+
+    result = services._find_existing_artifact_in_records(
+        records=[clamped],
+        dataset_id="chirps3_precipitation_daily",
+        request_scope=request_scope,
+        prefer_zarr=True,
+    )
+
+    assert result == clamped
+
+
 def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyPatch) -> None:
     request_scope = ArtifactRequestScope(
         start="2026-01-01",

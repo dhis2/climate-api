@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import icechunk
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +12,7 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
+from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services import downloader
 from climate_api.ingestions import services as ingestion_services
 
@@ -421,6 +422,23 @@ def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: 
     result = open_zarr_dataset(str(zarr_path))
     try:
         assert "pop_total" in result.data_vars
+    finally:
+        result.close()
+
+
+def test_open_icechunk_dataset_falls_back_to_level_0_when_root_has_no_data_vars(tmp_path: Path) -> None:
+    """Icechunk store with data only under group 0 falls back to the base level."""
+    store_path = tmp_path / "pyramid.icechunk"
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.create(storage)
+    session = repo.writable_session("main")
+    _make_dataset().to_zarr(session.store, group="0", mode="w", zarr_format=3)
+    session.commit("seed pyramid level 0")
+
+    result = open_icechunk_dataset(store_path)
+    try:
+        assert "pop_total" in result.data_vars
+        assert result.sizes["time"] == 2
     finally:
         result.close()
 

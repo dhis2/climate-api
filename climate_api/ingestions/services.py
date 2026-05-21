@@ -925,17 +925,32 @@ def _find_existing_artifact_in_records(
         if record.dataset_id != dataset_id:
             continue
         if record.request_scope != request_scope:
-            continue
+            # Streaming artifacts may persist a realized request_scope.end when
+            # the source clamps availability. Treat those as reusable when the
+            # existing artifact still satisfies the later requested scope for
+            # the same spatial extent.
+            if (
+                record.format == ArtifactFormat.ICECHUNK
+                and record.request_scope.bbox == request_scope.bbox
+                and _temporal_coverage_matches_streaming_request_scope(record.coverage.temporal, request_scope)
+            ):
+                pass
+            else:
+                continue
         if not _artifact_coverage_matches_request_scope(record):
-            logger.warning(
-                "Ignoring existing artifact '%s' because coverage %s..%s does not match request scope %s..%s",
-                record.artifact_id,
-                record.coverage.temporal.start,
-                record.coverage.temporal.end,
-                record.request_scope.start,
-                record.request_scope.end,
-            )
-            continue
+            if not (
+                record.format == ArtifactFormat.ICECHUNK
+                and _temporal_coverage_matches_streaming_request_scope(record.coverage.temporal, request_scope)
+            ):
+                logger.warning(
+                    "Ignoring existing artifact '%s' because coverage %s..%s does not match request scope %s..%s",
+                    record.artifact_id,
+                    record.coverage.temporal.start,
+                    record.coverage.temporal.end,
+                    record.request_scope.start,
+                    record.request_scope.end,
+                )
+                continue
         if prefer_zarr and record.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
             continue
         return record
