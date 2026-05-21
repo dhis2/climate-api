@@ -111,6 +111,9 @@ async def run_streaming_ingest(
     period_queue = iter(pending)
     in_flight: deque[tuple[str, asyncio.Task[xr.Dataset]]] = deque()
     max_parallel = max(1, int(plugin.max_concurrency))
+    # Ticket 1 still commits every fetched period individually. The plugin's
+    # commit_batch_size currently controls cursor checkpoint cadence rather than
+    # Icechunk transaction batching.
     commit_batch_size = max(1, int(plugin.commit_batch_size))
 
     async def _fetch(period_id: str) -> xr.Dataset:

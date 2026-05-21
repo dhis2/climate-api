@@ -32,14 +32,14 @@ class GridSpec:
     - spatial shape of one fetched period
     - native CRS
     - value dtype / nodata
-    - canonical x/y dimension names and any root attrs the writer should keep
+    - canonical time/x/y dimension names and any root attrs the writer should keep
     """
 
     shape: tuple[int, int]
     crs: int
     dtype: np.dtype[Any]
     nodata: float | None = None
-    time_dim: bool = True
+    time_dim: str = "time"
     x_dim: str = "x"
     y_dim: str = "y"
     attrs: dict[str, Any] = field(default_factory=dict)

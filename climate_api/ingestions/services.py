@@ -11,7 +11,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
-from typing import cast
 from uuid import uuid4
 
 import portalocker
@@ -469,12 +468,19 @@ def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> In
     try:
         module = import_module(module_path)
         plugin_cls = getattr(module, attr_name)
+        if not callable(plugin_cls):
+            raise TypeError(f"{plugin_path} is not callable")
         plugin = plugin_cls(**params)
+        if not isinstance(plugin, IngestionPlugin):
+            raise TypeError(
+                f"{plugin_path} does not implement the required streaming plugin contract "
+                "(probe, periods, fetch_period, max_concurrency, commit_batch_size)"
+            )
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to load ingestion.plugin '{plugin_path}': {exc}") from exc
-    return cast(IngestionPlugin, plugin)
+    return plugin
 
 
 def publish_artifact_record(artifact_id: str) -> ArtifactRecord:

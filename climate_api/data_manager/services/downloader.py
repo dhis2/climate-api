@@ -55,7 +55,7 @@ def download_dataset(
     _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
     ingestion = dataset["ingestion"]
     eo_download_func_path = ingestion.get("function")
-    if eo_download_func_path is None:
+    if not isinstance(eo_download_func_path, str) or not eo_download_func_path:
         raise HTTPException(
             status_code=409,
             detail=(
