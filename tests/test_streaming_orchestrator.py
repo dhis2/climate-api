@@ -34,6 +34,17 @@ class _FakePlugin:
         )
 
 
+class _ShapeMismatchPlugin(_FakePlugin):
+    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+        _ = bbox, params
+        if period_id == "2026-01-02":
+            return xr.Dataset(
+                {"precip": (("time", "y", "x"), np.array([[[1.0], [2.0]]], dtype=np.float32))},
+                coords={"time": [np.datetime64(period_id, "D")], "y": [0.0, 1.0], "x": [1.0]},
+            )
+        return await super().fetch_period(period_id, bbox, **params)
+
+
 class _FakeSession:
     def __init__(self, store: str) -> None:
         self.store = store
@@ -106,7 +117,7 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
 
     root = zarr.open_group(store_path, mode="r")
     assert root.attrs["proj:code"] == "EPSG:4326"
-    assert root.attrs["spatial:dimensions"] == ["y", "x"]
+    assert root.attrs["spatial:dimensions"] == ["x", "y"]
     assert root.attrs["spatial:shape"] == [1, 1]
 
     run_streaming_ingest_sync(
@@ -189,6 +200,65 @@ def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
 
     assert result.periods_written == 3
     assert cursor_saves[-1] == {"last_committed": "2026-01-03"}
+
+
+def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "streaming-store.zarr"
+    repo = _FakeRepo(str(store_path))
+
+    existing = xr.Dataset(
+        {"precip": (("time", "y", "x"), np.array([[[2.0]]], dtype=np.float32))},
+        coords={"time": [np.datetime64("2026-01-02", "D")], "y": [0.0], "x": [1.0]},
+    )
+    existing.to_zarr(store_path, mode="w", zarr_format=3)
+
+    monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
+    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: {"2026-01-02"})
+    monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
+
+    result = run_streaming_ingest_sync(
+        plugin=_FakePlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+        load_cursor=lambda: {"last_committed": "2026-01-02"},
+    )
+
+    assert result.periods_written == 2
+    ds = xr.open_zarr(store_path, consolidated=None)
+    try:
+        assert {str(item)[:10] for item in ds["time"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
+    finally:
+        ds.close()
+
+
+def test_orchestrator_rejects_spatial_shape_changes_across_appends(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "streaming-store.zarr"
+    repo = _FakeRepo(str(store_path))
+
+    monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
+    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: set())
+    monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
+
+    with pytest.raises(RuntimeError, match="has spatial shape"):
+        run_streaming_ingest_sync(
+            plugin=_ShapeMismatchPlugin(),
+            params={},
+            bbox=[0.0, 0.0, 1.0, 1.0],
+            start="2026-01-01",
+            end="2026-01-03",
+            store_path=store_path,
+            period_type="daily",
+        )
 
 
 def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path) -> None:

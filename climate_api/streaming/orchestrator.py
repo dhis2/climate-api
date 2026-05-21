@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -95,12 +95,7 @@ async def run_streaming_ingest(
         return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=0)
 
     committed = read_committed_period_ids(store_path, period_type)
-    cursor = load_cursor() if load_cursor else None
-    cursor_period = cursor.get("last_committed") if cursor else None
-    candidates = all_periods
-    if cursor_period in all_periods and cursor_period in committed:
-        candidates = all_periods[all_periods.index(cursor_period) :]
-    pending = [period for period in candidates if period not in committed]
+    pending = [period for period in all_periods if period not in committed]
     if not pending:
         return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=0)
 
@@ -124,6 +119,7 @@ async def run_streaming_ingest(
     # commit_batch_size currently controls cursor checkpoint cadence rather than
     # Icechunk transaction batching.
     commit_batch_size = max(1, int(plugin.commit_batch_size))
+    expected_spatial_shape: tuple[int, int] | None = None
 
     async def _fetch(period_id: str) -> xr.Dataset:
         return await plugin.fetch_period(period_id, bbox, **params)
@@ -144,6 +140,22 @@ async def run_streaming_ingest(
             period_id, task = in_flight.popleft()
             ds = await task
             _strip_cf_encoding(ds, period_type)
+            try:
+                spatial_shape = (int(ds.sizes[spec.y_dim]), int(ds.sizes[spec.x_dim]))
+            except KeyError as exc:
+                raise RuntimeError(
+                    f"Fetched dataset for {period_id} is missing expected spatial dimensions "
+                    f"'{spec.y_dim}' and '{spec.x_dim}'"
+                ) from exc
+            if expected_spatial_shape is None:
+                expected_spatial_shape = spatial_shape
+                if spec.shape != spatial_shape:
+                    spec = replace(spec, shape=spatial_shape)
+            elif spatial_shape != expected_spatial_shape:
+                raise RuntimeError(
+                    f"Fetched dataset for {period_id} has spatial shape {spatial_shape}, "
+                    f"expected {expected_spatial_shape}"
+                )
 
             session = repo.writable_session("main")
             if is_first_write:

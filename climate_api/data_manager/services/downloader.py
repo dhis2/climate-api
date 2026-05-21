@@ -128,7 +128,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     ds = xr.open_mfdataset(files, parallel=False)
 
     x_dim, y_dim = get_x_y_dims(ds)
-    dims = [y_dim, x_dim]
+    dims = [x_dim, y_dim]
 
     # trim to only minimal vars and coords before loading into memory
     logger.info("Trimming unnecessary variables and coordinates")
@@ -145,7 +145,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     if rename_map:
         ds = ds.rename(rename_map)
     x_dim, y_dim = "x", "y"
-    dims = [y_dim, x_dim]
+    dims = [x_dim, y_dim]
 
     ds = _select_time_range(ds, dataset=dataset, start=start, end=end)
     ds = _run_transforms(ds, dataset)
@@ -158,7 +158,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     ymin = ds[y_dim].min().item()
     ymax = ds[y_dim].max().item()
     bbox = [xmin, ymin, xmax, ymax]
-    shape = (ds.sizes[y_dim], ds.sizes[x_dim])
+    shape = (ds.sizes[x_dim], ds.sizes[y_dim])
 
     # https://github.com/zarr-developers/geozarr-toolkit/issues/15
     geozarr_attrs = create_geozarr_attrs(

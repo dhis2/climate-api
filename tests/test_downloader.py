@@ -450,7 +450,7 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
         result.close()
 
     root = zarr.open_group(str(zarr_path), mode="r")
-    assert root.attrs["spatial:dimensions"] == ["y", "x"]
+    assert root.attrs["spatial:dimensions"] == ["x", "y"]
     assert root.attrs["spatial:shape"] == [3, 3]
 
 
