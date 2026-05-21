@@ -67,6 +67,29 @@ def test_dataset_registry_accepts_supported_sync_kind(
     assert datasets.list_datasets()[0]["id"] == "valid_temporal"
 
 
+def test_dataset_registry_accepts_ingestion_plugin_without_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_file = tmp_path / "valid_plugin.yaml"
+    registry_file.write_text(
+        """
+- id: valid_plugin
+  name: Valid plugin
+  variable: value
+  period_type: daily
+  sync:
+    kind: temporal
+  ingestion:
+    plugin: climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(datasets, "CONFIGS_DIR", tmp_path)
+
+    assert datasets.list_datasets()[0]["ingestion"]["plugin"].endswith("CHIRPS3DailyPlugin")
+
+
 def test_dataset_registry_rejects_unsupported_sync_execution(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

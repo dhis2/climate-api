@@ -341,6 +341,12 @@ def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     return None
 
 
+def get_icechunk_path(dataset: dict[str, Any]) -> Path:
+    """Return the Icechunk store path for a dataset."""
+    prefix = _get_cache_prefix(dataset)
+    return DOWNLOAD_DIR / f"{prefix}.icechunk"
+
+
 def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:
     """Raise HTTP 400 if the request bbox falls outside the dataset's declared extents."""
     extents = dataset.get("extents")

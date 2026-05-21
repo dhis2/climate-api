@@ -47,6 +47,19 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     from climate_api.ingestions.services import list_artifacts
 
     collection_id = managed_dataset_id_for(record)
+    if record.format == ArtifactFormat.ICECHUNK:
+        return record.model_copy(
+            update={
+                "publication": record.publication.model_copy(
+                    update={
+                        "status": PublicationStatus.PUBLISHED,
+                        "collection_id": collection_id,
+                        "published_at": datetime.now(UTC),
+                        "pygeoapi_path": None,
+                    }
+                )
+            }
+        )
     data_path = record.path or record.asset_paths[0]
     is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
     published_record = record.model_copy(

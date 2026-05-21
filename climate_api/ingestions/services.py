@@ -8,7 +8,9 @@ import mimetypes
 import os
 from collections.abc import Callable
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import portalocker
@@ -46,6 +48,8 @@ from climate_api.ingestions.schemas import (
 from climate_api.ingestions.sync_engine import SyncConfigurationError, plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
 from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
+from climate_api.streaming.orchestrator import run_streaming_ingest_sync
+from climate_api.streaming.protocol import IngestionPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +161,10 @@ def create_artifact(
     publish: bool,
     download_start: str | None = None,
     download_end: str | None = None,
+    on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
+    is_cancel_requested: Callable[[], bool] | None = None,
+    save_cursor: Callable[[dict[str, object]], None] | None = None,
+    load_cursor: Callable[[], dict[str, object] | None] | None = None,
 ) -> ArtifactRecord:
     """Download a dataset, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
@@ -181,6 +189,27 @@ def create_artifact(
         end=end,
         bbox=(bbox[0], bbox[1], bbox[2], bbox[3]) if bbox is not None else None,
     )
+    ingestion = dataset.get("ingestion")
+    plugin_path = ingestion.get("plugin") if isinstance(ingestion, dict) else None
+    # Ticket 1 only moves direct ingest onto the streaming engine. Delta ingest
+    # still routes through the legacy download/rebuild path until sync is
+    # refactored to reuse committed store state.
+    if isinstance(plugin_path, str) and plugin_path and download_start is None and download_end is None:
+        return _create_streaming_artifact(
+            dataset=dataset,
+            plugin_path=plugin_path,
+            start=start,
+            end=resolved_download_end,
+            bbox=bbox,
+            overwrite=overwrite,
+            publish=publish,
+            request_scope=request_scope,
+            on_progress=on_progress,
+            is_cancel_requested=is_cancel_requested,
+            save_cursor=save_cursor,
+            load_cursor=load_cursor,
+        )
+
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
@@ -316,6 +345,127 @@ def create_artifact(
         logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
+
+
+def _create_streaming_artifact(
+    *,
+    dataset: dict[str, object],
+    plugin_path: str,
+    start: str,
+    end: str,
+    bbox: list[float] | None,
+    overwrite: bool,
+    publish: bool,
+    request_scope: ArtifactRequestScope,
+    on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
+    is_cancel_requested: Callable[[], bool] | None = None,
+    save_cursor: Callable[[dict[str, object]], None] | None = None,
+    load_cursor: Callable[[], dict[str, object] | None] | None = None,
+) -> ArtifactRecord:
+    """Create or update one plugin-backed Icechunk artifact for initial ingest.
+
+    This helper is intentionally scoped to the direct ingest path. It does not
+    yet implement delta-download sync semantics or broader publication behavior
+    for Icechunk-backed datasets.
+    """
+    if bbox is None:
+        raise HTTPException(status_code=400, detail="Streaming ingest requires a bounding box")
+
+    existing = _find_existing_artifact(
+        dataset_id=str(dataset["id"]),
+        request_scope=request_scope,
+        prefer_zarr=True,
+    )
+    if existing is not None and not overwrite:
+        if publish and existing.publication.status != PublicationStatus.PUBLISHED:
+            return publish_artifact_record(existing.artifact_id)
+        return existing
+
+    ingestion = dataset.get("ingestion")
+    raw_params = ingestion.get("default_params") if isinstance(ingestion, dict) else None
+    if raw_params is None:
+        params: dict[str, object] = {}
+    elif isinstance(raw_params, dict):
+        params = dict(raw_params)
+    else:
+        raise HTTPException(status_code=500, detail="ingestion.default_params must be an object")
+
+    plugin = _load_streaming_plugin(plugin_path, params=params)
+    store_path = downloader.get_icechunk_path(dataset)
+    run_streaming_ingest_sync(
+        plugin=plugin,
+        params={},
+        bbox=bbox,
+        start=start,
+        end=end,
+        store_path=store_path,
+        period_type=str(dataset["period_type"]),
+        on_progress=on_progress,
+        is_cancel_requested=is_cancel_requested,
+        save_cursor=save_cursor,
+        load_cursor=load_cursor,
+    )
+
+    coverage_data = get_data_coverage_for_paths(dataset, icechunk_path=str(store_path.resolve()))
+    if not coverage_data.get("has_data", True):
+        raise HTTPException(status_code=409, detail="Materialized artifact contains no data for the requested scope")
+
+    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
+    coverage = ArtifactCoverage(
+        temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
+        spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
+        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
+    )
+    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Materialized artifact coverage does not match the requested scope: "
+                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
+                f"request={request_scope.start}..{request_scope.end}"
+            ),
+        )
+
+    record = ArtifactRecord(
+        artifact_id=str(uuid4()),
+        dataset_id=str(dataset["id"]),
+        dataset_name=str(dataset["name"]),
+        variable=str(dataset["variable"]),
+        period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
+        format=ArtifactFormat.ICECHUNK,
+        path=str(store_path.resolve()),
+        asset_paths=[str(store_path.resolve())],
+        variables=[str(dataset["variable"])],
+        request_scope=request_scope,
+        coverage=coverage,
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(),
+    )
+    stored_record = _upsert_artifact_record(
+        record,
+        prefer_zarr=True,
+        publish=publish,
+        overwrite=overwrite,
+    )
+    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored_record.artifact_id)
+    return stored_record
+
+
+def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> IngestionPlugin:
+    """Load and instantiate one streaming plugin class from a dotted import path."""
+    module_path, _, attr_name = plugin_path.rpartition(".")
+    if not module_path or not attr_name:
+        raise HTTPException(status_code=500, detail=f"Invalid ingestion.plugin path '{plugin_path}'")
+    try:
+        module = import_module(module_path)
+        plugin_cls = getattr(module, attr_name)
+        plugin = plugin_cls(**params)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load ingestion.plugin '{plugin_path}': {exc}") from exc
+    return cast(IngestionPlugin, plugin)
 
 
 def publish_artifact_record(artifact_id: str) -> ArtifactRecord:
@@ -773,7 +923,7 @@ def _find_existing_artifact_in_records(
                 record.request_scope.end,
             )
             continue
-        if prefer_zarr and record.format != ArtifactFormat.ZARR:
+        if prefer_zarr and record.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
             continue
         return record
     return None
@@ -872,10 +1022,9 @@ def _build_dataset_detail_record(dataset_id: str, artifacts: list[ArtifactRecord
 
 
 def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAccessLink]:
-    links = [
-        DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
-        DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
-    ]
+    links = [DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail")]
+    if latest.format == ArtifactFormat.ZARR:
+        links.append(DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"))
     if latest.publication.status == PublicationStatus.PUBLISHED and latest.format == ArtifactFormat.ZARR:
         links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
     if latest.format == ArtifactFormat.NETCDF:

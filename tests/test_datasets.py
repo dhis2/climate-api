@@ -138,6 +138,17 @@ def test_dataset_links_omit_stac_for_unpublished_or_netcdf() -> None:
     assert all(link.rel != "stac" for link in netcdf_links)
 
 
+def test_dataset_links_omit_zarr_for_icechunk_artifacts() -> None:
+    icechunk = _artifact(artifact_id="a3")
+    icechunk.format = ArtifactFormat.ICECHUNK
+    icechunk.publication.pygeoapi_path = None
+
+    links = services._dataset_links("chirps3_precipitation_daily", icechunk)
+
+    assert all(link.rel != "zarr" for link in links)
+    assert all(link.rel != "stac" for link in links)
+
+
 def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPatch) -> None:
     records = [
         _artifact(artifact_id="a1", created_at="2026-01-10T00:00:00+00:00", end="2026-01-10"),
@@ -331,6 +342,97 @@ def test_create_artifact_computes_coverage_from_created_artifact_paths(
     assert captured["netcdf_paths"] == [str(created_file.resolve())]
     assert artifact.coverage.temporal.start == "2020"
     assert artifact.coverage.temporal.end == "2020"
+
+
+def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset: dict[str, object] = {
+        "id": "chirps3_precipitation_daily",
+        "name": "Total precipitation (CHIRPS3)",
+        "variable": "precip",
+        "period_type": "daily",
+        "ingestion": {
+            "plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+            "default_params": {"stage": "final"},
+        },
+    }
+    store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
+    store_path.mkdir()
+
+    plugin = object()
+    captured: dict[str, object] = {}
+
+    def fake_load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> object:
+        captured["plugin_path"] = plugin_path
+        captured["params"] = params
+        return plugin
+
+    monkeypatch.setattr(services, "_load_streaming_plugin", fake_load_streaming_plugin)
+    monkeypatch.setattr(services.downloader, "get_icechunk_path", lambda _: store_path)
+
+    def fake_run_streaming_ingest_sync(**kwargs: object) -> object:
+        captured["run"] = kwargs
+        return object()
+
+    monkeypatch.setattr(services, "run_streaming_ingest_sync", fake_run_streaming_ingest_sync)
+
+    def fake_get_data_coverage_for_paths(
+        dataset_arg: dict[str, object],
+        *,
+        zarr_path: str | None = None,
+        icechunk_path: str | None = None,
+        netcdf_paths: list[str] | None = None,
+    ) -> dict[str, object]:
+        captured["dataset_id"] = dataset_arg["id"]
+        captured["zarr_path"] = zarr_path
+        captured["icechunk_path"] = icechunk_path
+        captured["netcdf_paths"] = netcdf_paths
+        return {
+            "coverage": {
+                "temporal": {"start": "2026-01-01", "end": "2026-01-03"},
+                "spatial": {"xmin": 1.0, "ymin": 2.0, "xmax": 3.0, "ymax": 4.0},
+            }
+        }
+
+    monkeypatch.setattr(services, "get_data_coverage_for_paths", fake_get_data_coverage_for_paths)
+    monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
+    monkeypatch.setattr(services, "_upsert_artifact_record", lambda record, **_: record)
+
+    artifact = services.create_artifact(
+        dataset=dataset,
+        start="2026-01-01",
+        end="2026-01-03",
+        bbox=[1.0, 2.0, 3.0, 4.0],
+        country_code=None,
+        overwrite=False,
+        prefer_zarr=True,
+        publish=False,
+    )
+
+    assert captured["plugin_path"] == "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"
+    assert captured["params"] == {"stage": "final"}
+    assert captured["dataset_id"] == "chirps3_precipitation_daily"
+    assert captured["zarr_path"] is None
+    assert captured["icechunk_path"] == str(store_path.resolve())
+    assert captured["netcdf_paths"] is None
+    assert captured["run"] == {
+        "plugin": plugin,
+        "params": {},
+        "bbox": [1.0, 2.0, 3.0, 4.0],
+        "start": "2026-01-01",
+        "end": "2026-01-03",
+        "store_path": store_path,
+        "period_type": "daily",
+        "on_progress": None,
+        "is_cancel_requested": None,
+        "save_cursor": None,
+        "load_cursor": None,
+    }
+    assert artifact.format == ArtifactFormat.ICECHUNK
+    assert artifact.path == str(store_path.resolve())
+    assert artifact.asset_paths == [str(store_path.resolve())]
 
 
 def test_create_artifact_normalizes_request_scope_to_dataset_period(

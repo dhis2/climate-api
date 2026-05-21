@@ -1,15 +1,16 @@
-"""Loading raster data from downloaded files into xarray."""
+"""Loading raster data from downloaded files and stores into xarray."""
 
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from ...data_manager.services.downloader import get_cache_files, get_zarr_path
+from ...data_manager.services.downloader import get_cache_files, get_icechunk_path, get_zarr_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
 
@@ -24,21 +25,26 @@ def get_data(
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
     logger.info("Opening dataset")
-    zarr_path = get_zarr_path(dataset)
-    if zarr_path:
-        logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = open_zarr_dataset(str(zarr_path))
+    icechunk_path = get_icechunk_path(dataset)
+    if icechunk_path.exists():
+        logger.info("Using Icechunk-backed store: %s", icechunk_path)
+        ds = open_icechunk_dataset(icechunk_path)
     else:
-        logger.warning(
-            f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
-        )
-        files = get_cache_files(dataset)
-        ds = xr.open_mfdataset(
-            files,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+        zarr_path = get_zarr_path(dataset)
+        if zarr_path:
+            logger.info(f"Using optimized zarr file: {zarr_path}")
+            ds = open_zarr_dataset(str(zarr_path))
+        else:
+            logger.warning(
+                f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
+            )
+            files = get_cache_files(dataset)
+            ds = xr.open_mfdataset(
+                files,
+                data_vars="minimal",
+                coords="minimal",  # pyright: ignore[reportArgumentType]
+                compat="override",
+            )
 
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
@@ -73,15 +79,17 @@ def get_data_coverage_for_paths(
     dataset: dict[str, Any],
     *,
     zarr_path: str | None = None,
+    icechunk_path: str | None = None,
     netcdf_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     """Return coverage metadata for the concrete files created for one artifact."""
-    if zarr_path is not None and netcdf_paths:
-        raise ValueError("Provide either zarr_path or netcdf_paths when computing coverage, not both")
-    if zarr_path is None and not netcdf_paths:
-        raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
+    provided = sum(value is not None for value in (zarr_path, icechunk_path)) + int(bool(netcdf_paths))
+    if provided != 1:
+        raise ValueError("Coverage calculation requires exactly one artifact source")
 
-    if zarr_path is not None:
+    if icechunk_path is not None:
+        ds = open_icechunk_dataset(icechunk_path)
+    elif zarr_path is not None:
         ds = open_zarr_dataset(zarr_path)
     else:
         assert netcdf_paths is not None
@@ -124,9 +132,30 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
     return ds
 
 
+def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
+    """Open an Icechunk-backed dataset through a readonly repository session."""
+    import icechunk
+    import zarr
+
+    path = Path(store_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Icechunk store not found: {path}")
+    storage = icechunk.local_filesystem_storage(str(path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+    root = zarr.open_group(session.store, mode="r")
+    group: str | None = "0" if "multiscales" in root.attrs else None
+    return xr.open_zarr(session.store, group=group)  # type: ignore[no-any-return]
+
+
 def _open_zarr(zarr_path: str) -> xr.Dataset:
     """Open a zarr store with automatic consolidated metadata detection."""
     return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
+
+
+def coverage_from_open_dataset(ds: xr.Dataset, *, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
+    """Summarize coverage for a caller-managed open dataset."""
+    return _coverage_from_dataset(ds=ds, period_type=period_type, native_crs=native_crs)
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
