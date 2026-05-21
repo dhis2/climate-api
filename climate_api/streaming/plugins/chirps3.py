@@ -29,22 +29,22 @@ from climate_api.streaming.protocol import GridSpec
 _CHIRPS3_NODATA = -9999.0
 _CHIRPS3_RES_DEG = 0.05
 _COMPLETE_AFTER_DAY = 20
-_EXECUTOR: ThreadPoolExecutor | None = None
+_executor: ThreadPoolExecutor | None = None
 
 
 def _shutdown_executor() -> None:
-    global _EXECUTOR
-    if _EXECUTOR is not None:
-        _EXECUTOR.shutdown(wait=False, cancel_futures=True)
-        _EXECUTOR = None
+    global _executor
+    if _executor is not None:
+        _executor.shutdown(wait=False, cancel_futures=True)
+        _executor = None
 
 
 def _get_executor() -> ThreadPoolExecutor:
-    global _EXECUTOR
-    if _EXECUTOR is None:
-        _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chirps3")
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chirps3")
         atexit.register(_shutdown_executor)
-    return _EXECUTOR
+    return _executor
 
 
 class CHIRPS3DailyPlugin:

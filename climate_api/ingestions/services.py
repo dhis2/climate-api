@@ -998,9 +998,9 @@ def _temporal_coverage_matches_streaming_request_scope(
     """
     if temporal.start != request_scope.start:
         return False
-    if request_scope.end is not None and temporal.end is not None and temporal.end > request_scope.end:
+    if request_scope.end is not None and temporal.end > request_scope.end:
         return False
-    return temporal.end is not None
+    return True
 
 
 def _build_dataset_record(dataset_id: str, artifacts: list[ArtifactRecord]) -> DatasetRecord:
