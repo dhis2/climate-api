@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -94,3 +95,66 @@ def test_build_collection_resource_keeps_singleton_time_dimension_for_zarr(
 
     assert provider["options"] == {"zarr": {"consolidated": True}}
     assert "squeeze" not in provider["options"]
+
+
+def test_publish_icechunk_artifact_removes_existing_pygeoapi_collection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    old_zarr = ArtifactRecord(
+        artifact_id="artifact-zarr",
+        dataset_id="chirps3_precipitation_daily",
+        dataset_name="CHIRPS3 precipitation",
+        variable="precip",
+        format=ArtifactFormat.ZARR,
+        path="/tmp/chirps3.zarr",
+        asset_paths=["/tmp/chirps3.zarr"],
+        variables=["precip"],
+        request_scope=ArtifactRequestScope(start="2026-01-01", end="2026-01-03"),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start="2026-01-01", end="2026-01-03"),
+            spatial=CoverageSpatial(xmin=1.0, ymin=2.0, xmax=3.0, ymax=4.0),
+        ),
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(
+            status=PublicationStatus.PUBLISHED,
+            collection_id="chirps3_precipitation_daily",
+            pygeoapi_path="/ogcapi/collections/chirps3_precipitation_daily",
+        ),
+    )
+    new_icechunk = ArtifactRecord(
+        artifact_id="artifact-icechunk",
+        dataset_id="chirps3_precipitation_daily",
+        dataset_name="CHIRPS3 precipitation",
+        variable="precip",
+        format=ArtifactFormat.ICECHUNK,
+        path="/tmp/chirps3.icechunk",
+        asset_paths=["/tmp/chirps3.icechunk"],
+        variables=["precip"],
+        request_scope=ArtifactRequestScope(start="2026-01-01", end="2026-01-05"),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start="2026-01-01", end="2026-01-05"),
+            spatial=CoverageSpatial(xmin=1.0, ymin=2.0, xmax=3.0, ymax=4.0),
+        ),
+        created_at=datetime.now(UTC),
+        publication=ArtifactPublication(status=PublicationStatus.UNPUBLISHED),
+    )
+
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "climate_api.ingestions.services.list_artifacts",
+        lambda: type("Artifacts", (), {"items": [old_zarr, new_icechunk]})(),
+    )
+    monkeypatch.setattr(
+        services,
+        "_sync_pygeoapi_documents",
+        lambda *, resources: captured.setdefault("resources", resources),
+    )
+    monkeypatch.setattr(services, "_refresh_mounted_pygeoapi", lambda: captured.setdefault("refreshed", True))
+
+    published = services.publish_artifact(new_icechunk)
+
+    assert published.publication.status == PublicationStatus.PUBLISHED
+    assert published.publication.pygeoapi_path is None
+    assert captured["resources"] == {}
+    assert captured["refreshed"] is True

@@ -65,6 +65,28 @@ def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
         return set()
 
 
+def is_store_empty(store_path: Path) -> bool:
+    """Return whether an Icechunk repository has no arrays, groups, or attrs.
+
+    This is a conservative safety check for first-write detection. If the store
+    cannot be inspected, we treat it as non-empty to avoid a destructive
+    `mode="w"` rewrite of data that may already exist.
+    """
+    import zarr
+
+    if not store_path.exists():
+        return True
+
+    try:
+        repo = open_or_create_repo(store_path)
+        session = repo.readonly_session("main")
+        root = zarr.open_group(session.store, mode="r")
+        return not list(root.array_keys()) and not list(root.group_keys()) and not bool(root.attrs.asdict())
+    except Exception:
+        logger.debug("Could not determine whether %s is empty", store_path, exc_info=True)
+        return False
+
+
 def write_geozarr_attrs(store: Any, *, spec: Any, bbox: list[float]) -> None:
     """Write root metadata for a flat Zarr v3 store.
 

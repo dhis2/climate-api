@@ -25,7 +25,12 @@ from typing import Any
 import xarray as xr
 
 from climate_api.streaming.protocol import GridSpec, IngestionPlugin
-from climate_api.streaming.store import open_or_create_repo, read_committed_period_ids, write_geozarr_attrs
+from climate_api.streaming.store import (
+    is_store_empty,
+    open_or_create_repo,
+    read_committed_period_ids,
+    write_geozarr_attrs,
+)
 
 
 @dataclass
@@ -118,7 +123,14 @@ async def run_streaming_ingest(
             break
         in_flight.append((period_id, asyncio.create_task(_fetch(period_id))))
 
-    is_first_write = len(committed) == 0
+    if committed:
+        is_first_write = False
+    elif is_store_empty(store_path):
+        is_first_write = True
+    else:
+        raise RuntimeError(
+            f"Existing store at {store_path} is not empty, but committed periods could not be determined safely"
+        )
     written = 0
     try:
         while in_flight:

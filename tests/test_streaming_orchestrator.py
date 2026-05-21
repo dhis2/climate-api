@@ -79,6 +79,7 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
         "read_committed_period_ids",
         lambda path, period_type: _read_committed_periods_from_zarr(path, period_type),
     )
+    monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
     result = run_streaming_ingest_sync(
         plugin=_FakePlugin(),
@@ -128,3 +129,27 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
 
     assert any(update[2] == "Wrote 2026-01-03" for update in progress_updates)
     assert cursor_saves[-1] == {"last_committed": "2026-01-03"}
+
+
+def test_orchestrator_refuses_destructive_first_write_when_existing_store_is_not_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "streaming-store.zarr"
+    store_path.mkdir()
+    repo = _FakeRepo(str(store_path))
+
+    monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
+    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: set())
+    monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
+
+    with pytest.raises(RuntimeError, match="committed periods could not be determined safely"):
+        run_streaming_ingest_sync(
+            plugin=_FakePlugin(),
+            params={},
+            bbox=[0.0, 0.0, 1.0, 1.0],
+            start="2026-01-01",
+            end="2026-01-03",
+            store_path=store_path,
+            period_type="daily",
+        )
