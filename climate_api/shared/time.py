@@ -199,7 +199,7 @@ def parse_period_string_to_datetime(value: str) -> datetime:
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
     if period_type != "weekly":
-        lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
+        lengths = {"hourly": 13, "daily": 10, "dekadal": 10, "monthly": 7, "yearly": 4}
         return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))
