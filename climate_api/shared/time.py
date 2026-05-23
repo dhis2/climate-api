@@ -93,7 +93,7 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
     value = _normalize_datetime_for_period(value)
     if period_type == "hourly":
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return value.date().isoformat()
     if period_type == "weekly":
         iso_year, iso_week, _ = value.isocalendar()
@@ -148,11 +148,11 @@ def normalize_period_string(value: str, period_type: str, *, is_end: bool = Fals
             return datetime_to_period_string(dt, period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         try:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
-            raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
+            raise ValueError(f"Invalid {period_type} period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
     if period_type == "weekly":
         try:
             return datetime_to_period_string(parse_weekly_period_string(value), period_type)

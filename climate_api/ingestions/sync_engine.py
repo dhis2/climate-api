@@ -301,7 +301,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     if period_type == "hourly":
         timestamp = parse_hourly_period_string(latest_period_end)
         return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
     if period_type == "weekly":
@@ -324,7 +324,7 @@ def _default_target_end(*, period_type: str) -> str:
     today = utc_today()
     if period_type == "hourly":
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return today.isoformat()
     if period_type == "weekly":
         return datetime_to_period_string(utc_now(), period_type)
