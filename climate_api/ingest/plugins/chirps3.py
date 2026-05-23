@@ -4,8 +4,7 @@ Authentication: none required (public COG files on data.chc.ucsb.edu).
 
 Daily COG files are fetched with HTTP range requests so only the bbox
 window is downloaded per period. CHIRPS3 "final/rnl" data is released
-in complete months; availability lags roughly one to two months behind
-today depending on which day of the month it is.
+in complete months with a consistent ~2-month publication lag.
 
 URL layout (final):
   https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/final/{flavor}/cogs/
@@ -34,8 +33,6 @@ logger = logging.getLogger(__name__)
 _CHIRPS3_NODATA = -9999.0
 # CHIRPS3 resolution: 0.05° × 0.05° (~5 km at equator)
 _CHIRPS3_RES_DEG = 0.05
-# After the 20th of a month, the previous month is considered complete
-_COMPLETE_AFTER_DAY = 20
 
 
 class Chirps3Plugin:
@@ -136,11 +133,14 @@ class Chirps3Plugin:
         )
 
     def _availability_cutoff(self) -> date:
-        """Return the last day of the most recent complete published month."""
+        """Return the last day of the most recent complete published month.
+
+        CHIRPS3 final/rnl data lags ~2 months regardless of the current day,
+        so always go back 2 months to avoid requesting files that don't exist yet.
+        """
         today = date.today()
-        months_back = 1 if today.day > _COMPLETE_AFTER_DAY else 2
         y, m = today.year, today.month
-        for _ in range(months_back):
+        for _ in range(2):
             m -= 1
             if m == 0:
                 m, y = 12, y - 1

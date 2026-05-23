@@ -254,9 +254,9 @@ class TestChirps3Plugin:
 
     def test_periods_returns_daily_dates(self) -> None:
         plugin = self._make_plugin()
-        # Use a fixed cutoff by patching today
+        # 2 months back from April = end of February (2024 is a leap year → Feb 29)
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 3, 25)  # day > 20 → cutoff = end of Feb
+            mock_date.today.return_value = date(2024, 4, 15)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
             periods = plugin.periods("2024-02-01", "2024-03-31")
@@ -265,10 +265,11 @@ class TestChirps3Plugin:
         assert periods[-1] == "2024-02-29"
         assert len(periods) == 29
 
-    def test_periods_respects_lag_before_threshold_day(self) -> None:
+    def test_periods_respects_2month_lag(self) -> None:
         plugin = self._make_plugin()
+        # 2 months back from March = end of January, regardless of day-of-month
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 3, 10)  # day <= 20 → cutoff = end of Jan
+            mock_date.today.return_value = date(2024, 3, 10)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
             periods = plugin.periods("2024-01-01", "2024-03-31")
@@ -285,8 +286,9 @@ class TestChirps3Plugin:
 
     def test_periods_consecutive(self) -> None:
         plugin = self._make_plugin()
+        # 2 months back from May = end of March
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 4, 25)
+            mock_date.today.return_value = date(2024, 5, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
             periods = plugin.periods("2024-03-01", "2024-03-05")
@@ -294,8 +296,9 @@ class TestChirps3Plugin:
 
     def test_periods_single_day(self) -> None:
         plugin = self._make_plugin()
+        # 2 months back from May = end of March
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 4, 25)
+            mock_date.today.return_value = date(2024, 5, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
             periods = plugin.periods("2024-03-01", "2024-03-01")
@@ -303,8 +306,9 @@ class TestChirps3Plugin:
 
     def test_periods_spans_months(self) -> None:
         plugin = self._make_plugin()
+        # 2 months back from June = end of April
         with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 5, 25)
+            mock_date.today.return_value = date(2024, 6, 25)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
             periods = plugin.periods("2024-03-30", "2024-04-02")
