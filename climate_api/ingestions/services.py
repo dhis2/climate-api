@@ -6,6 +6,7 @@ import json
 import logging
 import mimetypes
 import os
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +51,20 @@ from climate_api.publications.services import managed_dataset_id_for, publish_ar
 from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
 
 logger = logging.getLogger(__name__)
+
+# Per-store threading locks prevent two concurrent ingest/sync runs from writing
+# to the same Icechunk store simultaneously (which causes MVCC commit conflicts).
+_store_locks: dict[str, threading.Lock] = {}
+_store_locks_mutex = threading.Lock()
+
+
+def _acquire_store_lock(store_path: Path) -> threading.Lock:
+    """Return the exclusive lock for store_path, creating it if needed."""
+    key = str(store_path.resolve())
+    with _store_locks_mutex:
+        if key not in _store_locks:
+            _store_locks[key] = threading.Lock()
+        return _store_locks[key]
 
 
 def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) -> None:
@@ -312,54 +327,63 @@ def _create_icechunk_artifact(
     _check_bbox_overlap(dataset, resolved_bbox)
     store_path = downloader.get_icechunk_path(dataset)
 
-    if overwrite and store_path.exists():
-        import shutil
-
-        shutil.rmtree(store_path)
-        logger.info("Cleared existing store for overwrite: %s", store_path)
-
-    extent_country_code = extent.get("country_code") if extent else None
-    extra_params: dict[str, object] = {}
-    if extent_country_code:
-        extra_params["country_code"] = extent_country_code
+    lock = _acquire_store_lock(store_path)
+    if not lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail=f"An ingest or sync is already running for dataset '{dataset_id}'. Wait for it to finish.",
+        )
     try:
-        plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"Plugin configuration error: {exc}") from exc
+        if overwrite and store_path.exists():
+            import shutil
 
-    effective_start = ingest_start if ingest_start is not None else start
-    # Rechunk after the initial ingest (when no delta start is provided) using the
-    # plugin's declared rechunk_time, if any. Sync appends skip rechunking to avoid
-    # rewriting the full store on every small update.
-    rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
-    pyramid: bool = bool(getattr(plugin, "pyramid", False)) if ingest_start is None else False
-    logger.info(
-        "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s pyramid=%s",
-        dataset_id,
-        effective_start,
-        end,
-        start,
-        end,
-        rechunk_time,
-        pyramid,
-    )
-    transforms = dataset.get("transforms")
-    apply_transforms = (lambda ds: downloader._run_transforms(ds, dataset)) if transforms else None
-    run_ingest_sync(
-        plugin=plugin,
-        params=params,
-        bbox=resolved_bbox,
-        start=effective_start,
-        end=end,
-        store_path=store_path,
-        period_type=period_type,
-        rechunk_time=rechunk_time,
-        apply_transforms=apply_transforms,
-        pyramid=pyramid,
-        on_progress=on_progress,
-        is_cancel_requested=is_cancel_requested,
-        save_cursor=save_cursor,
-    )
+            shutil.rmtree(store_path)
+            logger.info("Cleared existing store for overwrite: %s", store_path)
+
+        extent_country_code = extent.get("country_code") if extent else None
+        extra_params: dict[str, object] = {}
+        if extent_country_code:
+            extra_params["country_code"] = extent_country_code
+        try:
+            plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Plugin configuration error: {exc}") from exc
+
+        effective_start = ingest_start if ingest_start is not None else start
+        # Rechunk after the initial ingest (when no delta start is provided) using the
+        # plugin's declared rechunk_time, if any. Sync appends skip rechunking to avoid
+        # rewriting the full store on every small update.
+        rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
+        pyramid: bool = bool(getattr(plugin, "pyramid", False)) if ingest_start is None else False
+        logger.info(
+            "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s pyramid=%s",
+            dataset_id,
+            effective_start,
+            end,
+            start,
+            end,
+            rechunk_time,
+            pyramid,
+        )
+        transforms = dataset.get("transforms")
+        apply_transforms = (lambda ds: downloader._run_transforms(ds, dataset)) if transforms else None
+        run_ingest_sync(
+            plugin=plugin,
+            params=params,
+            bbox=resolved_bbox,
+            start=effective_start,
+            end=end,
+            store_path=store_path,
+            period_type=period_type,
+            rechunk_time=rechunk_time,
+            apply_transforms=apply_transforms,
+            pyramid=pyramid,
+            on_progress=on_progress,
+            is_cancel_requested=is_cancel_requested,
+            save_cursor=save_cursor,
+        )
+    finally:
+        lock.release()
 
     if not store_path.exists():
         raise HTTPException(status_code=409, detail="Plugin returned no periods for the requested range")
