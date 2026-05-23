@@ -6,19 +6,22 @@ import json
 import logging
 import mimetypes
 import os
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import portalocker
 import pyproj
+import xarray as xr
 from fastapi import HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.responses import Response
 
 from climate_api import config as api_config
-from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
+from climate_api.data_accessor.services.accessor import coverage_from_open_dataset, get_data_coverage_for_paths
 from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent
@@ -48,6 +51,77 @@ from climate_api.publications.services import managed_dataset_id_for, publish_ar
 from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
 
 logger = logging.getLogger(__name__)
+
+# Per-store threading locks prevent two concurrent ingest/sync runs from writing
+# to the same Icechunk store simultaneously (which causes MVCC commit conflicts).
+_store_locks: dict[str, threading.Lock] = {}
+_store_locks_mutex = threading.Lock()
+
+
+def _acquire_store_lock(store_path: Path) -> threading.Lock:
+    """Return the exclusive lock for store_path, creating it if needed."""
+    key = str(store_path.resolve())
+    with _store_locks_mutex:
+        if key not in _store_locks:
+            _store_locks[key] = threading.Lock()
+        return _store_locks[key]
+
+
+def _check_bbox_overlap(dataset: dict[str, object], instance_bbox: list[float]) -> None:
+    """Raise HTTP 400 if the dataset's declared spatial extent does not overlap the instance bbox."""
+    extents = dataset.get("extents")
+    if not isinstance(extents, dict):
+        return
+    spatial = extents.get("spatial")
+    if not isinstance(spatial, dict):
+        return
+    dataset_bbox = spatial.get("bbox")
+    if not (isinstance(dataset_bbox, list) and len(dataset_bbox) == 4):
+        return
+    try:
+        dx_min, dy_min, dx_max, dy_max = (float(v) for v in dataset_bbox)
+    except (TypeError, ValueError):
+        return  # malformed dataset bbox — skip overlap check
+    ix_min, iy_min, ix_max, iy_max = (float(v) for v in instance_bbox)
+    if dx_max <= ix_min or dx_min >= ix_max or dy_max <= iy_min or dy_min >= iy_max:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Dataset '{dataset.get('id')}' spatial extent {dataset_bbox} "
+                f"does not overlap the configured instance extent {instance_bbox}"
+            ),
+        )
+
+
+def _read_crs_from_spatial_ref(ds: xr.Dataset) -> str | None:
+    """Return an EPSG CRS string from a dataset, or None if undetectable.
+
+    Checks spatial_ref WKT first, then falls back to dimension units/standard_name
+    so that datasets like ERA5-Land (no spatial_ref, but degrees_east/north units)
+    are not misidentified as projected.
+    """
+    if "spatial_ref" in ds.coords:
+        try:
+            import pyproj
+
+            attrs = dict(ds["spatial_ref"].attrs)
+            wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+            if wkt:
+                epsg = pyproj.CRS.from_wkt(str(wkt)).to_epsg()
+                if epsg:
+                    return f"EPSG:{epsg}"
+        except Exception:
+            pass
+    for dim in set(ds.dims):
+        if dim not in ds.coords:
+            continue
+        attrs = dict(ds[dim].attrs)
+        if attrs.get("units") in ("degrees_east", "degrees_north") or attrs.get("standard_name") in (
+            "longitude",
+            "latitude",
+        ):
+            return "EPSG:4326"
+    return None
 
 
 def _resolve_artifacts_dir() -> Path:
@@ -151,28 +225,30 @@ def create_artifact(
     start: str,
     end: str | None,
     bbox: list[float] | None,
-    country_code: str | None,
     overwrite: bool,
-    prefer_zarr: bool,
     publish: bool,
     download_start: str | None = None,
     download_end: str | None = None,
+    on_progress: Any | None = None,
+    is_cancel_requested: Any | None = None,
+    save_cursor: Any | None = None,
 ) -> ArtifactRecord:
-    """Download a dataset, persist it locally, and store artifact metadata."""
+    """Ingest a dataset via its plugin, persist it locally, and store artifact metadata."""
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    end = _normalize_optional_request_period(end, period_type=period_type, field_name="end", is_end=True)
     download_start = _normalize_optional_request_period(
         download_start, period_type=period_type, field_name="download_start"
     )
-    download_end = _normalize_optional_request_period(download_end, period_type=period_type, field_name="download_end")
+    download_end = _normalize_optional_request_period(
+        download_end, period_type=period_type, field_name="download_end", is_end=True
+    )
     _validate_download_scope(
         start=start,
         end=end,
         download_start=download_start,
         download_end=download_end,
     )
-    requires_canonical_zarr = download_start is not None
     resolved_download_end = download_end if download_end is not None else end
     if resolved_download_end is None:
         resolved_download_end = _default_request_end(period_type)
@@ -184,7 +260,6 @@ def create_artifact(
     existing = _find_existing_artifact(
         dataset_id=str(dataset["id"]),
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr or requires_canonical_zarr,
     )
     if existing is not None and not overwrite:
         logger.info(
@@ -198,124 +273,188 @@ def create_artifact(
             return publish_artifact_record(existing.artifact_id)
         return existing
 
-    logger.info(
-        "Downloading dataset '%s': request_scope=%s..%s download_scope=%s..%s prefer_zarr=%s publish=%s",
-        dataset["id"],
-        start,
-        end,
-        download_start or start,
-        resolved_download_end,
-        prefer_zarr,
-        publish,
-    )
-    downloaded_files = downloader.download_dataset(
-        dataset,
-        start=download_start or start,
+    return _create_icechunk_artifact(
+        dataset=dataset,
+        start=start,
         end=resolved_download_end,
         bbox=bbox,
-        country_code=country_code,
+        request_scope=request_scope,
         overwrite=overwrite,
-        background_tasks=None,
+        publish=publish,
+        ingest_start=download_start,
+        on_progress=on_progress,
+        is_cancel_requested=is_cancel_requested,
+        save_cursor=save_cursor,
     )
-    logger.info("Download finished for dataset '%s': changed_files=%d", dataset["id"], len(downloaded_files))
 
-    if prefer_zarr or requires_canonical_zarr:
-        try:
-            logger.info("Building canonical Zarr artifact for dataset '%s'", dataset["id"])
-            downloader.build_dataset_zarr(dataset, start=start, end=end)
-            logger.info("Canonical Zarr artifact built for dataset '%s'", dataset["id"])
-        except Exception as exc:
-            if requires_canonical_zarr:
-                if isinstance(exc, ValueError):
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Append sync canonical Zarr rebuild failed for requested scope: {exc}",
-                    ) from exc
-                raise HTTPException(
-                    status_code=500,
-                    detail="Append sync canonical Zarr rebuild failed unexpectedly.",
-                ) from exc
-            # Fall back to NetCDF when Zarr materialization is not viable.
-            logger.warning(
-                "Zarr materialization failed for dataset '%s'; falling back to NetCDF",
-                dataset["id"],
-                exc_info=True,
-            )
 
-    zarr_path = downloader.get_zarr_path(dataset)
-    if requires_canonical_zarr and zarr_path is None:
+def _create_icechunk_artifact(
+    *,
+    dataset: dict[str, object],
+    start: str,
+    end: str,
+    bbox: list[float] | None,
+    request_scope: ArtifactRequestScope,
+    overwrite: bool = False,
+    publish: bool,
+    ingest_start: str | None = None,
+    on_progress: Any | None = None,
+    is_cancel_requested: Any | None = None,
+    save_cursor: Any | None = None,
+) -> ArtifactRecord:
+    """Run per-period Icechunk ingest and register the resulting store as an artifact.
+
+    `ingest_start` is the period from which the orchestrator begins its period scan.
+    For delta/append syncs this is the first missing period (delta_start), which avoids
+    enumerating the entire historical range just to discover that all prior periods are
+    already committed. When omitted the full artifact `start` is used.
+    """
+    from climate_api.ingest.orchestrator import load_plugin, run_ingest_sync
+    from climate_api.ingest.store import open_or_create_repo
+
+    dataset_id = str(dataset["id"])
+    period_type = str(dataset["period_type"])
+    _raw_ingestion = dataset.get("ingestion")
+    ingestion: dict[str, object] = dict(_raw_ingestion) if isinstance(_raw_ingestion, dict) else {}
+    plugin_path = str(ingestion["plugin"])
+    _raw_params = ingestion.get("params")
+    params: dict[str, object] = dict(_raw_params) if isinstance(_raw_params, dict) else {}
+
+    extent = get_extent()
+    resolved_bbox: list[float] = (
+        list(bbox) if bbox is not None else (list(extent["bbox"]) if extent else [-180, -90, 180, 90])
+    )
+    _check_bbox_overlap(dataset, resolved_bbox)
+    store_path = downloader.get_icechunk_path(dataset)
+
+    lock = _acquire_store_lock(store_path)
+    if not lock.acquire(blocking=False):
         raise HTTPException(
-            status_code=500,
-            detail="Append sync requires a canonical Zarr artifact, but no Zarr store was produced.",
+            status_code=409,
+            detail=f"An ingest or sync is already running for dataset '{dataset_id}'. Wait for it to finish.",
         )
-    cache_files = (
-        downloader.get_cache_files(dataset)
-        if requires_canonical_zarr
-        else downloaded_files or downloader.get_cache_files(dataset)
-    )
-    primary_path: str | None
+    try:
+        if overwrite and store_path.exists():
+            import shutil
 
-    if zarr_path is not None:
-        artifact_format = ArtifactFormat.ZARR
-        primary_path = str(zarr_path.resolve())
-        asset_paths = [primary_path]
-    elif cache_files:
-        artifact_format = ArtifactFormat.NETCDF
-        asset_paths = [str(path.resolve()) for path in cache_files]
-        primary_path = asset_paths[0] if len(asset_paths) == 1 else None
-    else:
-        raise HTTPException(status_code=500, detail="Download finished without any saved artifact files")
+            shutil.rmtree(store_path)
+            logger.info("Cleared existing store for overwrite: %s", store_path)
 
-    coverage_data = get_data_coverage_for_paths(
-        dataset,
-        zarr_path=primary_path if artifact_format == ArtifactFormat.ZARR else None,
-        netcdf_paths=asset_paths if artifact_format == ArtifactFormat.NETCDF else None,
-    )
+        extent_country_code = extent.get("country_code") if extent else None
+        extra_params: dict[str, object] = {}
+        if extent_country_code:
+            extra_params["country_code"] = extent_country_code
+        try:
+            plugin = load_plugin(plugin_path, params, extra_params=extra_params or None)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Plugin configuration error: {exc}") from exc
+
+        effective_start = ingest_start if ingest_start is not None else start
+        # Rechunk after the initial ingest (when no delta start is provided) using the
+        # plugin's declared rechunk_time, if any. Sync appends skip rechunking to avoid
+        # rewriting the full store on every small update.
+        rechunk_time: int | None = getattr(plugin, "rechunk_time", None) if ingest_start is None else None
+        pyramid: bool = bool(getattr(plugin, "pyramid", False)) if ingest_start is None else False
+        logger.info(
+            "Running Icechunk ingest for '%s': ingest_scope=%s..%s artifact_scope=%s..%s rechunk_time=%s pyramid=%s",
+            dataset_id,
+            effective_start,
+            end,
+            start,
+            end,
+            rechunk_time,
+            pyramid,
+        )
+        transforms = dataset.get("transforms")
+        apply_transforms = (lambda ds: downloader._run_transforms(ds, dataset)) if transforms else None
+        run_ingest_sync(
+            plugin=plugin,
+            params=params,
+            bbox=resolved_bbox,
+            start=effective_start,
+            end=end,
+            store_path=store_path,
+            period_type=period_type,
+            rechunk_time=rechunk_time,
+            apply_transforms=apply_transforms,
+            pyramid=pyramid,
+            on_progress=on_progress,
+            is_cancel_requested=is_cancel_requested,
+            save_cursor=save_cursor,
+        )
+    finally:
+        lock.release()
+
+    if not store_path.exists():
+        raise HTTPException(status_code=409, detail="Plugin returned no periods for the requested range")
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+    import xarray as xr
+
+    try:
+        ds = xr.open_zarr(session.store)
+        # For pyramid stores the data and time live under group "0"; root has
+        # only multiscales metadata with empty coordinates.
+        if "time" not in ds.coords and "multiscales" in ds.attrs:
+            ds.close()
+            ds = xr.open_zarr(session.store, group="0")
+    except Exception as exc:
+        raise HTTPException(status_code=409, detail="Ingest produced no readable data for the requested range") from exc
+    from climate_api import config as api_config
+
+    native_crs = _read_crs_from_spatial_ref(ds) or api_config.get_crs() or "EPSG:4326"
+    try:
+        coverage_data = coverage_from_open_dataset(ds, period_type=period_type, native_crs=native_crs)
+    finally:
+        ds.close()
+
     if not coverage_data.get("has_data", True):
-        raise HTTPException(status_code=409, detail="Downloaded artifact contains no data for the requested scope")
+        raise HTTPException(status_code=409, detail="Icechunk store contains no data for the requested scope")
+
     _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
     coverage = ArtifactCoverage(
         temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
         spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
         spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
     )
-    if not _temporal_coverage_matches_request_scope(coverage.temporal, request_scope):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Materialized artifact coverage does not match the requested scope: "
-                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
-                f"request={request_scope.start}..{request_scope.end}"
-            ),
+
+    # When a plugin clamps availability (e.g. CHIRPS3 has a 3-month lag), the
+    # realized coverage end is earlier than the requested end. Normalise the
+    # stored request_scope to the actual coverage end so that
+    # _artifact_coverage_matches_request_scope passes on future requests for the
+    # same realized range, instead of triggering an unnecessary re-ingest.
+    if request_scope.end is not None and coverage.temporal.end != request_scope.end:
+        request_scope = ArtifactRequestScope(
+            start=request_scope.start,
+            end=coverage.temporal.end,
+            bbox=request_scope.bbox,
         )
 
     record = ArtifactRecord(
         artifact_id=str(uuid4()),
-        dataset_id=str(dataset["id"]),
+        dataset_id=dataset_id,
         dataset_name=str(dataset["name"]),
         variable=str(dataset["variable"]),
-        format=artifact_format,
-        path=primary_path,
-        asset_paths=asset_paths,
+        format=ArtifactFormat.ICECHUNK,
+        asset_paths=[str(store_path.resolve())],
         variables=[str(dataset["variable"])],
         request_scope=request_scope,
         coverage=coverage,
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored_record = _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+    stored = _upsert_icechunk_artifact_record(record)
     logger.info(
-        "Stored artifact '%s' for dataset '%s': format=%s coverage=%s..%s",
-        stored_record.artifact_id,
-        dataset["id"],
-        stored_record.format,
-        stored_record.coverage.temporal.start,
-        stored_record.coverage.temporal.end,
+        "Stored Icechunk artifact '%s' for '%s': coverage=%s..%s",
+        stored.artifact_id,
+        dataset_id,
+        stored.coverage.temporal.start,
+        stored.coverage.temporal.end,
     )
-    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
-        logger.info("Publishing artifact '%s' for dataset '%s'", stored_record.artifact_id, dataset["id"])
-        return publish_artifact_record(stored_record.artifact_id)
-    return stored_record
+    if publish and stored.publication.status != PublicationStatus.PUBLISHED:
+        return publish_artifact_record(stored.artifact_id)
+    return stored
 
 
 def publish_artifact_record(artifact_id: str) -> ArtifactRecord:
@@ -346,7 +485,7 @@ def store_materialized_zarr_artifact(
     """Store metadata for a locally materialized Zarr artifact."""
     period_type = str(dataset["period_type"])
     normalized_start = _normalize_request_period(start, period_type=period_type, field_name="start")
-    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
+    normalized_end = _normalize_optional_request_period(end, period_type=period_type, field_name="end", is_end=True)
     request_scope = ArtifactRequestScope(
         start=normalized_start,
         end=normalized_end,
@@ -373,7 +512,6 @@ def store_materialized_zarr_artifact(
         variable=str(dataset["variable"]),
         period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
         format=ArtifactFormat.ZARR,
-        path=str(zarr_path.resolve()),
         asset_paths=[str(zarr_path.resolve())],
         variables=[str(dataset["variable"])],
         request_scope=request_scope,
@@ -381,7 +519,7 @@ def store_materialized_zarr_artifact(
         created_at=datetime.now(UTC),
         publication=ArtifactPublication(),
     )
-    stored_record = _upsert_artifact_record(record, prefer_zarr=True, publish=publish, overwrite=overwrite)
+    stored_record = _upsert_artifact_record(record, publish=publish, overwrite=overwrite)
     if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
         return publish_artifact_record(stored_record.artifact_id)
     return stored_record
@@ -391,31 +529,47 @@ def sync_dataset(
     *,
     dataset_id: str,
     end: str | None,
-    prefer_zarr: bool,
     publish: bool,
+    on_progress: Any | None = None,
 ) -> SyncResponse:
     """Resolve sync inputs and delegate managed-dataset sync to the sync engine.
 
     The service layer stays thin on purpose: it validates that the requested
     public dataset id resolves to a managed dataset plus a source template, then
     hands execution to `sync_engine.run_sync(...)`.
+
+    For Icechunk artifacts the authoritative `current_end` is read directly from
+    the store's committed period log rather than from the potentially-stale artifact
+    metadata record, so the sync plan reflects the true on-disk state.
     """
     latest_artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
-    extent = get_extent()
-    resolved_country_code = extent.get("country_code") if extent else None
+    committed_end: str | None = None
+    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.asset_paths:
+        from climate_api.ingest.store import read_committed_period_ids
+
+        period_type = str(source_dataset.get("period_type", ""))
+        committed = read_committed_period_ids(Path(latest_artifact.asset_paths[0]), period_type)
+        committed_end = max(committed) if committed else None
+        logger.info(
+            "Icechunk store-based current_end for '%s': %s (artifact record had: %s)",
+            dataset_id,
+            committed_end,
+            latest_artifact.coverage.temporal.end,
+        )
+
     try:
         return run_sync(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
-            country_code=resolved_country_code,
-            prefer_zarr=prefer_zarr,
             publish=publish,
             create_artifact_fn=create_artifact,
             get_dataset_fn=get_dataset_or_404,
+            current_end=committed_end,
+            on_progress=on_progress,
         )
     except SyncConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -433,11 +587,19 @@ def plan_sync_dataset(
     source_dataset = registry_datasets.get_dataset(latest_artifact.dataset_id)
     if source_dataset is None:
         raise HTTPException(status_code=404, detail=f"Source dataset '{latest_artifact.dataset_id}' not found")
+    committed_end: str | None = None
+    if latest_artifact.format == ArtifactFormat.ICECHUNK and latest_artifact.asset_paths:
+        from climate_api.ingest.store import read_committed_period_ids
+
+        period_type = str(source_dataset.get("period_type", ""))
+        committed = read_committed_period_ids(Path(latest_artifact.asset_paths[0]), period_type)
+        committed_end = max(committed) if committed else None
     try:
         return plan_sync(
             latest_artifact=latest_artifact,
             source_dataset=source_dataset,
             requested_end=end,
+            current_end=committed_end,
         )
     except SyncConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -448,6 +610,10 @@ def plan_sync_dataset(
 def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     """Return a public Zarr store listing for a managed dataset."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return _icechunk_store_info(dataset_id, artifact)
+
     store_root = _get_zarr_root_or_409(artifact)
 
     entries = _zarr_entries(dataset_id=dataset_id, store_root=store_root, directory=store_root)
@@ -457,7 +623,46 @@ def get_dataset_zarr_store_info_or_404(dataset_id: str) -> dict[str, object]:
     return {
         "kind": "ZarrListing",
         "dataset_id": dataset_id,
-        "format": artifact.format,
+        "format": "zarr",
+        "path": ".",
+        "crs": crs,
+        "proj4": _crs_to_proj4(crs),
+        "bounds": _read_zarr_bounds(store_attrs),
+        "entries": entries,
+    }
+
+
+def _icechunk_store_info(dataset_id: str, artifact: ArtifactRecord) -> dict[str, object]:
+    """Return a Zarr store listing for an Icechunk-backed artifact."""
+    import zarr
+
+    from climate_api.ingest.store import open_or_create_repo
+
+    store_path = Path(artifact.asset_paths[0])
+    if not store_path.exists():
+        raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+
+    root: zarr.Group = zarr.open_group(session.store, mode="r")
+    store_attrs: dict[str, object] = dict(root.attrs)
+
+    store_crs = store_attrs.get("proj:code")
+    crs = store_crs if isinstance(store_crs, str) and store_crs else api_config.get_crs()
+    entries = [
+        {
+            "name": name,
+            "kind": "directory",
+            "href": f"/zarr/{dataset_id}/{name}",
+        }
+        for name in sorted(root.keys())
+    ]
+
+    return {
+        "kind": "ZarrListing",
+        "dataset_id": dataset_id,
+        "format": "zarr",
         "path": ".",
         "crs": crs,
         "proj4": _crs_to_proj4(crs),
@@ -517,6 +722,10 @@ def get_dataset_zarr_store_file_or_404(
 ) -> FileResponse | Response | dict[str, object]:
     """Serve a file, metadata document, or directory listing within a dataset Zarr store."""
     artifact = get_latest_artifact_for_dataset_or_404(dataset_id)
+
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return _serve_icechunk_key(dataset_id, artifact, relative_path)
+
     store_root = _get_zarr_root_or_409(artifact)
     target = _resolve_zarr_path(store_root, relative_path)
     if not target.exists():
@@ -532,10 +741,86 @@ def get_dataset_zarr_store_file_or_404(
     return FileResponse(target, media_type=media_type, filename=target.name)
 
 
+def _serve_icechunk_key(dataset_id: str, artifact: ArtifactRecord, relative_path: str) -> Response | dict[str, object]:
+    """Serve a zarr v3 key from an Icechunk store via its session store."""
+    import zarr
+
+    from climate_api.ingest.store import open_or_create_repo
+
+    store_path = Path(artifact.asset_paths[0])
+    if not store_path.exists():
+        raise HTTPException(status_code=404, detail="Icechunk store not found on disk")
+
+    repo = open_or_create_repo(store_path)
+    session = repo.readonly_session("main")
+    key = relative_path.lstrip("/")
+
+    # Directory-like paths: list child keys as a ZarrListing
+    if not key or key.endswith("/"):
+        root: zarr.Group = zarr.open_group(session.store, mode="r")
+        prefix = key.rstrip("/")
+        try:
+            node: zarr.Group = root[prefix] if prefix else root  # type: ignore[assignment]
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
+        entries = [
+            {
+                "name": name,
+                "kind": "directory",
+                "href": f"/zarr/{dataset_id}/{prefix}/{name}".replace("//", "/"),
+            }
+            for name in sorted(node.keys())
+        ]
+        return {
+            "kind": "ZarrListing",
+            "dataset_id": dataset_id,
+            "path": key or ".",
+            "entries": entries,
+        }
+
+    # Detect bare group-path requests (e.g. "0", "0/precip").
+    # fsspec HTTP _ls_real issues GET without a trailing slash; zarr chunk/metadata
+    # keys always contain a "." (zarr.json) or "/c/" (chunk coordinates), so anything
+    # that matches neither pattern must be a group path.  Return an HTML directory
+    # listing so fsspec can parse the children via <a href> links.
+    last_segment = key.rsplit("/", 1)[-1]
+    is_chunk_key = "/c/" in key or key.startswith("c/")
+    is_file_key = "." in last_segment
+    if not is_chunk_key and not is_file_key:
+        root = zarr.open_group(session.store, mode="r")
+        try:
+            node = root[key]  # type: ignore[assignment]
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Zarr path '{relative_path}' not found")
+        children = sorted(node.keys())
+        html_lines = ["<html><body>"]
+        for child in children:
+            html_lines.append(f'<a href="{child}/">{child}/</a>')
+        html_lines.append("</body></html>")
+        return HTMLResponse("\n".join(html_lines))
+
+    try:
+        import zarr.core.buffer
+
+        proto = zarr.core.buffer.default_buffer_prototype()
+        # IcechunkStore does not expose a public synchronous read method; _get_bytes_sync
+        # is the internal synchronous accessor used by zarr's own blocking read path.
+        data = session.store._get_bytes_sync(key, prototype=proto)
+        if data is None:  # pyright: ignore[reportUnnecessaryComparison]
+            raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
+    except (KeyError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail=f"Zarr key '{relative_path}' not found in store")
+
+    raw = bytes(data)
+    if key.endswith("zarr.json"):
+        return JSONResponse(content=json.loads(raw))
+    return Response(content=raw, media_type="application/octet-stream")
+
+
 def _load_records() -> list[ArtifactRecord]:
     ensure_store()
     raw = json.loads(ARTIFACTS_INDEX_PATH.read_text(encoding="utf-8"))
-    return [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in raw]
+    return [ArtifactRecord.model_validate(item) for item in raw]
 
 
 def _save_records(records: list[ArtifactRecord]) -> None:
@@ -547,7 +832,6 @@ def _save_records(records: list[ArtifactRecord]) -> None:
 def _store_artifact_record(
     record: ArtifactRecord,
     *,
-    prefer_zarr: bool,
     publish: bool,
 ) -> ArtifactRecord:
     """Persist a newly created artifact record while avoiding lost updates."""
@@ -557,7 +841,6 @@ def _store_artifact_record(
             records=records,
             dataset_id=record.dataset_id,
             request_scope=record.request_scope,
-            prefer_zarr=prefer_zarr,
         )
         if existing is not None:
             if publish and existing.publication.status != PublicationStatus.PUBLISHED:
@@ -570,23 +853,46 @@ def _store_artifact_record(
     return _mutate_records(mutate)
 
 
+def _upsert_icechunk_artifact_record(record: ArtifactRecord) -> ArtifactRecord:
+    """Persist an Icechunk artifact record, replacing any existing record for the same store path.
+
+    Matches by dataset_id + path rather than request_scope so that sync appends
+    (which extend the end date) update the existing record in-place instead of
+    accumulating duplicate entries for the same physical store.
+    """
+
+    def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
+        for i, existing in enumerate(records):
+            if existing.dataset_id == record.dataset_id and existing.asset_paths == record.asset_paths:
+                replacement = record.model_copy(
+                    update={
+                        "artifact_id": existing.artifact_id,
+                        "publication": existing.publication,
+                    }
+                )
+                records[i] = replacement
+                return replacement
+        records.append(record)
+        return record
+
+    return _mutate_records(mutate)
+
+
 def _upsert_artifact_record(
     record: ArtifactRecord,
     *,
-    prefer_zarr: bool,
     publish: bool,
     overwrite: bool,
 ) -> ArtifactRecord:
     """Persist a new or replacement artifact record for the same logical request scope."""
     if not overwrite:
-        return _store_artifact_record(record, prefer_zarr=prefer_zarr, publish=publish)
+        return _store_artifact_record(record, publish=publish)
 
     def mutate(records: list[ArtifactRecord]) -> ArtifactRecord:
         existing = _find_existing_artifact_in_records(
             records=records,
             dataset_id=record.dataset_id,
             request_scope=record.request_scope,
-            prefer_zarr=prefer_zarr,
         )
         if existing is None:
             records.append(record)
@@ -615,7 +921,7 @@ def _mutate_records(mutation: Callable[[list[ArtifactRecord]], ArtifactRecord]) 
         portalocker.lock(handle, portalocker.LOCK_EX)
         handle.seek(0)
         raw = handle.read()
-        records = [ArtifactRecord.model_validate(_upgrade_legacy_record(item)) for item in json.loads(raw or "[]")]
+        records = [ArtifactRecord.model_validate(item) for item in json.loads(raw or "[]")]
         result = mutation(records)
         payload = [record.model_dump(mode="json") for record in records]
         handle.seek(0)
@@ -632,7 +938,7 @@ def _get_zarr_root_or_409(artifact: ArtifactRecord) -> Path:
     if artifact.format != ArtifactFormat.ZARR:
         raise HTTPException(status_code=409, detail="Artifact is not a Zarr store")
 
-    store_root = Path(artifact.path or artifact.asset_paths[0]).resolve()
+    store_root = Path(artifact.asset_paths[0]).resolve()
     if not store_root.exists() or not store_root.is_dir():
         raise HTTPException(status_code=404, detail="Zarr store path does not exist on disk")
     return store_root
@@ -676,21 +982,19 @@ def _find_existing_artifact(
     *,
     dataset_id: str,
     request_scope: ArtifactRequestScope,
-    prefer_zarr: bool,
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request when possible."""
     return _find_existing_artifact_in_records(
         records=_load_records(),
         dataset_id=dataset_id,
         request_scope=request_scope,
-        prefer_zarr=prefer_zarr,
     )
 
 
-def _normalize_request_period(value: str, *, period_type: str, field_name: str) -> str:
+def _normalize_request_period(value: str, *, period_type: str, field_name: str, is_end: bool = False) -> str:
     """Normalize a required request period or raise a clear client error."""
     try:
-        return normalize_period_string(value, period_type)
+        return normalize_period_string(value, period_type, is_end=is_end)
     except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
@@ -698,18 +1002,20 @@ def _normalize_request_period(value: str, *, period_type: str, field_name: str) 
         ) from exc
 
 
-def _normalize_optional_request_period(value: str | None, *, period_type: str, field_name: str) -> str | None:
+def _normalize_optional_request_period(
+    value: str | None, *, period_type: str, field_name: str, is_end: bool = False
+) -> str | None:
     """Normalize an optional request period or raise a clear client error."""
     if value is None:
         return None
-    return _normalize_request_period(value, period_type=period_type, field_name=field_name)
+    return _normalize_request_period(value, period_type=period_type, field_name=field_name, is_end=is_end)
 
 
 def _default_request_end(period_type: str) -> str:
     """Return the current dataset-native period string for omitted ingestion end values."""
     if period_type == "hourly":
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return utc_today().isoformat()
     if period_type == "weekly":
         return datetime_to_period_string(utc_now(), period_type)
@@ -749,7 +1055,6 @@ def _find_existing_artifact_in_records(
     records: list[ArtifactRecord],
     dataset_id: str,
     request_scope: ArtifactRequestScope,
-    prefer_zarr: bool,
 ) -> ArtifactRecord | None:
     """Return an existing artifact for an identical logical request from a provided record set."""
     for record in reversed(records):
@@ -773,8 +1078,6 @@ def _find_existing_artifact_in_records(
                 record.request_scope.end,
             )
             continue
-        if prefer_zarr and record.format != ArtifactFormat.ZARR:
-            continue
         return record
     return None
 
@@ -797,14 +1100,9 @@ def _materialized_records(records: list[ArtifactRecord]) -> list[ArtifactRecord]
 
 def _artifact_storage_exists(record: ArtifactRecord) -> bool:
     """Return whether an artifact's on-disk backing files are still present."""
-    paths: list[str] = []
-    if record.path is not None:
-        paths.append(record.path)
-    if record.asset_paths:
-        paths.extend(record.asset_paths)
-    if not paths:
+    if not record.asset_paths:
         return False
-    return all(Path(path).exists() for path in paths)
+    return all(Path(path).exists() for path in record.asset_paths)
 
 
 def _temporal_coverage_matches_request_scope(
@@ -876,12 +1174,12 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
         DatasetAccessLink(href=f"/datasets/{dataset_id}", rel="self", title="Dataset detail"),
         DatasetAccessLink(href=f"/zarr/{dataset_id}", rel="zarr", title="Zarr store"),
     ]
-    if latest.publication.status == PublicationStatus.PUBLISHED and latest.format == ArtifactFormat.ZARR:
+    is_published_store = latest.publication.status == PublicationStatus.PUBLISHED and latest.format in {
+        ArtifactFormat.ZARR,
+        ArtifactFormat.ICECHUNK,
+    }
+    if is_published_store:
         links.append(DatasetAccessLink(href=f"/stac/collections/{dataset_id}", rel="stac", title="STAC collection"))
-    if latest.format == ArtifactFormat.NETCDF:
-        links.append(
-            DatasetAccessLink(href=f"/datasets/{dataset_id}/download", rel="download", title="Download NetCDF")
-        )
     if latest.publication.pygeoapi_path is not None:
         links.append(
             DatasetAccessLink(href=latest.publication.pygeoapi_path, rel="ogc-collection", title="OGC collection")
@@ -891,42 +1189,3 @@ def _dataset_links(dataset_id: str, latest: ArtifactRecord) -> list[DatasetAcces
 
 def _as_optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
-
-
-def _upgrade_legacy_record(item: dict[str, object]) -> dict[str, object]:
-    """Backfill newer schema fields for records created before migrations existed."""
-    if "request_scope" not in item:
-        coverage = item.get("coverage")
-        if isinstance(coverage, dict):
-            spatial = coverage.get("spatial")
-            temporal = coverage.get("temporal")
-            bbox: tuple[float, float, float, float] | None = None
-            if isinstance(spatial, dict):
-                xmin = spatial.get("xmin")
-                ymin = spatial.get("ymin")
-                xmax = spatial.get("xmax")
-                ymax = spatial.get("ymax")
-                if (
-                    isinstance(xmin, int | float)
-                    and isinstance(ymin, int | float)
-                    and isinstance(xmax, int | float)
-                    and isinstance(ymax, int | float)
-                ):
-                    bbox = (float(xmin), float(ymin), float(xmax), float(ymax))
-
-            start = ""
-            end: str | None = None
-            if isinstance(temporal, dict):
-                raw_start = temporal.get("start")
-                raw_end = temporal.get("end")
-                if isinstance(raw_start, str):
-                    start = raw_start
-                if isinstance(raw_end, str):
-                    end = raw_end
-
-            item["request_scope"] = {
-                "start": start,
-                "end": end,
-                "bbox": bbox,
-            }
-    return item

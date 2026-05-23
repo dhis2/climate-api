@@ -8,59 +8,10 @@ The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package da
 
 Adding a custom dataset involves two things:
 
-1. **A download function** — a Python function that downloads data and writes it as one or more NetCDF files to a given directory.
-2. **A dataset template YAML** — a file that describes the dataset and tells the API which download function to call.
+1. **An `IngestionPlugin` class** — streams data directly into an Icechunk store one period at a time.
+2. **A dataset template YAML** — a file that describes the dataset and tells the API which plugin to call.
 
-## Step 1: Write the download function
-
-The download function must be importable as a dotted Python path. The API calls it with keyword arguments and ignores the return value — the function is expected to write NetCDF files to `dirname` using `prefix` as the filename prefix.
-
-```python
-# mypackage/sources/enacts.py
-from pathlib import Path
-
-def download(
-    *,
-    start: str,         # ISO 8601 date or datetime
-    end: str,
-    dirname: Path,      # directory to write output files into
-    prefix: str,        # filename prefix (use e.g. f"{prefix}_{year}.nc")
-    overwrite: bool,
-    bbox: list[float],  # [xmin, ymin, xmax, ymax] — include only if your source needs it
-    **kwargs: object,   # absorbs default_params from the YAML template
-) -> None:
-    """Download ENACTS rainfall and write NetCDF files to dirname."""
-    ...
-```
-
-**Required parameters** — always passed by the API:
-
-| Parameter   | Type       | Description |
-| ----------- | ---------- | ----------- |
-| `start`     | `str`      | Start of the requested time range (ISO 8601) |
-| `end`       | `str`      | End of the requested time range (ISO 8601) |
-| `dirname`   | `Path`     | Directory to write output NetCDF files into |
-| `prefix`    | `str`      | Filename prefix for output files |
-| `overwrite` | `bool`     | Whether to overwrite existing cached files |
-
-**Optional parameters** — passed only when present in the function signature:
-
-| Parameter      | Type            | Description |
-| -------------- | --------------- | ----------- |
-| `bbox`         | `list[float]`   | Bounding box as `[xmin, ymin, xmax, ymax]` — include this if your source requires a spatial filter |
-| `country_code` | `str`           | ISO 3166-1 alpha-3 code — include this if your source (e.g. WorldPop) requires a country code |
-
-Any extra keyword arguments from `ingestion.default_params` in the YAML template are forwarded as additional kwargs.
-
-The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`latitude` → `y`, `lon`/`longitude` → `x`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
-
-Install your package in the same environment as the Climate API:
-
-```bash
-pip install ./mypackage
-```
-
-## Step 2: Create a dataset template YAML
+## Step 1: Create a dataset template YAML
 
 Create a directory for your custom templates and add a YAML file. Each file contains a list of templates (even if there is only one):
 
@@ -75,7 +26,9 @@ Create a directory for your custom templates and add a YAML file. Each file cont
     kind: temporal
     execution: append
   ingestion:
-    function: mypackage.sources.enacts.download
+    plugin: mypackage.sources.EnactsPlugin
+    params:
+      variable: rainfall
   units: mm
   resolution: 4 km x 4 km
   source: ENACTS
@@ -127,8 +80,8 @@ Omit `sync.availability` entirely for `static` datasets or when you always want 
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `ingestion.function` | Yes | Dotted path to the download function |
-| `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
+| `ingestion.plugin` | Yes | Dotted path to an `IngestionPlugin` class |
+| `ingestion.params` | No | Constructor keyword arguments forwarded to the plugin class |
 
 **Transforms** — applied after download, before writing to Zarr:
 
@@ -223,5 +176,89 @@ The smallest valid template for a static dataset with no sync:
   sync:
     kind: static
   ingestion:
-    function: mypackage.sources.my_source.download
+    plugin: mypackage.sources.my_plugin.MyPlugin
 ```
+
+---
+
+## Ingestion plugin
+
+For sources that need streaming access or resumable long ingests, implement an `IngestionPlugin` instead of a download function. The plugin streams data directly into the Icechunk store one period at a time — no intermediate files, no full-rebuild on sync.
+
+### Plugin skeleton
+
+```python
+# mypackage/sources/my_plugin.py
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+import numpy as np
+import xarray as xr
+
+from climate_api.ingest.protocol import GridSpec, enumerate_periods
+
+
+class MyPlugin:
+    max_concurrency = 2   # fetch this many periods in parallel
+    commit_batch_size = 1  # cursor checkpoint interval
+
+    def __init__(self, variable: str) -> None:
+        self.variable = variable
+
+    def probe(self, bbox: list[float], **_: Any) -> GridSpec:
+        """Return grid shape and CRS without downloading data."""
+        # Derive shape from known resolution, or open a small metadata request.
+        xmin, ymin, xmax, ymax = bbox
+        res = 0.05  # degrees per pixel
+        import math
+        nx = max(1, math.ceil((xmax - xmin) / res))
+        ny = max(1, math.ceil((ymax - ymin) / res))
+        return GridSpec(shape=(ny, nx), crs=4326, dtype=np.dtype("float32"), nodata=-9999.0)
+
+    def periods(self, start: str, end: str) -> list[str]:
+        """Return the ordered list of period IDs to fetch."""
+        # enumerate_periods handles daily/hourly/monthly/yearly enumeration and
+        # optional availability cutoff clamping.
+        return enumerate_periods(start, end, "daily")
+
+    def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
+        """Fetch one period. Must return a Dataset with a 'time' dimension."""
+        # Blocking I/O is fine — the orchestrator runs this in asyncio.to_thread.
+        ...
+```
+
+### Dataset template
+
+```yaml
+- id: my_streaming_dataset
+  name: My streaming dataset
+  variable: rainfall
+  period_type: daily
+  sync:
+    kind: temporal
+    execution: append
+  extents:
+    spatial:
+      bbox: [-180, -50, 180, 50]
+    temporal:
+      begin: "2000-01-01"
+      resolution: P1D
+  ingestion:
+    plugin: mypackage.sources.my_plugin.MyPlugin
+    params:
+      variable: rainfall
+  units: mm
+  resolution: 5 km x 5 km
+  source: My source
+```
+
+### Key conventions for `fetch_period`
+
+- The returned Dataset must have a `time` dimension with exactly the period's time steps as coordinate values.
+- Spatial dimensions should be named `x` and `y` (or match `GridSpec.x_dim` / `GridSpec.y_dim`).
+- Clear all encoding before returning and pin the time encoding: `ds["time"].encoding.update({"units": "days since 1970-01-01", "dtype": "int32"})`.
+- For sources where blocking I/O is unavoidable (rioxarray, requests), run it in a `ThreadPoolExecutor` as shown above.
+
+See the built-in plugins (`climate_api/ingest/plugins/`) for complete worked examples: `chirps3.py` (COG range requests), `era5_land.py` (remote zarr), and `worldpop.py` (full-file download).

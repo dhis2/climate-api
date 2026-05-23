@@ -50,12 +50,15 @@ Used by: ERA5-Land total precipitation (`era5land_precipitation_hourly`).
 
 ## Reprojection
 
-Reprojection to the instance CRS is handled automatically by the ingestion pipeline as a separate step after all user-declared transforms have run. It is not a transform and should not be declared in the `transforms` list.
+No automatic reprojection occurs. Data is stored in whatever CRS the plugin returns (declared via `GridSpec.crs` in `probe()`).
 
-If your source data is not in `EPSG:4326`, declare `source_crs` in the dataset template so the pipeline knows what to reproject from:
+If you need to reproject to a different CRS, declare `reproject_to_instance_crs` as an explicit transform. It reprojects from `source_crs` (default `EPSG:4326`) to the instance CRS set in `climate-api.yaml`:
 
 ```yaml
-source_crs: EPSG:32633
+transforms:
+  - function: climate_api.transforms.reproject_to_instance_crs
+    params:
+      source_crs: EPSG:32633
 ```
 
 ---

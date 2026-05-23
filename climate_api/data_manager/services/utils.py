@@ -5,8 +5,9 @@ from typing import Any
 
 def get_time_dim(ds: Any) -> str:
     """Return the name of the time dimension in a dataset or dataframe."""
+    actual_dims: set[str] = set(getattr(ds, "dims", {}) or {})
     for time_name in ["valid_time", "time"]:
-        if hasattr(ds, time_name):
+        if time_name in actual_dims:
             return time_name
     raise ValueError(f"Unable to find time dimension: {getattr(ds, 'coords', repr(ds))}")
 

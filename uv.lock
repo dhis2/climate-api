@@ -171,40 +171,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cartopy"
-version = "0.25.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "pyproj" },
-    { name = "pyshp" },
-    { name = "shapely" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3c/3f/ec3dee34237b696a486d566a6d3ae6550ae821836e0412bafdcbbec2cfd2/cartopy-0.25.0.tar.gz", hash = "sha256:55f1a390e5f3f075b221c7d91fb10258ad978db786c7930eba06eb45d28753fe", size = 10767728, upload-time = "2025-08-01T12:44:16.573Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/b9/0773ff8f1c755b8a362029e6910db87064d27ca021b060c48ce511ec98b7/cartopy-0.25.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:a6fcd2df8039293096f957fc9c76e969b1a9715d12ab8cee1a6bdae0c6773b8b", size = 11007728, upload-time = "2025-08-01T12:44:06.64Z" },
-    { url = "https://files.pythonhosted.org/packages/34/a6/75738630b7f64bca7afc6bc5de08ddf0c61f13563f2a1abf642373d1095e/cartopy-0.25.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:e4def451617e6957169447fe6ecdad0f63ef2d2007e7d451dd7b9656ada57382", size = 10996613, upload-time = "2025-08-01T12:44:08.822Z" },
-    { url = "https://files.pythonhosted.org/packages/19/0d/669d4bbeb36b87ba504409d85c68ec297e6f434ea6525424f8aa5f14abac/cartopy-0.25.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1c388824cb13e4fa9c2901dc4fbb2dbe9547acd2f4a6a3440983d4e6c6973ae3", size = 11829044, upload-time = "2025-08-01T12:44:11.402Z" },
-    { url = "https://files.pythonhosted.org/packages/01/ff/b46e2120abd99b2ff3d376dc91ed58ae8f0a052d57c242c9b140497573dd/cartopy-0.25.0-cp313-cp313-win_amd64.whl", hash = "sha256:60bad14c072d16e3c96967638cd66eb5a62cf24bc70087bcbfc6b30a3872ed26", size = 10987060, upload-time = "2025-08-01T12:44:14.222Z" },
-]
-
-[[package]]
-name = "cdsapi"
-version = "0.7.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "ecmwf-datastores-client" },
-    { name = "requests" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/55/f3/6cb5b4bf077c441978c5d5be3a568d37e1f07f3e7177a17fa66aec2594b6/cdsapi-0.7.7.tar.gz", hash = "sha256:bc0cf807c1b78aceba6a11c3a5180f885f47f71a4e58205e324cfedcee16f10b", size = 13322, upload-time = "2025-09-30T19:11:22.404Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/f4/4a65460d5cb6784128019fd707a87993f378db25e796eba01400a0903f62/cdsapi-0.7.7-py2.py3-none-any.whl", hash = "sha256:384c1658572d6dc53f4111f6dd46fcdfe6fea54a688af9756d71f6fe9118b66d", size = 12293, upload-time = "2025-09-30T19:11:21.184Z" },
-]
-
-[[package]]
 name = "certifi"
 version = "2026.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -402,18 +368,19 @@ name = "climate-api"
 version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
-    { name = "dhis2eo" },
     { name = "earthkit-transforms" },
     { name = "fastapi" },
     { name = "geojson-pydantic" },
     { name = "geozarr-toolkit" },
     { name = "httpx" },
+    { name = "icechunk" },
     { name = "jinja2" },
     { name = "metpy" },
     { name = "portalocker" },
     { name = "pygeoapi" },
     { name = "pystac" },
     { name = "python-dotenv" },
+    { name = "python-multipart" },
     { name = "rioxarray" },
     { name = "starlette" },
     { name = "topozarr" },
@@ -435,18 +402,19 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dhis2eo", specifier = ">=1.2.1" },
     { name = "earthkit-transforms", specifier = "==0.5.*" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "geojson-pydantic", specifier = ">=2.1.0" },
     { name = "geozarr-toolkit", specifier = "==0.1.*" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "icechunk", specifier = ">=2.0,<3" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "metpy", specifier = ">=1.7,<2" },
     { name = "portalocker", specifier = ">=3.2.0" },
     { name = "pygeoapi", specifier = ">=0.22.0" },
     { name = "pystac", specifier = ">=1.10,<2" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "python-multipart", specifier = ">=0.0.29" },
     { name = "rioxarray", specifier = ">=0.17" },
     { name = "starlette", specifier = ">=0.27.0" },
     { name = "topozarr", specifier = "==0.0.*" },
@@ -599,27 +567,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dhis2eo"
-version = "1.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "earthkit-data", extra = ["cds", "geopandas", "geotiff", "projection"] },
-    { name = "ecmwf-datastores-client" },
-    { name = "geopandas" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "requests" },
-    { name = "rioxarray" },
-    { name = "xarray" },
-    { name = "zarr" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/3d/0a2945f5459bbda30e2d014a2c02417415374953e119f7a19d58c2bdf004/dhis2eo-1.2.1.tar.gz", hash = "sha256:dfc8687f033ae36758bdbc9f78ac648c50e1badf483356d35ebbee6d00f800e3", size = 22424, upload-time = "2026-05-07T11:52:09.867Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/f3/c07d21f796b809ae72858d537c68fe6be7f9f97d363ba0f76adb604b8795/dhis2eo-1.2.1-py3-none-any.whl", hash = "sha256:25fc25a8225ef7b9384a5eba6df491857562b317312cb931b8af924878fa0c52", size = 29273, upload-time = "2026-05-07T11:52:08.23Z" },
-]
-
-[[package]]
 name = "donfig"
 version = "0.8.1.post1"
 source = { registry = "https://pypi.org/simple" }
@@ -659,22 +606,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3e/a0/1f95956eccbde6a08179ddfe06d75ae2d8e57e1f4f7c21feab0423ecb8fa/earthkit_data-0.16.8.tar.gz", hash = "sha256:4c2031530ec4b7033530c959321e1b08e0eabfa8b71734084971cc3ab3bf6e84", size = 5519823, upload-time = "2026-02-18T13:34:20.934Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/97/098f7faf1267031c54662d52791e219f95528806a744cae37014fc21be07/earthkit_data-0.16.8-py3-none-any.whl", hash = "sha256:afa6a5cc6119756be93951a75014d96ce62eb20a5acba05553a3ddca723e1a35", size = 378372, upload-time = "2026-02-18T13:34:18.988Z" },
-]
-
-[package.optional-dependencies]
-cds = [
-    { name = "cdsapi" },
-]
-geopandas = [
-    { name = "geopandas" },
-]
-geotiff = [
-    { name = "pyproj" },
-    { name = "rasterio" },
-    { name = "rioxarray" },
-]
-projection = [
-    { name = "cartopy" },
 ]
 
 [[package]]
@@ -733,21 +664,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/dc/8d/63d8287e912a99a73
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/ba/4cbca5157e90d90c318b2acae178d38b0c6c6df73b434e6a2b6a8cb23a2b/eccodes-2.47.0-cp313-cp313-win_amd64.whl", hash = "sha256:f5f9b71b6e2cb8c9b8349b88a09791e8fb6d51a4396d7160b3da2a83149a4973", size = 7436001, upload-time = "2026-04-22T11:29:36.596Z" },
     { url = "https://files.pythonhosted.org/packages/b3/a3/f58ff573ba0f678ff8116686e868afe436627b19b457a2aba62cd463c9ad/eccodes-2.47.0-py3-none-any.whl", hash = "sha256:13d0b28bd58e94e2c303f42415ca0dcc56ab3febf0f52b1fb0f1d4aa5e7db8e1", size = 91567, upload-time = "2026-04-22T11:30:06.789Z" },
-]
-
-[[package]]
-name = "ecmwf-datastores-client"
-version = "0.4.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "attrs" },
-    { name = "multiurl" },
-    { name = "requests" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/51/60/f86eb3e57baf2b1780a7046148c234e9e57b0aeb550d30f39e50991da253/ecmwf_datastores_client-0.4.2.tar.gz", hash = "sha256:7cee1f5e5dab34edcc794cd62bee02c603fafb6f4cc2121c5f012806e0f7934d", size = 48205, upload-time = "2026-01-21T15:27:31.665Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/40/2ccf4c87a5f9c8198fe71600d5f307f5dada201c091af8774a9c1e360865/ecmwf_datastores_client-0.4.2-py3-none-any.whl", hash = "sha256:d22a675b35263286de09969502ec897da9ceb9e4c8ec4d709f7ebb3b90d3ae98", size = 29092, upload-time = "2026-01-21T15:27:30.452Z" },
 ]
 
 [[package]]
@@ -1099,6 +1015,37 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
+]
+
+[[package]]
+name = "icechunk"
+version = "2.0.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "zarr" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/97/99/fabc9794c1f82e51b5c7c66301695b8fd920f72dee1726104dbdbd8df3e7/icechunk-2.0.5.tar.gz", hash = "sha256:50a2a44a1b561d3f2d3b5d19725c3759f300dc67225a2360fc793d894abfcab1", size = 3327412, upload-time = "2026-05-18T20:22:05.466Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/4e/73e0851289894ce7ba1d88e8ecc00f49dbf51220129ac3ab703a0a599eab/icechunk-2.0.5-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:9c7baeab6837a1e0aec8b5dd63f865b842d66d92314e02de40612190acdcaa2c", size = 16834379, upload-time = "2026-05-18T20:22:42.89Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/54/84e504554e9a502a4bed4d2d1e72ff0cd256e103e0c632a40e31d6c7fc9d/icechunk-2.0.5-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:bd02bc6fb32c9c6477f45d6818e7e363d5365884d42c03d66d97801c9ed98726", size = 15538385, upload-time = "2026-05-18T20:22:33.645Z" },
+    { url = "https://files.pythonhosted.org/packages/49/a9/3241119145b05beec05b45e46581faebdc02c14f5f923ebbb56ac6d0bdb0/icechunk-2.0.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:de5105891c297c9a8c3ff96bef78125a576224eaf3b970e6f0aa6ec4d8cab876", size = 17229820, upload-time = "2026-05-18T20:22:23.591Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/ac/8392e6b23841aa81324144b7893bf7685137658848a2d8cffbd4955d89b1/icechunk-2.0.5-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:b73c5ce8987a6975970c050751d47b43af7ecaaf94c1dfa130446e3972b7f8bd", size = 16867941, upload-time = "2026-05-18T20:21:59.35Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/95/a323289e37ccdd6e4a7ddc8251681d921428c788c9b7f05e731d537015f0/icechunk-2.0.5-cp313-cp313-manylinux_2_28_armv7l.whl", hash = "sha256:53d7c7926251c8a45d1b526e1fe348619239c011920402f6466cfcfbcd96ba74", size = 16697076, upload-time = "2026-05-18T20:22:11.771Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/82/ef006b6433127a7b6aa9fbd9183cb2f4ce69df61096220e16d0292b563c9/icechunk-2.0.5-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:47883961b0b570eb206b3218ee285ad9e36dd407c5988ee39032356c73a90f40", size = 17086219, upload-time = "2026-05-18T20:22:53.068Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/42/0d1ede1a3cd383f2bf00cc8905816339885022efde31951015fb2e110885/icechunk-2.0.5-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:4779422967dcf69b2c2606211ae48b313e865a0caf3414afab790422ef1b5d7e", size = 16868204, upload-time = "2026-05-18T20:23:03.334Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/b3/baefe0939737277efbec5b97fe0f4286f53f81a423d7cab2e7d5128f1633/icechunk-2.0.5-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:83bf18ac31aace8325ce9cc1ee73581f007c0bf3061ad10b4b3ffff8b734977b", size = 16945422, upload-time = "2026-05-18T20:23:13.69Z" },
+    { url = "https://files.pythonhosted.org/packages/be/1f/144799746b0b5269458c4a24049bae7f4d52da55735c10e173de5c76c134/icechunk-2.0.5-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:ae7bb09eafeb714597d795e74506a9f258a798d7a26d840c37b3bfec44e988a4", size = 17637469, upload-time = "2026-05-18T20:23:23.199Z" },
+    { url = "https://files.pythonhosted.org/packages/02/bc/1dec19138d4ab82175a8b2cddd24320003476c8e9e4d2cafa70b096d5b76/icechunk-2.0.5-cp313-cp313-win_amd64.whl", hash = "sha256:978ddc20fb1e6abfaacdb31810a37a83b94b488d7795e77931576f220930f72a", size = 15936134, upload-time = "2026-05-18T20:23:37.825Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/47/0e29dd5248dbaddef6351e9807d61c4eacae325f3b1415a2bb0ce5b2e92e/icechunk-2.0.5-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:2d2369db67502118150612ad481468cc0ae1333ba5cf6084179da04591e566b2", size = 16841657, upload-time = "2026-05-18T20:22:45.594Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/c5/9652585ee78a0f242d2c92983a550990b6a39779d6d0a7c24ab82f293d39/icechunk-2.0.5-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:0554ef924b14f7d6369919c22f042a817f8dbc85d0b9efd793398e2d44786fa4", size = 15544742, upload-time = "2026-05-18T20:22:36.879Z" },
+    { url = "https://files.pythonhosted.org/packages/59/2c/076e478b9b45616ef268bdb0473d6d0c8bfc4ad62224477c0c066b74ebe0/icechunk-2.0.5-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:43289b68bc3ca93804a8ffd96e356f509c87bfd35c3d8202382dd97febd9957d", size = 17240728, upload-time = "2026-05-18T20:22:26.306Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/06/8c0f3fb0df245f42d05d4b423a92766a466ad9e36711972da84196263d14/icechunk-2.0.5-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:35812c0c3087688c422470610fa9f77f6edb2d5d7c3345e0610beb32c8028f96", size = 16883484, upload-time = "2026-05-18T20:22:02.374Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/6a/74440741ac30bb09c9d3fb74acb1332f218ae87faba24f6a81c8c575b9d2/icechunk-2.0.5-cp314-cp314-manylinux_2_28_armv7l.whl", hash = "sha256:ba30ea180b056c34fcf094b36fd7fb7cbd2521f778e5d1080ce9ab9b2f28204d", size = 16706325, upload-time = "2026-05-18T20:22:15.083Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/09/fe20275108f44a7ad8bbb904165feaf65f31796a8dad7baa764d86181fa9/icechunk-2.0.5-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:65075bce7674d2292344a661129fa987a579e5ab46c35862ef366b0c167e1066", size = 17099016, upload-time = "2026-05-18T20:22:56.368Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/f6/bd9b9d79b1a10a8382116ac018f3580f6e8021674fe53167829fba70bd7e/icechunk-2.0.5-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:231f8a46de0949da8ffd0e59446342a1051e374276385ca9a529ab593e73c7ce", size = 16878446, upload-time = "2026-05-18T20:23:06.761Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/af/025f9c303dca742c709a8c01f809479c3d22bdf630954f08eadb6eaace5b/icechunk-2.0.5-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:65e514a6394b1ed5f3726d7da1cc3cafae8e23c7a6b243dc793b1eb876078813", size = 16955472, upload-time = "2026-05-18T20:23:16.865Z" },
+    { url = "https://files.pythonhosted.org/packages/52/b3/7429c90e9a0512f6e11443ccbc9d4ee392757b53c8604db05578457ffac9/icechunk-2.0.5-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:e1a488e9162d64e05e995aa4015cc8118c68fc54d0ed5af4616627a66a4d1d01", size = 17646740, upload-time = "2026-05-18T20:23:30.02Z" },
+    { url = "https://files.pythonhosted.org/packages/25/3c/8e086299cc1a779837e65e4152d03d02b457f8974bb388082fef20894b5e/icechunk-2.0.5-cp314-cp314-win_amd64.whl", hash = "sha256:95b1beb874ad287fcb99dfea29cd5218c795b5d9bca47b8f43ef78b8e6c5b572", size = 15945027, upload-time = "2026-05-18T20:23:40.81Z" },
 ]
 
 [[package]]
@@ -2265,15 +2212,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyshp"
-version = "3.0.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8c/20/8b07bae73aaa0c3f5a2683ba6e23b46e977e2d33a88126d56bbcc2d135cd/pyshp-3.0.3.tar.gz", hash = "sha256:bf4678b13dd53578ed87669676a2fffeccbcded1ec8ff9cafb36d1b660f4b305", size = 2192568, upload-time = "2025-11-28T17:47:31.616Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/06/cad54e8ce758bd836ee5411691cbd49efeb9cc611b374670fce299519334/pyshp-3.0.3-py3-none-any.whl", hash = "sha256:28c8fac8c0c25bb0fecbbfd10ead7f319c2ff2f3b0b44a94f22bd2c93510ad42", size = 58465, upload-time = "2025-11-28T17:47:30.328Z" },
-]
-
-[[package]]
 name = "pystac"
 version = "1.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2320,6 +2258,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
+]
+
+[[package]]
+name = "python-multipart"
+version = "0.0.29"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/fe/70bd71a6738b09a0bdf6480ca6436b167469ca4578b2a0efbe390b4b0e70/python_multipart-0.0.29.tar.gz", hash = "sha256:643e93849196645e2dbdd81a0f8829a23123ad7f797a84a364c6fb3563f18904", size = 45678, upload-time = "2026-05-17T17:29:47.654Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/cb/769cfc37177252872a45a71f3fbdde9d51b471a3f3c14bfe95dde3407386/python_multipart-0.0.29-py3-none-any.whl", hash = "sha256:2ddcc971cef266225f54f552d8fa10bcfbb1f14446caec199060daac59ff2d69", size = 29640, upload-time = "2026-05-17T17:29:45.69Z" },
 ]
 
 [[package]]

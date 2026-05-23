@@ -5,10 +5,6 @@
   period_type: yearly
   sync:
     kind: release
-    availability:
-      latest_available_function: climate_api.providers.availability.worldpop_release_latest_available
-      # WorldPop projections are intentionally request-driven for future years.
-      allow_future: true
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -17,8 +13,9 @@
       end: "2030"
       resolution: P1Y
   ingestion:
-    function: dhis2eo.data.worldpop.pop_total.yearly.download
-    default_params:
+    plugin: climate_api.ingest.plugins.worldpop.WorldPopPlugin
+    params:
+      # country_code is injected automatically from extent.country_code in climate-api.yaml
       version: global2
   units: people
   resolution: 100m x 100m
@@ -27,4 +24,3 @@
   display:
     colormap: reds
     range: [0.0, 25.0]
-    nodata: 0.0

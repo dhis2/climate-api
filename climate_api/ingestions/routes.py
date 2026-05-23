@@ -1,7 +1,8 @@
 """Routes for EO ingestion, datasets, and sync operations."""
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from typing import Any
+
+from fastapi import APIRouter, Header
 from starlette.responses import Response
 
 from climate_api.data_registry.routes import _get_dataset_or_404
@@ -24,21 +25,51 @@ zarr_router = APIRouter()
 sync_router = APIRouter()
 
 
-@ingestions_router.post("", response_model=IngestionResponse)
-def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
-    """Create or update a managed dataset from a dataset template and configured extent."""
+def _prefer_respond_async(prefer: str | None) -> bool:
+    if prefer is None:
+        return False
+    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
+    return "respond-async" in directives
+
+
+@ingestions_router.post("", response_model=None)
+def create_ingestion(
+    request: CreateIngestionRequest,
+    response: Response,
+    prefer: str | None = Header(default=None),
+) -> Any:
+    """Create or update a managed dataset from a dataset template and configured extent.
+
+    Send ``Prefer: respond-async`` to run the ingest as a background job and
+    receive HTTP 202 with a ``Location: /jobs/{job_id}`` header immediately.
+    Poll ``GET /jobs/{job_id}`` for progress and completion status.
+    """
+    if _prefer_respond_async(prefer):
+        from climate_api.jobs.service import get_job_service
+
+        job = get_job_service().submit_process_job(
+            process_id="ingest",
+            request={
+                "dataset_id": request.dataset_id,
+                "start": request.start,
+                "end": request.end,
+                "overwrite": request.overwrite,
+                "publish": request.publish,
+            },
+        )
+        response.status_code = 202
+        response.headers["Location"] = f"/jobs/{job.job_id}"
+        return job
+
     dataset = _get_dataset_or_404(request.dataset_id)
     extent = get_extent_or_404()
     resolved_bbox = list(extent["bbox"])
-    resolved_country_code = extent.get("country_code")
     artifact = services.create_artifact(
         dataset=dataset,
         start=request.start,
         end=request.end,
         bbox=resolved_bbox,
-        country_code=resolved_country_code,
         overwrite=request.overwrite,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
     return IngestionResponse(
@@ -72,21 +103,6 @@ def get_dataset(dataset_id: str) -> DatasetDetailRecord:
     return services.get_dataset_or_404(dataset_id)
 
 
-@datasets_router.get("/{dataset_id}/download")
-def download_artifact_file(dataset_id: str) -> FileResponse:
-    """Download the primary saved file for a dataset when available."""
-    artifact = services.get_latest_artifact_for_dataset_or_404(dataset_id)
-    if artifact.path is None or artifact.format.value == "zarr":
-        raise HTTPException(
-            status_code=409,
-            detail="Dataset is not a single downloadable file; use metadata and dataset assets instead",
-        )
-
-    media_type = "application/x-netcdf"
-    filename = f"{dataset_id}.nc"
-    return FileResponse(artifact.path, media_type=media_type, filename=filename)
-
-
 @zarr_router.api_route("/{dataset_id}", methods=["GET", "HEAD"])
 def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
     """Return canonical Zarr store listing for a managed dataset."""
@@ -94,7 +110,7 @@ def get_canonical_zarr_store_info(dataset_id: str) -> dict[str, object]:
 
 
 @zarr_router.api_route("/{dataset_id}/{relative_path:path}", methods=["GET", "HEAD"], response_model=None)
-def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> FileResponse | Response | dict[str, object]:
+def get_canonical_zarr_store_file(dataset_id: str, relative_path: str) -> Response | dict[str, object]:
     """Serve canonical Zarr store content for a managed dataset."""
     return services.get_dataset_zarr_store_file_or_404(dataset_id, relative_path)
 
@@ -105,7 +121,6 @@ def sync_dataset(dataset_id: str, request: SyncDatasetRequest) -> SyncResponse:
     return services.sync_dataset(
         dataset_id=dataset_id,
         end=request.end,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
 

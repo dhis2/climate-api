@@ -25,3 +25,9 @@ def metres_to_mm(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
     """Convert the dataset variable from metres to millimetres."""
     logger.info("Converting '%s' from m to mm", dataset["variable"])
     return _apply(ds, dataset, scale=1000.0, offset=0.0, units="mm")
+
+
+def kg_per_m3_to_ug_per_m3(ds: xr.Dataset, dataset: dict[str, Any]) -> xr.Dataset:
+    """Convert the dataset variable from kg m⁻³ to μg m⁻³ (×10⁹)."""
+    logger.info("Converting '%s' from kg/m³ to μg/m³", dataset["variable"])
+    return _apply(ds, dataset, scale=1e9, offset=0.0, units="μg m⁻³")

@@ -1,17 +1,47 @@
 """Root API endpoints."""
 
+import asyncio
+import json
 import sys
 import urllib.parse
 from importlib.metadata import version as _pkg_version
+from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.responses import RedirectResponse
 
 from .schemas import AppInfo, HealthStatus, Status
 from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, root_json, wants_json
 
 router = APIRouter()
+
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+
+
+async def _sse_stream(
+    task: asyncio.Task[None],
+    queue: asyncio.Queue[dict[str, Any] | None],
+) -> AsyncGenerator[str, None]:
+    """Yield SSE events from queue until the task sentinel (None) arrives.
+
+    Sends a keepalive comment every 5 seconds so the connection is not
+    dropped and partial response buffers are flushed by the browser.
+    """
+    while True:
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=5.0)
+        except asyncio.TimeoutError:
+            yield ": keepalive\n\n"
+            continue
+        if event is None:
+            break
+        yield f"data: {json.dumps(event)}\n\n"
 
 
 @router.get("/", response_class=Response, responses=ROOT_RESPONSES)
@@ -42,73 +72,104 @@ def manage(
 
 
 @router.post("/manage/ingest", include_in_schema=False)
-async def manage_ingest(request: Request) -> RedirectResponse:
-    """Handle ingest form submission and redirect to the management page."""
-    from fastapi import HTTPException
-
+async def manage_ingest(request: Request) -> Response:
+    """Stream ingest progress as SSE, then signal redirect on completion."""
     from climate_api.data_registry.services.datasets import get_dataset
     from climate_api.extents.services import get_extent_or_404
     from climate_api.ingestions.services import create_artifact
 
     base = str(request.base_url).rstrip("/")
-    try:
-        form = await request.form()
-        dataset_id = str(form.get("dataset_id", ""))
-        start = str(form.get("start", ""))
-        end = str(form.get("end", "")) or None
-        publish = "publish" in form
-        overwrite = "overwrite" in form
+    form = await request.form()
+    dataset_id = str(form.get("dataset_id", ""))
+    start = str(form.get("start", ""))
+    end = str(form.get("end", "")) or None
+    publish = "publish" in form
+    overwrite = "overwrite" in form
 
-        template = get_dataset(dataset_id)
-        if template is None:
-            msg = urllib.parse.quote(f"Dataset template '{dataset_id}' not found")
-            return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
-
-        extent = get_extent_or_404()
-        resolved_bbox = list(extent["bbox"])
-        country_code = extent.get("country_code")
-
-        create_artifact(
-            dataset=template,
-            start=start,
-            end=end,
-            bbox=resolved_bbox,
-            country_code=country_code,
-            overwrite=overwrite,
-            prefer_zarr=True,
-            publish=publish,
-        )
-        name = urllib.parse.quote(template.get("name", dataset_id))
-        return RedirectResponse(f"{base}/manage?message=Ingested+{name}", status_code=303)
-    except HTTPException as exc:
-        msg = urllib.parse.quote(str(exc.detail))
+    template = get_dataset(dataset_id)
+    if template is None:
+        msg = urllib.parse.quote(f"Dataset template '{dataset_id}' not found")
         return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
-    except Exception as exc:
-        msg = urllib.parse.quote(str(exc))
-        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+
+    extent = get_extent_or_404()
+    resolved_bbox = list(extent["bbox"])
+
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+    error_holder: list[str] = []
+
+    def on_progress(done: int, total: int, message: str = "") -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, {"done": done, "total": total, "message": message})
+
+    async def run() -> None:
+        try:
+            await asyncio.to_thread(
+                create_artifact,
+                dataset=template,
+                start=start,
+                end=end,
+                bbox=resolved_bbox,
+                overwrite=overwrite,
+                publish=publish,
+                on_progress=on_progress,
+            )
+        except Exception as exc:
+            error_holder.append(str(exc))
+        finally:
+            await queue.put(None)
+
+    task = asyncio.create_task(run())
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        async for chunk in _sse_stream(task, queue):
+            yield chunk
+        if error_holder:
+            yield f"data: {json.dumps({'error': error_holder[0]})}\n\n"
+        else:
+            name = urllib.parse.quote(str(template.get("name", dataset_id)))
+            yield f"data: {json.dumps({'redirect': f'{base}/manage?message=Ingested+{name}'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.post("/manage/sync", include_in_schema=False)
-async def manage_sync(request: Request) -> RedirectResponse:
-    """Handle sync form submission and redirect to the management page."""
-    from fastapi import HTTPException
-
+async def manage_sync(request: Request) -> Response:
+    """Stream sync progress as SSE, then signal redirect on completion."""
     from climate_api.ingestions.services import sync_dataset
 
     base = str(request.base_url).rstrip("/")
-    try:
-        form = await request.form()
-        dataset_id = str(form.get("dataset_id", ""))
-        publish = "publish" in form
+    form = await request.form()
+    dataset_id = str(form.get("dataset_id", ""))
+    publish = "publish" in form
 
-        sync_dataset(dataset_id=dataset_id, end=None, prefer_zarr=True, publish=publish)
-        return RedirectResponse(f"{base}/manage?message=Sync+completed", status_code=303)
-    except HTTPException as exc:
-        msg = urllib.parse.quote(str(exc.detail))
-        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
-    except Exception as exc:
-        msg = urllib.parse.quote(str(exc))
-        return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+    error_holder: list[str] = []
+
+    def on_progress(done: int, total: int, message: str = "") -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, {"done": done, "total": total, "message": message})
+
+    async def run() -> None:
+        try:
+            await asyncio.to_thread(
+                sync_dataset, dataset_id=dataset_id, end=None, publish=publish, on_progress=on_progress
+            )
+        except Exception as exc:
+            error_holder.append(str(exc))
+        finally:
+            await queue.put(None)
+
+    task = asyncio.create_task(run())
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        async for chunk in _sse_stream(task, queue):
+            yield chunk
+        if error_holder:
+            yield f"data: {json.dumps({'error': error_holder[0]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'redirect': f'{base}/manage?message=Sync+completed'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.get("/health")

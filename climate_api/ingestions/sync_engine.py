@@ -11,15 +11,12 @@ and keeps future scheduler-driven sync jobs on the same code path.
 
 from __future__ import annotations
 
-import importlib
-import inspect
 import logging
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
-from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
 from climate_api.shared.time import (
     datetime_to_period_string,
@@ -42,6 +39,7 @@ def plan_sync(
     source_dataset: dict[str, Any],
     latest_artifact: ArtifactRecord,
     requested_end: str | None,
+    current_end: str | None = None,
 ) -> SyncDetail:
     """Return the sync decision for one managed dataset without changing local state.
 
@@ -54,6 +52,10 @@ def plan_sync(
     - release datasets compare the current materialized release against the requested end
     - static datasets are marked as not syncable
 
+    `current_end` overrides `latest_artifact.coverage.temporal.end` when provided.
+    Callers pass the store-authoritative value for formats (e.g. Icechunk) where the
+    artifact metadata record may lag behind what is actually committed on disk.
+
     This planner deliberately does not download data or persist artifacts.
     """
     sync_kind_value = source_dataset.get("sync", {}).get("kind")
@@ -61,7 +63,7 @@ def plan_sync(
         raise ValueError("source_dataset must define sync.kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     current_start = latest_artifact.request_scope.start
-    current_end = latest_artifact.coverage.temporal.end
+    current_end = current_end if current_end is not None else latest_artifact.coverage.temporal.end
 
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
@@ -75,6 +77,8 @@ def plan_sync(
             target_end=current_end,
             target_end_source="current_coverage",
         )
+    if current_end is None:
+        raise ValueError(f"Cannot plan sync for {sync_kind.value} dataset with no existing temporal coverage")
     period_type = str(source_dataset["period_type"])
     normalized_requested_end = requested_end.strip() if isinstance(requested_end, str) else None
     normalized_requested_end = normalized_requested_end or None
@@ -83,7 +87,9 @@ def plan_sync(
         resolved_end = normalize_period_string(normalized_requested_end, period_type)
     else:
         resolved_end = _default_target_end(period_type=period_type)
-    latest_available_end = _latest_available_end(source_dataset=source_dataset, requested_end=resolved_end)
+    latest_available_end = _latest_available_end(
+        source_dataset=source_dataset, requested_end=resolved_end, current_end=current_end
+    )
     target_end_source = (
         requested_target_end_source
         if latest_available_end == resolved_end
@@ -163,11 +169,11 @@ def run_sync(
     latest_artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
     requested_end: str | None,
-    country_code: str | None,
-    prefer_zarr: bool,
     publish: bool,
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
+    current_end: str | None = None,
+    on_progress: Any | None = None,
 ) -> SyncResponse:
     """Plan and execute one sync operation for a managed dataset.
 
@@ -183,6 +189,7 @@ def run_sync(
         source_dataset=source_dataset,
         latest_artifact=latest_artifact,
         requested_end=requested_end,
+        current_end=current_end,
     )
     dataset_id = managed_dataset_id_for(latest_artifact)
     logger.info(
@@ -242,10 +249,9 @@ def run_sync(
         download_start=download_start,
         download_end=sync_detail.delta_end if download_start is not None else None,
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
-        country_code=country_code,
         overwrite=False,
-        prefer_zarr=prefer_zarr,
         publish=publish,
+        on_progress=on_progress,
     )
     logger.info(
         "Sync completed for dataset '%s': artifact_id=%s action=%s",
@@ -295,7 +301,7 @@ def _next_period_start(latest_period_end: str, *, period_type: str) -> str:
     if period_type == "hourly":
         timestamp = parse_hourly_period_string(latest_period_end)
         return datetime_to_period_string(timestamp + timedelta(hours=1), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         current = date.fromisoformat(latest_period_end)
         return (current + timedelta(days=1)).isoformat()
     if period_type == "weekly":
@@ -318,7 +324,7 @@ def _default_target_end(*, period_type: str) -> str:
     today = utc_today()
     if period_type == "hourly":
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return today.isoformat()
     if period_type == "weekly":
         return datetime_to_period_string(utc_now(), period_type)
@@ -329,93 +335,127 @@ def _default_target_end(*, period_type: str) -> str:
     raise ValueError(f"Unsupported period_type '{period_type}' for sync")
 
 
-def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str) -> str:
-    """Clamp requested sync end to the latest upstream state declared by template metadata.
+def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str, current_end: str | None = None) -> str:
+    """Clamp requested sync end to the latest upstream state via the plugin's periods() method.
 
-    The current engine does not query upstream providers directly. Instead it can
-    apply conservative template metadata so sync planning does not overshoot known
-    provider lag or release cadence.
+    current_end must be provided so the function can return it when periods() reports nothing
+    new (empty list → NOOP detected by caller).
     """
-    availability = source_dataset.get("sync", {}).get("availability")
-    if not isinstance(availability, dict):
-        return requested_end
+    period_type = source_dataset.get("period_type")
+    if current_end is not None and isinstance(period_type, str):
+        ingestion = source_dataset.get("ingestion")
+        if isinstance(ingestion, dict) and isinstance(ingestion.get("plugin"), str):
+            next_start = _next_period_start(current_end, period_type=period_type)
+            plugin_latest = _plugin_latest_available_period(
+                source_dataset=source_dataset,
+                next_period_start=next_start,
+                requested_end=requested_end,
+                current_end=current_end,
+            )
+            if plugin_latest is not None:
+                return min(requested_end, plugin_latest)
 
-    provider_latest = _provider_latest_available_end(
-        source_dataset=source_dataset,
-        availability=availability,
-        requested_end=requested_end,
-    )
-    if provider_latest is not None:
-        return min(requested_end, provider_latest)
-    # Keep the legacy metadata-only lag fallback for templates that do not yet
-    # declare a latest_available_function, but delegate to the provider helper
-    # so lag logic lives in one place.
-    return min(
-        requested_end,
-        provider_availability.lagged_latest_available(
-            dataset=source_dataset,
-            requested_end=requested_end,
-        ),
-    )
+    return requested_end
+
+
+def _plugin_latest_available_period(
+    *,
+    source_dataset: dict[str, Any],
+    next_period_start: str,
+    requested_end: str,
+    current_end: str,
+) -> str | None:
+    """Return the last period available from next_period_start..requested_end via the plugin.
+
+    Returns:
+    - str: the last available period in the range (may equal current_end when nothing new)
+    - None: plugin could not be instantiated (caller falls back to legacy availability logic)
+
+    """
+    ingestion = source_dataset.get("ingestion")
+    if not isinstance(ingestion, dict):
+        return None
+    plugin_path = ingestion.get("plugin")
+    if not isinstance(plugin_path, str):
+        return None
+
+    _raw_params = ingestion.get("params")
+    params: dict[str, Any] = dict(_raw_params) if isinstance(_raw_params, dict) else {}
+
+    try:
+        from climate_api.ingest.orchestrator import load_plugin
+
+        plugin = load_plugin(plugin_path, params)
+    except (TypeError, ValueError, ImportError, AttributeError) as exc:
+        logger.debug(
+            "Plugin '%s' cannot be instantiated for availability check (needs extra_params?): %s",
+            plugin_path,
+            exc,
+        )
+        return None
+
+    try:
+        periods: list[str] = plugin.periods(next_period_start, requested_end)
+    except Exception as exc:
+        logger.debug("plugin.periods() failed during availability check for '%s': %s", plugin_path, exc)
+        return None
+
+    return periods[-1] if periods else current_end
 
 
 def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> bool:
-    """Return whether this template opts into V1 delta-download sync execution."""
-    from pathlib import Path
+    """Return whether this artifact supports incremental append sync execution.
+
+    Icechunk stores always support append: the orchestrator uses read_committed_period_ids
+    to determine exactly which periods are missing and commits only those. No YAML
+    sync.execution flag is required.
+
+    For all other formats the YAML must opt in with sync.execution: append, and
+    pyramid zarr stores (identified by a "0/" subdirectory) are excluded because
+    they must be rebuilt in full.
+    """
+    from climate_api.ingestions.schemas import ArtifactFormat
+
+    if latest_artifact.format == ArtifactFormat.ICECHUNK:
+        # Pyramid Icechunk stores have data under group "0"; appending to root
+        # would create a second flat dataset instead of extending the pyramid.
+        # Fall back to rematerialize so the full pyramid is rebuilt.
+        if latest_artifact.asset_paths:
+            from pathlib import Path
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            try:
+                import zarr
+
+                icechunk_path = Path(latest_artifact.asset_paths[0])
+                if icechunk_path.exists():
+                    repo = open_or_create_repo(icechunk_path)
+                    session = repo.readonly_session("main")
+                    root = zarr.open_group(session.store, mode="r")
+                    if "multiscales" in root.attrs:
+                        logger.warning(
+                            "Sync append not supported for pyramid Icechunk dataset '%s'; "
+                            "falling back to rematerialize",
+                            source_dataset.get("id", "<unknown>"),
+                        )
+                        return False
+            except Exception:
+                pass  # store unreadable — let the ingest path handle it
+        return True
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
-    artifact_path = latest_artifact.path
-    if artifact_path and "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
-        logger.warning(
-            "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
-            source_dataset.get("id", "<unknown>"),
-        )
-        return False
+    if latest_artifact.asset_paths:
+        from pathlib import Path
+
+        artifact_path = latest_artifact.asset_paths[0]
+        if "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
+            logger.warning(
+                "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
+                source_dataset.get("id", "<unknown>"),
+            )
+            return False
     return True
-
-
-def _provider_latest_available_end(
-    *,
-    source_dataset: dict[str, Any],
-    availability: dict[str, Any],
-    requested_end: str,
-) -> str | None:
-    """Call an optional provider-specific latest-availability function."""
-    function_path = availability.get("latest_available_function")
-    if not isinstance(function_path, str) or not function_path:
-        return None
-
-    try:
-        latest_available_fn = _get_dynamic_function(function_path)
-        params: dict[str, Any] = {}
-        signature = inspect.signature(latest_available_fn)
-        if "dataset" in signature.parameters:
-            params["dataset"] = source_dataset
-        if "requested_end" in signature.parameters:
-            params["requested_end"] = requested_end
-        result = latest_available_fn(**params)
-    except (AttributeError, ImportError, TypeError, ValueError) as exc:
-        raise SyncConfigurationError(f"Latest availability function '{function_path}' failed: {exc}") from exc
-    if not isinstance(result, str):
-        raise SyncConfigurationError(f"Latest availability function '{function_path}' must return a period string")
-    try:
-        return normalize_period_string(result, period_type=str(source_dataset["period_type"]))
-    except (KeyError, TypeError, ValueError) as exc:
-        raise SyncConfigurationError(
-            f"Latest availability function '{function_path}' returned invalid period "
-            f"'{result}' for dataset period_type '{source_dataset.get('period_type')}'"
-        ) from exc
-
-
-def _get_dynamic_function(full_path: str) -> Callable[..., Any]:
-    """Import and return a function given its dotted module path."""
-    parts = full_path.split(".")
-    if len(parts) < 2 or any(not part for part in parts):
-        raise ValueError(f"Invalid dotted function path '{full_path}'")
-    module_path = ".".join(parts[:-1])
-    function_name = parts[-1]
-    module = importlib.import_module(module_path)
-    return getattr(module, function_name)  # type: ignore[no-any-return]

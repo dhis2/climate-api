@@ -7,7 +7,7 @@ The same pattern applies at every extension point:
 | Extension point | How to extend | Plugin location |
 | --------------- | ------------- | --------------- |
 | [Dataset templates](#dataset-templates) | YAML files | `plugins_dir/datasets/` |
-| [Ingestion functions](#ingestion-functions) | Python function, dotted path in YAML | any importable path |
+| [Ingestion plugins](#ingestion-plugins) | Python class implementing `IngestionPlugin` | any importable path |
 | [Transform functions](#transform-functions) | Python function, dotted path in YAML | any importable path |
 | [Processes](#processes) | YAML file + Python function | `plugins_dir/processes/` |
 
@@ -34,16 +34,69 @@ See [Adding custom datasets](adding_custom_datasets.md) for the full template fi
 
 ---
 
-## Ingestion functions
+## Ingestion plugins
 
-The `ingestion.function` field in a dataset template is a dotted Python path to the download function that fetches data for that dataset.
+The `ingestion.plugin` field in a dataset template is a dotted Python path to an `IngestionPlugin` class. The plugin streams data directly into the Icechunk store one period at a time — no intermediate files, resumable on restart.
 
 ```yaml
 ingestion:
-  function: mypackage.sources.enacts.download
+  plugin: mypackage.sources.MyPlugin
+  params:
+    variable: rainfall
+    stage: final
 ```
 
-The function must follow the download function contract (see [Adding custom datasets](adding_custom_datasets.md#step-1-write-the-download-function)). It can live anywhere that is importable — either an installed package or a module placed directly under `plugins_dir` (which is automatically added to `sys.path`).
+### Plugin protocol
+
+A plugin implements three focused async methods. The Climate API layer owns the orchestration loop — plugins never write to zarr or Icechunk directly:
+
+```python
+from climate_api.ingest.protocol import GridSpec
+import xarray as xr
+
+class MyPlugin:
+    max_concurrency: int = 1    # parallel fetch limit
+    commit_batch_size: int = 1  # cursor checkpoint interval (every period is committed)
+
+    def probe(self, bbox: list[float], **params) -> GridSpec:
+        """Metadata-only source probe. Returns grid shape, CRS, dtype. No data transfer."""
+        ...
+
+    def periods(self, start: str, end: str) -> list[str]:
+        """Return the ordered list of available period IDs from start to end."""
+        ...
+
+    def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+        """Fetch one period. Return a dataset with a 'time' dimension in source CRS."""
+        ...
+```
+
+**`GridSpec`** is the return type of `probe()`:
+
+```python
+@dataclass
+class GridSpec:
+    shape: tuple[int, int]       # (ny, nx) grid dimensions
+    crs: int                     # EPSG code, e.g. 4326 or 32633
+    dtype: np.dtype              # data type, e.g. np.dtype("float32")
+    nodata: float | None = None  # fill value
+    time_dim: bool = True        # False for static (time-invariant) datasets
+    extra_dims: dict[str, int] = field(default_factory=dict)  # e.g. {"age_group": 20}
+```
+
+Set `time_dim=False` for static (time-invariant) datasets — the orchestrator issues a single write with no append dimension.
+
+### What the orchestrator does
+
+1. Calls `probe()` once to fix the Icechunk store's chunk shape and write GeoZarr attributes.
+2. Calls `periods()` once to get the full period list; filters against already-committed time coordinates.
+3. Creates all fetch tasks upfront so up to `max_concurrency` fetches are in flight simultaneously.
+4. Awaits tasks in chronological order so writes are always sequential.
+5. Commits every period to the Icechunk store; checkpoints the job cursor every `commit_batch_size` periods so a restart resumes from the last checkpoint rather than the beginning.
+6. On restart, resumes from the last committed period — a crash loses at most one uncommitted batch.
+7. After all periods are written, runs a rechunk pass if the plugin declares `rechunk_time`, then expires intermediate Icechunk snapshots to prune history.
+
+See [Adding custom datasets](adding_custom_datasets.md#ingestion-plugin) for a worked example.
 
 ---
 

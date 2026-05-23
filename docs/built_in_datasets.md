@@ -21,7 +21,9 @@ To ingest a built-in dataset for your configured extent, see the [API reference]
 
 CHIRPS (Climate Hazards Group InfraRed Precipitation with Station data) v3 is a quasi-global daily precipitation dataset merging satellite thermal infrared imagery with station observations. It is widely used for drought monitoring, food security analysis, and WASH planning in low- and middle-income countries.
 
-**Sync behaviour** — new data is ingested incrementally as it becomes available. CHIRPS has a nominal publication lag of around 3–7 days, so data through yesterday is not always present. The API uses a custom availability function that checks the actual latest available date from the CHIRPS server before each sync.
+**Ingest method** — each day is fetched as a Cloud-Optimized GeoTIFF via HTTP range request. Only the configured bbox window is downloaded; full global files are never transferred. Up to four days are fetched concurrently and written directly to the Icechunk store — no intermediate files on disk.
+
+**Sync behaviour** — new days are appended incrementally. CHIRPS final data lags approximately 1–2 months (exact cutoff: end of the previous month if today is after the 20th, else two months back). Only the missing days are fetched on each sync run.
 
 **Transforms** — none applied; data is stored as received in mm.
 
@@ -42,7 +44,9 @@ CHIRPS (Climate Hazards Group InfraRed Precipitation with Station data) v3 is a 
 
 ERA5-Land is a global atmospheric reanalysis produced by ECMWF. The 2 m temperature variable (`t2m`) represents the air temperature 2 metres above the land surface, including corrections for topography relative to the ERA5 pressure levels.
 
-**Sync behaviour** — new hours are appended incrementally. ERA5-Land is published with a nominal 5-day lag; the API will not request data closer than 120 hours to the current time.
+**Ingest method** — the DestinE zarr store is opened lazily over HTTPS. Individual hourly periods are fetched and written directly to the Icechunk store — no intermediate files on disk. The source's 0–360° longitude range is converted to −180–180° before writing. `commit_batch_size = 720` checkpoints the cursor once per month of hourly data.
+
+**Sync behaviour** — new months are appended incrementally. ERA5-Land is published with a nominal 5-day lag; months closer than 120 hours to today are not requested.
 
 **Transforms** — raw values are in Kelvin. The `kelvin_to_celsius` transform is applied at ingest time, so stored values are in °C.
 
@@ -63,7 +67,9 @@ ERA5-Land is a global atmospheric reanalysis produced by ECMWF. The 2 m temperat
 
 Total precipitation (`tp`) from ERA5-Land is an accumulated hourly value representing the sum of large-scale and convective precipitation falling onto the land surface. It is useful as a high-resolution complement to CHIRPS for countries outside CHIRPS's 50°N–50°S band, or for sub-daily analysis.
 
-**Sync behaviour** — same 5-day lag as ERA5-Land temperature; hours are appended incrementally.
+**Ingest method** — same as ERA5-Land temperature: individual hourly periods fetched from DestinE and written directly to Icechunk.
+
+**Sync behaviour** — same 5-day lag as ERA5-Land temperature; months are appended incrementally.
 
 **Transforms** — raw values are in metres per hour. The `metres_to_mm` transform converts to mm at ingest time.
 
@@ -85,7 +91,9 @@ Total precipitation (`tp`) from ERA5-Land is an accumulated hourly value represe
 
 WorldPop Global2 provides gridded population estimates and projections at 100 m resolution. Each raster year represents estimated residential population counts. Years up to and including the present are backward-modelled estimates; years beyond the present are forward projections.
 
-**Sync behaviour** — population data is released year by year, not as a continuous stream. The API uses a `release`-kind sync that checks each calendar year separately. Future years (projections) are also requestable, since the underlying data covers through 2030.
+**Ingest method** — each year is downloaded as a per-country GeoTIFF from WorldPop's HTTP server (typically 50–200 MB per file), clipped to the configured bbox, and written directly to the Icechunk store. A multiscale pyramid is built after the initial ingest. The country code is taken from `extent.country_code` in `climate-api.yaml` (preferred) or from `ingestion.params.country_code` in the dataset template.
+
+**Sync behaviour** — population data is released year by year. The API uses a `release`-kind sync that checks each calendar year separately. Future years (projections through 2030) are also requestable.
 
 **Transforms** — none applied; values are stored as received (population counts per pixel).
 

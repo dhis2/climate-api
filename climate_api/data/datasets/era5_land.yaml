@@ -6,9 +6,6 @@
   sync:
     kind: temporal
     execution: append
-    availability:
-      latest_available_function: climate_api.providers.availability.lagged_latest_available
-      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -16,9 +13,9 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
-    function: dhis2eo.data.destine.era5_land.hourly.download
-    default_params:
-      variables: ['t2m']
+    plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
+    params:
+      variable: t2m
   transforms:
     - climate_api.transforms.kelvin_to_celsius
   units: degC
@@ -37,9 +34,6 @@
   sync:
     kind: temporal
     execution: append
-    availability:
-      latest_available_function: climate_api.providers.availability.lagged_latest_available
-      lag_hours: 120
   extents:
     spatial:
       bbox: [-180, -90, 180, 90]
@@ -47,9 +41,9 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
-    function: dhis2eo.data.destine.era5_land.hourly.download
-    default_params:
-      variables: ['tp']
+    plugin: climate_api.ingest.plugins.era5_land.Era5LandPlugin
+    params:
+      variable: tp
   transforms:
     - climate_api.transforms.metres_to_mm
   units: mm

@@ -24,29 +24,34 @@ def main() -> None:
     print(ds)
 
     print(f"\nDimensions:  {dict(ds.sizes)}")
-    print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
-    print(f"Latitude:    {ds.latitude.min().item()}  →  {ds.latitude.max().item()}")
-    print(f"Longitude:   {ds.longitude.min().item()}  →  {ds.longitude.max().item()}")
+    if "time" in ds.dims:
+        print(f"Time range:  {ds.time.values[0]}  →  {ds.time.values[-1]}")
+    print(f"y:    {ds.y.min().item():.4f}  →  {ds.y.max().item():.4f}")
+    print(f"x:   {ds.x.min().item():.4f}  →  {ds.x.max().item():.4f}")
 
     variable = list(ds.data_vars)[0]
 
     # Select a single time step
-    t0 = ds.time.values[0]
-    snapshot = ds[variable].sel(time=t0)
-    print(f"\n{variable} snapshot at {t0}:")
-    print(f"  shape: {snapshot.shape},  min: {snapshot.min().item()},  max: {snapshot.max().item()}")
+    if "time" in ds.dims:
+        t0 = ds.time.values[0]
+        snap = ds[variable].sel(time=t0).compute()
+        print(f"\n{variable} snapshot at {t0}:")
+        print(f"  shape: {snap.shape},  min: {snap.min().item():.4f},  max: {snap.max().item():.4f}")
 
     # Select the point closest to the spatial centre of the domain
-    centre_lat = ds.latitude.mean().item()
-    centre_lon = ds.longitude.mean().item()
-    point = ds[variable].sel(latitude=centre_lat, longitude=centre_lon, method="nearest")
-    print(f"\n{variable} at domain centre ({centre_lat:.2f}, {centre_lon:.2f}):")
-    print(point.to_dataframe()[[variable]].head(10))
+    cy, cx = ds.y.mean().item(), ds.x.mean().item()
+    point = ds[variable].sel(y=cy, x=cx, method="nearest")
+    print(f"\n{variable} at domain centre ({cy:.2f}, {cx:.2f}):")
+    if "time" in ds.dims:
+        print(point.to_dataframe()[[variable]].head(10))
+    else:
+        print(f"  value: {point.compute().item()}")
 
     # Spatial mean over the full domain — first 10 time steps
-    spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["latitude", "longitude"])
-    print(f"\nSpatial mean {variable} time series (first 10 steps):")
-    print(spatial_mean.to_dataframe()[[variable]])
+    if "time" in ds.dims:
+        spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["y", "x"])
+        print(f"\nSpatial mean {variable} time series (first 10 steps):")
+        print(spatial_mean.to_dataframe()[[variable]])
 
 
 if __name__ == "__main__":

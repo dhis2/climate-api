@@ -10,7 +10,7 @@ class ArtifactFormat(StrEnum):
     """Supported stored artifact formats."""
 
     ZARR = "zarr"
-    NETCDF = "netcdf"
+    ICECHUNK = "icechunk"
 
 
 class PublicationStatus(StrEnum):
@@ -53,8 +53,12 @@ class CoverageSpatial(BaseModel):
 class CoverageTemporal(BaseModel):
     """Temporal extent summary."""
 
-    start: str = Field(description="First covered time period in dataset-native string form.")
-    end: str = Field(description="Last covered time period in dataset-native string form.")
+    start: str | None = Field(
+        description="First covered time period in dataset-native string form. None for static (timeless) datasets."
+    )
+    end: str | None = Field(
+        description="Last covered time period in dataset-native string form. None for static (timeless) datasets."
+    )
 
 
 class ArtifactCoverage(BaseModel):
@@ -98,7 +102,6 @@ class ArtifactRecord(BaseModel):
     variable: str
     period_type: str | None = None
     format: ArtifactFormat
-    path: str | None = None
     asset_paths: list[str] = Field(default_factory=list)
     variables: list[str] = Field(default_factory=list)
     request_scope: ArtifactRequestScope
@@ -116,10 +119,6 @@ class CreateIngestionRequest(BaseModel):
     overwrite: bool = Field(
         default=False,
         description="Whether to force regeneration of an existing matching artifact.",
-    )
-    prefer_zarr: bool = Field(
-        default=True,
-        description="Whether to prefer GeoZarr materialization when available.",
     )
     publish: bool = Field(
         default=True,
@@ -272,7 +271,6 @@ class SyncDatasetRequest(BaseModel):
     """Request payload for syncing a managed dataset forward."""
 
     end: str | None = Field(default=None, description="Optional end period to sync through.")
-    prefer_zarr: bool = Field(default=True, description="Whether to prefer GeoZarr materialization when syncing.")
     publish: bool = Field(default=True, description="Whether to publish the resulting dataset version.")
 
 

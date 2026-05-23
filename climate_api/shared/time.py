@@ -93,7 +93,7 @@ def datetime_to_period_string(value: datetime, period_type: str) -> str:
     value = _normalize_datetime_for_period(value)
     if period_type == "hourly":
         return value.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return value.date().isoformat()
     if period_type == "weekly":
         iso_year, iso_week, _ = value.isocalendar()
@@ -132,18 +132,27 @@ def parse_weekly_period_string(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def normalize_period_string(value: str, period_type: str) -> str:
-    """Normalize an input period string to the dataset-native period format."""
+def normalize_period_string(value: str, period_type: str, *, is_end: bool = False) -> str:
+    """Normalize an input period string to the dataset-native period format.
+
+    When is_end=True and period_type='hourly', a date-only input (YYYY-MM-DD)
+    is treated as the last hour of that day (T23) rather than T00.
+    """
     if period_type == "hourly":
         try:
-            return datetime_to_period_string(parse_hourly_period_string(value), period_type)
+            dt = parse_hourly_period_string(value)
+            # A bare date with no time component defaults to midnight; for an end
+            # bound that means the user intended the last hour of the day.
+            if is_end and len(value) == 10:
+                dt = dt.replace(hour=23)
+            return datetime_to_period_string(dt, period_type)
         except ValueError as exc:
             raise ValueError(f"Invalid hourly period '{value}'; expected YYYY-MM-DDTHH or ISO datetime") from exc
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         try:
             return datetime_to_period_string(datetime.fromisoformat(value), period_type)
         except ValueError as exc:
-            raise ValueError(f"Invalid daily period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
+            raise ValueError(f"Invalid {period_type} period '{value}'; expected YYYY-MM-DD or ISO datetime") from exc
     if period_type == "weekly":
         try:
             return datetime_to_period_string(parse_weekly_period_string(value), period_type)
@@ -190,7 +199,7 @@ def parse_period_string_to_datetime(value: str) -> datetime:
 def numpy_datetime_to_period_string(datetimes: np.ndarray[Any, Any], period_type: str) -> np.ndarray[Any, Any]:
     """Convert an array of numpy datetimes to truncated period strings."""
     if period_type != "weekly":
-        lengths = {"hourly": 13, "daily": 10, "monthly": 7, "yearly": 4}
+        lengths = {"hourly": 13, "daily": 10, "dekadal": 10, "monthly": 7, "yearly": 4}
         return np.datetime_as_string(datetimes, unit="s").astype(f"U{lengths[period_type]}")
 
     dt_index = pd.DatetimeIndex(np.atleast_1d(np.asarray(datetimes, dtype="datetime64[ns]")))

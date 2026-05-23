@@ -25,7 +25,7 @@ from climate_api.stac import services as stac_services
 
 @pytest.fixture(autouse=True)
 def _clear_xstac_collection_cache() -> None:
-    stac_services._clear_xstac_collection_cache()
+    stac_services._xstac_collection_cache.clear()
 
 
 def _artifact(
@@ -49,7 +49,6 @@ def _artifact(
         dataset_name=dataset_name,
         variable=variable,
         format=format,
-        path=path,
         asset_paths=[path] if asset_paths is None and path is not None else (asset_paths or []),
         variables=[variable],
         request_scope=ArtifactRequestScope(
@@ -100,14 +99,13 @@ def test_catalog_self_link_reflects_request_path(client: TestClient, monkeypatch
     assert payload["links"][0]["href"].endswith("/stac")
 
 
-def test_catalog_excludes_unpublished_and_netcdf(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_excludes_unpublished(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         ingestion_services,
         "list_artifacts",
         lambda: SimpleNamespace(
             items=[
                 _artifact(artifact_id="a1", status=PublicationStatus.UNPUBLISHED),
-                _artifact(artifact_id="a2", format=ArtifactFormat.NETCDF),
             ]
         ),
     )
@@ -117,6 +115,64 @@ def test_catalog_excludes_unpublished_and_netcdf(client: TestClient, monkeypatch
     assert response.status_code == 200
     payload = response.json()
     assert [link for link in payload["links"] if link["rel"] == "child"] == []
+
+
+def test_catalog_includes_published_icechunk_artifact(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ingestion_services,
+        "list_artifacts",
+        lambda: SimpleNamespace(items=[_artifact(artifact_id="a1", format=ArtifactFormat.ICECHUNK)]),
+    )
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services, "open_icechunk_dataset", lambda _: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
+    monkeypatch.setattr(stac_services, "xarray_to_stac", lambda ds, template, **kw: template)
+
+    response = client.get("/stac/catalog.json")
+
+    assert response.status_code == 200
+    child_links = [link for link in response.json()["links"] if link["rel"] == "child"]
+    assert len(child_links) == 1
+    assert "chirps3_precipitation_daily" in child_links[0]["href"]
+
+
+def test_collection_uses_icechunk_dataset_for_icechunk_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = _artifact(artifact_id="a1", format=ArtifactFormat.ICECHUNK)
+
+    class DummyDataset:
+        def close(self) -> None:
+            pass
+
+    opened: list[str] = []
+
+    def fake_open_icechunk(path: str) -> DummyDataset:
+        opened.append(path)
+        return DummyDataset()
+
+    template = pystac.Collection(
+        id="chirps3_precipitation_daily",
+        description="template",
+        extent=pystac.Extent(
+            spatial=pystac.SpatialExtent([[1.0, 2.0, 3.0, 4.0]]),
+            temporal=pystac.TemporalExtent([[datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 10, tzinfo=UTC)]]),
+        ),
+        title="CHIRPS3 precipitation",
+        license="proprietary",
+    )
+    template.add_asset("zarr", pystac.Asset(href="http://example.test/zarr"))
+    monkeypatch.setattr(stac_services, "open_icechunk_dataset", fake_open_icechunk)
+    monkeypatch.setattr(stac_services, "get_x_y_dims", lambda _: ("x", "y"))
+    monkeypatch.setattr(stac_services, "get_time_dim", lambda _: "time")
+    monkeypatch.setattr(stac_services, "xarray_to_stac", lambda *args, **kwargs: template)
+
+    payload = stac_services._build_collection_with_xstac(artifact=artifact, template=template)
+
+    assert payload["type"] == "Collection"
+    assert len(opened) == 1
+    assert opened[0] == "/tmp/chirps3_precipitation_daily.zarr"
 
 
 def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -286,7 +342,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
     assert payload["cube:dimensions"]["valid_time"]["step"] == "PT1H"
 
 
-def test_collection_uses_level0_href_for_pyramid_zarr_store(
+def test_collection_uses_root_href_for_pyramid_zarr_store(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
@@ -321,10 +377,10 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily/0")
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily")
 
 
-def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
+def test_collection_uses_root_href_for_remote_pyramid_zarr_store(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     artifact = _artifact(artifact_id="a1", path="s3://example-bucket/chirps3_precipitation_daily.zarr")
@@ -358,7 +414,7 @@ def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily/0")
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily")
 
 
 def test_collection_returns_404_for_unknown_dataset(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

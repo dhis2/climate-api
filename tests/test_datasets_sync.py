@@ -38,7 +38,6 @@ def _artifact(
         dataset_name="CHIRPS3 precipitation",
         variable="precip",
         format=ArtifactFormat.ZARR,
-        path=path,
         asset_paths=[path],
         variables=["precip"],
         request_scope=ArtifactRequestScope(
@@ -104,7 +103,7 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", publish=True)
 
     assert result.sync_id is None
     assert result.status == "up_to_date"
@@ -137,12 +136,11 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
 
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", publish=True)
 
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2026-02-10"
     assert captured["bbox"] == [1.0, 2.0, 3.0, 4.0]
-    assert captured["country_code"] == "SLE"
     assert result.sync_id == "a2"
     assert result.status == "completed"
     assert result.message == "Managed dataset was rematerialized against the latest planned upstream state."
@@ -187,7 +185,7 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", publish=True)
 
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2026-02-10"
@@ -255,7 +253,7 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
     monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2025", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2025", publish=True)
 
     assert "download_start" in captured
     assert captured["download_start"] is None
@@ -279,66 +277,13 @@ def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(mon
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2024", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2024", publish=True)
 
     assert result.sync_id is None
     assert result.status == "up_to_date"
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.NO_OP
     assert result.sync_detail.reason == "no_new_release"
-
-
-def test_sync_dataset_release_policy_clamps_future_year_by_template_availability(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dataset_id = "release_dataset_sle"
-    latest = _artifact(
-        artifact_id="a1",
-        source_dataset_id="release_dataset_yearly",
-        managed_dataset_id=dataset_id,
-        end="2024",
-    )
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
-    monkeypatch.setattr(
-        sync_engine.provider_availability,
-        "utc_today",
-        lambda: date(2026, 4, 15),
-    )
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {
-            "id": "release_dataset_yearly",
-            "period_type": "yearly",
-            "sync": {"kind": "release", "availability": {"latest_year_offset": 1}},
-        },
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
-        captured.update(kwargs)
-        return _artifact(
-            artifact_id="a2",
-            source_dataset_id="release_dataset_yearly",
-            managed_dataset_id=dataset_id,
-            end="2025",
-        )
-
-    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026", prefer_zarr=True, publish=True)
-
-    assert captured["start"] == "2026-01-01"
-    assert captured["end"] == "2025"
-    assert result.status == "completed"
-    assert result.sync_detail.sync_kind == SyncKind.RELEASE
-    assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert result.sync_detail.target_end == "2025"
-    assert result.sync_detail.target_end_source == "request_clamped_by_availability"
-    assert result.sync_detail.delta_start is None
-    assert result.sync_detail.delta_end is None
 
 
 def test_default_hourly_target_end_is_utc_aware(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -404,7 +349,7 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
     monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("static sync should not create artifacts"))
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="ignored", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="ignored", publish=True)
 
     assert result.sync_id is None
     assert result.status == "not_syncable"
@@ -561,7 +506,7 @@ def test_sync_route_executes_rematerialize_and_returns_structured_detail(
 
     response = client.post(
         f"/sync/{dataset_id}",
-        json={"end": "2026-02-10", "prefer_zarr": True, "publish": True},
+        json={"end": "2026-02-10", "publish": True},
     )
 
     assert response.status_code == 200
@@ -572,26 +517,6 @@ def test_sync_route_executes_rematerialize_and_returns_structured_detail(
     assert payload["sync_detail"]["sync_kind"] == "temporal"
     assert payload["sync_detail"]["action"] == "rematerialize"
     assert payload["sync_detail"]["target_end"] == "2026-02-10"
-
-
-def test_latest_available_end_preserves_requested_month_without_lag(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FixedDate(date):
-        @classmethod
-        def today(cls) -> "FixedDate":
-            return cls(2026, 4, 15)
-
-    monkeypatch.setattr(sync_engine.provider_availability, "utc_today", lambda: FixedDate(2026, 4, 15))
-
-    result = sync_engine._latest_available_end(
-        source_dataset={
-            "id": "monthly_dataset",
-            "period_type": "monthly",
-            "sync": {"availability": {"lag_days": 0}},
-        },
-        requested_end="2026-05",
-    )
-
-    assert result == "2026-05"
 
 
 def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -619,162 +544,201 @@ def test_plan_sync_marks_default_target_end_source(monkeypatch: pytest.MonkeyPat
     assert result.delta_end == "2026-04-20"
 
 
-def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-03-31")
-
-    result = sync_engine.plan_sync(
-        source_dataset={
-            "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
-            "sync": {
-                "kind": "temporal",
-                "execution": "append",
-                "availability": {
-                    "latest_available_function": "climate_api.providers.availability.chirps3_daily_latest_available"
-                },
-            },
-            "ingestion": {},
-        },
-        latest_artifact=_artifact(artifact_id="a1", end="2026-02-28"),
-        requested_end="2026-04-21",
-    )
-
-    assert result.target_end == "2026-03-31"
-    assert result.target_end_source == "request_clamped_by_availability"
-    assert result.delta_start == "2026-03-01"
-    assert result.delta_end == "2026-03-31"
-
-
-def test_latest_available_end_clamps_monthly_lag_to_month_period(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FixedDate(date):
-        @classmethod
-        def today(cls) -> "FixedDate":
-            return cls(2026, 4, 15)
-
-    monkeypatch.setattr(sync_engine.provider_availability, "utc_today", lambda: FixedDate(2026, 4, 15))
-
-    result = sync_engine._latest_available_end(
-        source_dataset={
-            "id": "monthly_dataset",
-            "period_type": "monthly",
-            "sync": {"availability": {"lag_days": 1}},
-        },
-        requested_end="2026-05",
-    )
-
-    assert result == "2026-04"
-
-
-def test_latest_available_end_uses_provider_availability_hook(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[dict[str, object]] = []
-
-    def fake_latest_available(*, dataset: dict[str, object], requested_end: str) -> str:
-        calls.append({"dataset": dataset, "requested_end": requested_end})
-        return "2026-02-05"
-
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: fake_latest_available)
-
-    source_dataset = {
-        "id": "provider_dataset",
-        "period_type": "daily",
-        "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
-    }
-    result = sync_engine._latest_available_end(source_dataset=source_dataset, requested_end="2026-02-10")
-
-    assert result == "2026-02-05"
-    assert calls == [{"dataset": source_dataset, "requested_end": "2026-02-10"}]
-
-
-def test_latest_available_end_clamps_provider_availability_to_requested_end(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-03-01")
-
-    result = sync_engine._latest_available_end(
-        source_dataset={
-            "id": "provider_dataset",
-            "period_type": "daily",
-            "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
-        },
-        requested_end="2026-02-10",
-    )
-
-    assert result == "2026-02-10"
-
-
-def test_latest_available_end_wraps_provider_import_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fail_import(_: str) -> object:
-        raise ImportError("missing provider")
-
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", fail_import)
-
-    with pytest.raises(
-        sync_engine.SyncConfigurationError,
-        match="Latest availability function 'provider.latest_available' failed",
-    ):
-        sync_engine._latest_available_end(
-            source_dataset={
-                "id": "provider_dataset",
-                "period_type": "daily",
-                "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
-            },
-            requested_end="2026-02-10",
-        )
-
-
-def test_latest_available_end_rejects_invalid_provider_period_string(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", lambda _: lambda: "2026-31-99")
-
-    with pytest.raises(
-        sync_engine.SyncConfigurationError,
-        match="Latest availability function 'provider.latest_available' returned invalid period",
-    ):
-        sync_engine._latest_available_end(
-            source_dataset={
-                "id": "provider_dataset",
-                "period_type": "daily",
-                "sync": {"availability": {"latest_available_function": "provider.latest_available"}},
-            },
-            requested_end="2026-02-10",
-        )
-
-
-def test_latest_available_end_wraps_invalid_provider_function_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(sync_engine.SyncConfigurationError, match="Latest availability function 'invalid_path' failed"):
-        sync_engine._latest_available_end(
-            source_dataset={
-                "id": "provider_dataset",
-                "period_type": "daily",
-                "sync": {"availability": {"latest_available_function": "invalid_path"}},
-            },
-            requested_end="2026-02-10",
-        )
-
-
-def test_sync_plan_route_returns_500_for_provider_hook_misconfiguration(
-    client: TestClient,
+def test_latest_available_end_uses_plugin_periods_for_plugin_datasets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    """For plugin datasets, _latest_available_end calls plugin.periods() instead of
+    latest_available_function."""
     monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {
-            "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
-            "sync": {"kind": "temporal", "availability": {"latest_available_function": "provider.latest_available"}},
-        },
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: "2026-02-08",
     )
 
-    def fail_import(_: str) -> object:
-        raise ImportError("missing provider")
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "daily",
+            "sync": {"kind": "temporal"},
+            "ingestion": {"plugin": "some.Plugin", "params": {}},
+        },
+        requested_end="2026-02-10",
+        current_end="2026-02-06",
+    )
 
-    monkeypatch.setattr(sync_engine, "_get_dynamic_function", fail_import)
+    assert result == "2026-02-08"
 
-    response = client.get(f"/sync/{dataset_id}/plan", params={"end": "2026-02-10"})
 
-    assert response.status_code == 500
-    assert "Latest availability function 'provider.latest_available' failed" in response.json()["detail"]
+def test_latest_available_end_plugin_returns_current_end_when_no_new_periods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When plugin.periods() returns an empty list, _latest_available_end returns current_end
+    so the NOOP check fires correctly."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: current_end,
+    )
+
+    result = sync_engine._latest_available_end(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "daily",
+            "sync": {"kind": "temporal"},
+            "ingestion": {"plugin": "some.Plugin", "params": {}},
+        },
+        requested_end="2026-02-10",
+        current_end="2026-02-06",
+    )
+
+    assert result == "2026-02-06"
+
+
+def test_plugin_latest_available_period_returns_last_period() -> None:
+    """_plugin_latest_available_period returns the last item from plugin.periods()."""
+
+    class FakePlugin:
+        max_concurrency = 1
+        commit_batch_size = 1
+        rechunk_time = None
+
+        def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+        def periods(self, start: str, end: str) -> list[str]:
+            return [d for d in ["2026-02-07", "2026-02-08", "2026-02-09"] if start <= d <= end]
+
+        def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+    orch_mod.load_plugin = lambda path, params, extra_params=None: FakePlugin()  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "fake.Plugin", "params": {}}},
+            next_period_start="2026-02-07",
+            requested_end="2026-02-10",
+            current_end="2026-02-06",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result == "2026-02-09"
+
+
+def test_plugin_latest_available_period_returns_current_end_when_empty() -> None:
+    """When plugin.periods() returns [], _plugin_latest_available_period returns current_end."""
+
+    class EmptyPlugin:
+        max_concurrency = 1
+        commit_batch_size = 1
+        rechunk_time = None
+
+        def probe(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+        def periods(self, start: str, end: str) -> list[str]:
+            return []
+
+        def fetch_period(self, *_a: object, **_k: object) -> object:  # type: ignore[override]
+            raise NotImplementedError
+
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+    orch_mod.load_plugin = lambda *_a, **_kw: EmptyPlugin()  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "fake.Plugin", "params": {}}},
+            next_period_start="2026-02-07",
+            requested_end="2026-02-10",
+            current_end="2026-02-06",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result == "2026-02-06"
+
+
+def test_plugin_latest_available_period_returns_none_on_instantiation_failure() -> None:
+    """TypeError during load_plugin (e.g. plugin needs country_code) → returns None."""
+    import climate_api.ingest.orchestrator as orch_mod
+
+    orig = orch_mod.load_plugin
+
+    def explode(path: str, params: dict, extra_params: object = None) -> object:
+        raise TypeError("country_code is required")
+
+    orch_mod.load_plugin = explode  # type: ignore[assignment]
+    try:
+        result = sync_engine._plugin_latest_available_period(
+            source_dataset={"ingestion": {"plugin": "worldpop.Plugin", "params": {}}},
+            next_period_start="2026",
+            requested_end="2026",
+            current_end="2025",
+        )
+    finally:
+        orch_mod.load_plugin = orig
+
+    assert result is None
+
+
+def test_plan_sync_uses_plugin_periods_for_availability(monkeypatch: pytest.MonkeyPatch) -> None:
+    """For an ICECHUNK artifact backed by a plugin, plan_sync calls plugin.periods() to
+    determine whether new data is available, not a static lag function."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: "2024-01-01T05",
+    )
+
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+            "ingestion": {
+                "plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin",
+                "params": {"variable": "t2m"},
+            },
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T10",
+    )
+
+    assert result.action == "append"
+    assert result.target_end == "2024-01-01T05"
+    assert result.delta_start == "2024-01-01T04"
+    assert result.delta_end == "2024-01-01T05"
+
+
+def test_plan_sync_noop_when_plugin_reports_no_new_periods(monkeypatch: pytest.MonkeyPatch) -> None:
+    """plan_sync returns NO_OP when plugin.periods() is empty (nothing new since current_end)."""
+    monkeypatch.setattr(
+        sync_engine,
+        "_plugin_latest_available_period",
+        lambda *, source_dataset, next_period_start, requested_end, current_end: current_end,
+    )
+
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+            "ingestion": {
+                "plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin",
+                "params": {"variable": "t2m"},
+            },
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T10",
+    )
+
+    assert result.action == "no_op"
 
 
 def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -805,33 +769,190 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
             latest_artifact=latest_artifact,
             source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
             requested_end="2026-02-11",
-            country_code=None,
-            prefer_zarr=True,
             publish=True,
             create_artifact_fn=lambda **_: pytest.fail("create_artifact should not be called"),
             get_dataset_fn=lambda _: pytest.fail("get_dataset should not be called"),
         )
 
 
-def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
-    dataset_id = "worldpop_population_yearly_sle"
-    latest = _artifact(
-        artifact_id="a1",
-        source_dataset_id="worldpop_population_yearly",
-        managed_dataset_id=dataset_id,
-        end="2020",
+# ---------------------------------------------------------------------------
+# Icechunk store-based sync
+# ---------------------------------------------------------------------------
+
+
+def _icechunk_artifact(
+    *,
+    artifact_id: str,
+    source_dataset_id: str = "era5land_temperature_hourly",
+    managed_dataset_id: str = "era5land_temperature_hourly_nor",
+    end: str = "2024-01-01T03",
+    path: str = "/tmp/era5land_temperature_hourly.icechunk",
+) -> ArtifactRecord:
+    return ArtifactRecord(
+        artifact_id=artifact_id,
+        dataset_id=source_dataset_id,
+        dataset_name="2m temperature (ERA5-Land)",
+        variable="t2m",
+        format=ArtifactFormat.ICECHUNK,
+        asset_paths=[path],
+        variables=["t2m"],
+        request_scope=ArtifactRequestScope(
+            start="2024-01-01T00",
+            end=end,
+            bbox=(4.0, 57.5, 31.5, 71.5),
+        ),
+        coverage=ArtifactCoverage(
+            temporal=CoverageTemporal(start="2024-01-01T00", end=end),
+            spatial=CoverageSpatial(xmin=4.0, ymin=57.5, xmax=31.5, ymax=71.5),
+        ),
+        created_at=datetime.fromisoformat("2024-01-01T04:00:00+00:00"),
+        publication=ArtifactPublication(status=PublicationStatus.PUBLISHED),
     )
+
+
+def test_plan_sync_uses_current_end_override_instead_of_artifact_metadata() -> None:
+    """current_end parameter takes precedence over latest_artifact.coverage.temporal.end."""
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T06",
+        current_end="2024-01-01T05",
+    )
+
+    assert result.current_end == "2024-01-01T05"
+    assert result.delta_start == "2024-01-01T06"
+    assert result.delta_end == "2024-01-01T06"
+    assert result.target_end == "2024-01-01T06"
+
+
+def test_plan_sync_falls_back_to_artifact_end_when_no_override() -> None:
+    artifact = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
+        latest_artifact=artifact,
+        requested_end="2024-01-01T06",
+    )
+
+    assert result.current_end == "2024-01-01T03"
+    assert result.delta_start == "2024-01-01T04"
+
+
+def test_supports_append_returns_true_for_icechunk_format_without_yaml_execution_flag() -> None:
+    """ICECHUNK format always supports append — no sync.execution: append needed in YAML."""
+    artifact = _icechunk_artifact(artifact_id="a1")
+
+    result = sync_engine._supports_append(
+        source_dataset={"id": "era5land_temperature_hourly", "period_type": "hourly", "sync": {"kind": "temporal"}},
+        latest_artifact=artifact,
+    )
+
+    assert result is True
+
+
+def test_supports_append_requires_yaml_execution_flag_for_zarr_format() -> None:
+    zarr_artifact = _artifact(artifact_id="a1", end="2026-01-10")
+
+    without_flag = sync_engine._supports_append(
+        source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
+        latest_artifact=zarr_artifact,
+    )
+    with_flag = sync_engine._supports_append(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+        },
+        latest_artifact=zarr_artifact,
+    )
+
+    assert without_flag is False
+    assert with_flag is True
+
+
+def test_sync_dataset_reads_committed_end_from_icechunk_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """sync_dataset passes the store-authoritative current_end to run_sync for ICECHUNK artifacts."""
+    dataset_id = "era5land_temperature_hourly_nor"
+    latest = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
     monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
     monkeypatch.setattr(
         services.registry_datasets,
         "get_dataset",
-        lambda _: {"id": "worldpop_population_yearly", "period_type": "yearly", "sync": {"kind": "release"}},
+        lambda _: {
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal"},
+        },
     )
+
+    # Store has T00-T05; artifact record only knows about T03.
+    import climate_api.ingest.store as ingest_store
+
     monkeypatch.setattr(
-        services,
-        "get_extent",
-        lambda: {"id": "sle", "bbox": [-13.5, 6.9, -10.1, 10.0], "country_code": "SLE"},
+        ingest_store,
+        "read_committed_period_ids",
+        lambda path, period_type: {
+            "2024-01-01T00",
+            "2024-01-01T01",
+            "2024-01-01T02",
+            "2024-01-01T03",
+            "2024-01-01T04",
+            "2024-01-01T05",
+        },
     )
+
+    captured: dict[str, object] = {}
+
+    def fake_run_sync(**kwargs: object) -> SyncResponse:
+        captured.update(kwargs)
+        return SyncResponse(
+            sync_id=None,
+            status="up_to_date",
+            message="ok",
+            dataset=_dataset_detail(dataset_id),
+            sync_detail=SyncDetail(
+                source_dataset_id="era5land_temperature_hourly",
+                sync_kind=SyncKind.TEMPORAL,
+                action=SyncAction.NO_OP,
+                reason="no_new_period",
+                message="ok",
+                current_start="2024-01-01T00",
+                current_end="2024-01-01T05",
+                target_end="2024-01-01T05",
+                target_end_source="request",
+            ),
+        )
+
+    monkeypatch.setattr(services, "run_sync", fake_run_sync)
+
+    services.sync_dataset(dataset_id=dataset_id, end="2024-01-01T05", publish=False)
+
+    assert captured["current_end"] == "2024-01-01T05"
+
+
+def test_sync_dataset_icechunk_store_empty_uses_none_current_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the store has no committed periods yet, current_end is None (full ingest)."""
+    dataset_id = "era5land_temperature_hourly_nor"
+    latest = _icechunk_artifact(artifact_id="a1", end="2024-01-01T03")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {"id": "era5land_temperature_hourly", "period_type": "hourly", "sync": {"kind": "temporal"}},
+    )
+    import climate_api.ingest.store as ingest_store
+
+    monkeypatch.setattr(ingest_store, "read_committed_period_ids", lambda *_: set())
 
     captured: dict[str, object] = {}
 
@@ -843,20 +964,130 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
             message="ok",
             dataset=_dataset_detail(dataset_id),
             sync_detail=SyncDetail(
-                source_dataset_id="worldpop_population_yearly",
-                sync_kind=SyncKind.RELEASE,
+                source_dataset_id="era5land_temperature_hourly",
+                sync_kind=SyncKind.TEMPORAL,
                 action=SyncAction.REMATERIALIZE,
-                reason="new_release_available",
+                reason="new_periods_available",
                 message="ok",
-                current_start="2020",
-                current_end="2020",
-                target_end="2021",
+                current_start="2024-01-01T00",
+                current_end="2024-01-01T03",
+                target_end="2024-01-01T06",
                 target_end_source="request",
             ),
         )
 
     monkeypatch.setattr(services, "run_sync", fake_run_sync)
 
-    services.sync_dataset(dataset_id=dataset_id, end="2021", prefer_zarr=True, publish=True)
+    services.sync_dataset(dataset_id=dataset_id, end="2024-01-01T06", publish=False)
 
-    assert captured["country_code"] == "SLE"
+    assert captured["current_end"] is None
+
+
+def _patch_icechunk_artifact_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    captured: dict[str, object],
+) -> None:
+    """Patch all inline imports used by _create_icechunk_artifact."""
+    import numpy as np
+    import xarray as xr
+
+    import climate_api.ingest.orchestrator as orchestrator_mod
+    import climate_api.ingest.store as store_mod
+    from climate_api.ingestions import services as svc
+
+    def fake_run_ingest_sync(**kwargs: object) -> None:
+        captured.update(kwargs)
+        Path(str(kwargs["store_path"])).mkdir(exist_ok=True)
+
+    monkeypatch.setattr(orchestrator_mod, "run_ingest_sync", fake_run_ingest_sync)
+    monkeypatch.setattr(orchestrator_mod, "load_plugin", lambda path, params, extra_params=None: object())
+    monkeypatch.setattr(store_mod, "open_or_create_repo", lambda _: _FakeRepo())
+    monkeypatch.setattr(
+        svc,
+        "coverage_from_open_dataset",
+        lambda ds, **_: {
+            "has_data": True,
+            "coverage": {
+                "temporal": {"start": "2024-01-01T00", "end": "2024-01-01T06"},
+                "spatial": {"xmin": 4.0, "ymin": 57.5, "xmax": 31.5, "ymax": 71.5},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        xr,
+        "open_zarr",
+        lambda *_a, **_k: xr.Dataset({"t2m": xr.DataArray(np.zeros((1,)), dims=["time"])}),
+    )
+    monkeypatch.setattr(svc, "get_extent", lambda: None)
+    monkeypatch.setattr(svc.downloader, "DOWNLOAD_DIR", tmp_path)
+    monkeypatch.setattr(svc, "_store_artifact_record", lambda record, **_: record)
+    monkeypatch.setattr(svc, "_upsert_icechunk_artifact_record", lambda record: record)
+
+
+class _FakeRepo:
+    def readonly_session(self, _: str) -> "_FakeSession":
+        return _FakeSession()
+
+
+class _FakeSession:
+    store = None
+
+
+def test_create_icechunk_artifact_uses_ingest_start_for_delta_efficiency(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """_create_icechunk_artifact passes ingest_start to run_ingest_sync to skip prior periods."""
+    from climate_api.ingestions import services as svc
+
+    captured: dict[str, object] = {}
+    _patch_icechunk_artifact_dependencies(monkeypatch, tmp_path, captured)
+
+    dataset = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "ingestion": {"plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin", "params": {"variable": "t2m"}},
+    }
+
+    svc._create_icechunk_artifact(
+        dataset=dataset,  # type: ignore[arg-type]
+        start="2024-01-01T00",
+        end="2024-01-01T06",
+        bbox=None,
+        request_scope=ArtifactRequestScope(start="2024-01-01T00", end="2024-01-01T06", bbox=None),
+        publish=False,
+        ingest_start="2024-01-01T04",
+    )
+
+    assert captured["start"] == "2024-01-01T04"
+
+
+def test_create_icechunk_artifact_uses_full_start_when_no_ingest_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Without ingest_start, run_ingest_sync receives the artifact's full start."""
+    from climate_api.ingestions import services as svc
+
+    captured: dict[str, object] = {}
+    _patch_icechunk_artifact_dependencies(monkeypatch, tmp_path, captured)
+
+    dataset = {
+        "id": "era5land_temperature_hourly",
+        "name": "2m temperature (ERA5-Land)",
+        "variable": "t2m",
+        "period_type": "hourly",
+        "ingestion": {"plugin": "climate_api.ingest.plugins.era5_land.Era5LandPlugin", "params": {"variable": "t2m"}},
+    }
+
+    svc._create_icechunk_artifact(
+        dataset=dataset,  # type: ignore[arg-type]
+        start="2024-01-01T00",
+        end="2024-01-01T06",
+        bbox=None,
+        request_scope=ArtifactRequestScope(start="2024-01-01T00", end="2024-01-01T06", bbox=None),
+        publish=False,
+    )
+
+    assert captured["start"] == "2024-01-01T00"

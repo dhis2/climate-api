@@ -3,13 +3,14 @@
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from ...data_manager.services.downloader import get_cache_files, get_zarr_path
+from ...data_manager.services.downloader import get_icechunk_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
 
@@ -24,21 +25,8 @@ def get_data(
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
     logger.info("Opening dataset")
-    zarr_path = get_zarr_path(dataset)
-    if zarr_path:
-        logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = open_zarr_dataset(str(zarr_path))
-    else:
-        logger.warning(
-            f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
-        )
-        files = get_cache_files(dataset)
-        ds = xr.open_mfdataset(
-            files,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+    store_path = get_icechunk_path(dataset)
+    ds = open_icechunk_dataset(store_path)
 
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
@@ -72,25 +60,10 @@ def get_data_coverage(dataset: dict[str, Any]) -> dict[str, Any]:
 def get_data_coverage_for_paths(
     dataset: dict[str, Any],
     *,
-    zarr_path: str | None = None,
-    netcdf_paths: list[str] | None = None,
+    zarr_path: str,
 ) -> dict[str, Any]:
-    """Return coverage metadata for the concrete files created for one artifact."""
-    if zarr_path is not None and netcdf_paths:
-        raise ValueError("Provide either zarr_path or netcdf_paths when computing coverage, not both")
-    if zarr_path is None and not netcdf_paths:
-        raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
-
-    if zarr_path is not None:
-        ds = open_zarr_dataset(zarr_path)
-    else:
-        assert netcdf_paths is not None
-        ds = xr.open_mfdataset(
-            netcdf_paths,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+    """Return coverage metadata for a materialized flat-zarr artifact."""
+    ds = open_zarr_dataset(zarr_path)
 
     from climate_api import config as api_config
 
@@ -124,9 +97,38 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
     return ds
 
 
+def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
+    """Open an Icechunk store as an xarray Dataset via a readonly MVCC session.
+
+    Detects multiscale pyramid stores (root group has ``multiscales`` in attrs)
+    and opens group ``0`` (full resolution) in that case.
+    """
+    import icechunk
+    import zarr
+
+    path = Path(store_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Icechunk store not found: {path}")
+    storage = icechunk.local_filesystem_storage(str(path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+    root = zarr.open_group(session.store, mode="r")
+    group: str | None = "0" if "multiscales" in root.attrs else None
+    return xr.open_zarr(session.store, group=group)  # type: ignore[no-any-return]
+
+
 def _open_zarr(zarr_path: str) -> xr.Dataset:
     """Open a zarr store with automatic consolidated metadata detection."""
     return xr.open_zarr(zarr_path, consolidated=None)  # type: ignore[no-any-return]
+
+
+def coverage_from_open_dataset(ds: xr.Dataset, *, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
+    """Summarize temporal and spatial coverage for a caller-managed open dataset.
+
+    Unlike get_data_coverage_for_paths, this function does not close the dataset.
+    Use when the caller already holds a store handle (e.g. an Icechunk session store).
+    """
+    return _coverage_from_dataset(ds=ds, period_type=period_type, native_crs=native_crs)
 
 
 def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str = "EPSG:4326") -> dict[str, Any]:
@@ -141,11 +143,16 @@ def _coverage_from_dataset(*, ds: xr.Dataset, period_type: str, native_crs: str 
             },
         }
 
-    time_dim = get_time_dim(ds)
     x_dim, y_dim = get_x_y_dims(ds)
 
-    start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]
-    end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), period_type))  # type: ignore[arg-type]
+    start: str | None
+    end: str | None
+    try:
+        time_dim = get_time_dim(ds)
+        start = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].min(), period_type))  # type: ignore[arg-type]
+        end = _period_string_scalar(numpy_datetime_to_period_string(ds[time_dim].max(), period_type))  # type: ignore[arg-type]
+    except ValueError:
+        start = end = None
 
     xmin, xmax = ds[x_dim].min().item(), ds[x_dim].max().item()
     ymin, ymax = ds[y_dim].min().item(), ds[y_dim].max().item()

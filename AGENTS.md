@@ -8,7 +8,7 @@ The DHIS2 Climate API is a FastAPI-based REST API that downloads, processes, and
 
 Key concepts:
 
-- **Dataset templates** — YAML files in `data/datasets/` describing a data source (variable, period type, download function). These are blueprints.
+- **Dataset templates** — YAML files in `data/datasets/` describing a data source (variable, period type, ingestion plugin). These are blueprints.
 - **Artifacts / managed datasets** — ingested instances of a template for a specific spatial extent and time range. Exposed under `/datasets` and `/zarr/{dataset_id}`.
 - **Extent** — a single named spatial bounding box configured at instance setup time (`id`, `bbox`, optional `country_code`). Exposed at `GET /extent`.
 - **GeoZarr stores** — datasets are stored as chunked Zarr v3 archives with GeoZarr spatial attributes. Flat stores for small extents; multiscale pyramids for large ones. Served chunk-by-chunk over HTTP with no specialised server middleware.
@@ -44,17 +44,16 @@ The `.env` file is required for `make run` and `make openapi`. Copy `.env.exampl
 
 ## Dataset templates
 
-Each YAML in `data/datasets/` defines a dataset template. The `ingestion` block controls download and zarr build behaviour:
+Each YAML in `data/datasets/` defines a dataset template. The `ingestion` block specifies the plugin class that streams data directly into the Icechunk store:
 
 ```yaml
 ingestion:
-  function: dhis2eo.data.worldpop.pop_total.yearly.download
-  default_params: {} # passed to the download function
+  plugin: climate_api.ingest.plugins.worldpop.WorldPopPlugin
+  params:
+    version: global2
 ```
 
 `build_dataset_zarr` in `data_manager/downloader.py` builds a multiscale Zarr pyramid when the spatial dimensions exceed 2048×2048 pixels; otherwise it writes a flat chunked zarr with chunk sizes derived from the dataset's temporal resolution.
-
-The ingestion interface is being redesigned as a plugin protocol (see GitHub issue #64) — the `ingestion.function` convention will be replaced by a three-method async plugin (`probe`, `periods`, `fetch_period`).
 
 ## pygeoapi
 

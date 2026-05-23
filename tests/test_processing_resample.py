@@ -42,7 +42,6 @@ def _artifact(
         dataset_name=dataset_id,
         variable="value",
         format=ArtifactFormat.ZARR,
-        path=str(path),
         asset_paths=[str(path)],
         variables=["value"],
         request_scope=ArtifactRequestScope(
@@ -110,7 +109,7 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
     assert artifact.dataset_id == "era5land_temperature_hourly_1d_mean"
     assert artifact.coverage.temporal.start == "2026-01-01"
     assert artifact.coverage.temporal.end == "2026-01-02"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].shape == (2, 1, 1)
         assert result["value"].values[:, 0, 0].tolist() == [11.5, 35.5]
@@ -164,7 +163,7 @@ def test_materialize_resampled_artifact_supports_custom_frequency_dekadal(
 
     assert artifact.dataset_id == "chirps3_precipitation_daily_10d_sum"
     assert artifact.coverage.temporal.start == "2026-01-01"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [10.0]
     finally:
@@ -182,6 +181,54 @@ def test_materialize_resampled_artifact_returns_404_when_source_dataset_template
             overwrite=False,
             publish=False,
         )
+
+
+def test_materialize_resampled_artifact_reads_icechunk_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source.icechunk"
+    source_artifact = _artifact(
+        artifact_id="source-icechunk",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-02T23",
+    )
+    source_artifact = source_artifact.model_copy(update={"format": ArtifactFormat.ICECHUNK})
+
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(48)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(48, dtype=float).reshape(48, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: {"id": dataset_id, "period_type": "hourly"} if "hourly" in dataset_id else None,
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+    monkeypatch.setattr(resample, "open_icechunk_dataset", lambda _: ds)
+
+    artifact = resample.materialize_resampled_artifact(
+        source_dataset_id="era5land_temperature_hourly",
+        frequency="1D",
+        method="mean",
+        start="2026-01-01",
+        end="2026-01-02",
+        overwrite=False,
+        publish=False,
+    )
+
+    assert artifact.dataset_id == "era5land_temperature_hourly_1d_mean"
+    assert artifact.coverage.temporal.start == "2026-01-01"
+    assert artifact.coverage.temporal.end == "2026-01-02"
 
 
 def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
@@ -231,7 +278,7 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
     # W03 (Jan 12-18) is incomplete — only W02 (Jan 5-11) is covered fully
     assert artifact.coverage.temporal.start == "2026-W02"
     assert artifact.coverage.temporal.end == "2026-W02"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
     finally:
@@ -285,7 +332,7 @@ def test_materialize_resampled_artifact_drops_incomplete_leading_week(
     # W02 (Jan 5-11) starts Wednesday Jan 7 — incomplete leading week dropped
     assert artifact.coverage.temporal.start == "2026-W03"
     assert artifact.coverage.temporal.end == "2026-W03"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
     finally:
@@ -388,7 +435,7 @@ def test_materialize_resampled_artifact_builds_monthly_dataset_from_daily_source
     # Monthly resampled timestamp is the start of the month
     assert artifact.coverage.temporal.start == "2026-01"
     assert artifact.coverage.temporal.end == "2026-01"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [31.0]
     finally:
@@ -445,7 +492,7 @@ def test_materialize_resampled_artifact_keeps_complete_week_for_daily_non_midnig
 
     assert artifact.coverage.temporal.start == "2026-W02"
     assert artifact.coverage.temporal.end == "2026-W02"
-    result = xr.open_zarr(artifact.path, consolidated=True)
+    result = xr.open_zarr(artifact.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
     finally:
@@ -702,7 +749,7 @@ def test_materialize_resampled_artifact_rematerializes_when_overwrite_is_true(
     )
 
     assert second.artifact_id == first.artifact_id
-    result = xr.open_zarr(second.path, consolidated=True)
+    result = xr.open_zarr(second.asset_paths[0], consolidated=True)
     try:
         assert result["value"].values[:, 0, 0].tolist() == [35.5]
     finally:

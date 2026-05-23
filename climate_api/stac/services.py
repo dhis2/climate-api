@@ -13,7 +13,7 @@ import pystac
 from fastapi import HTTPException, Request
 from xstac import xarray_to_stac
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
@@ -131,7 +131,7 @@ def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
         latest = max(artifacts, key=lambda artifact: artifact.created_at)
         if latest.publication.status != PublicationStatus.PUBLISHED:
             continue
-        if latest.format != ArtifactFormat.ZARR:
+        if latest.format not in (ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK):
             continue
         result[dataset_id] = latest
     return dict(sorted(result.items()))
@@ -155,7 +155,12 @@ def _build_collection_template(
         extent=pystac.Extent(
             spatial=pystac.SpatialExtent([[spatial.xmin, spatial.ymin, spatial.xmax, spatial.ymax]]),
             temporal=pystac.TemporalExtent(
-                [[parse_period_string_to_datetime(temporal.start), parse_period_string_to_datetime(temporal.end)]]
+                [
+                    [
+                        parse_period_string_to_datetime(temporal.start) if temporal.start else None,
+                        parse_period_string_to_datetime(temporal.end) if temporal.end else None,
+                    ]
+                ]
             ),
         ),
         title=artifact.dataset_name,
@@ -196,7 +201,11 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         return deepcopy(cached_payload)
 
     try:
-        ds = open_zarr_dataset(_artifact_store_path(artifact))
+        store_path = _artifact_store_path(artifact)
+        if artifact.format == ArtifactFormat.ICECHUNK:
+            ds = open_icechunk_dataset(store_path)
+        else:
+            ds = open_zarr_dataset(store_path)
     except HTTPException:
         raise
     except Exception as exc:
@@ -207,14 +216,42 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         ) from exc
     try:
         x_dimension, y_dimension = get_x_y_dims(ds)
-        time_dimension = get_time_dim(ds)
+        try:
+            time_dimension = get_time_dim(ds)
+        except ValueError:
+            time_dimension = None
+        # Detect the actual data CRS so proj:code reflects the store's native coordinate
+        # system rather than the deployment CRS. This matters when a dataset (e.g. WorldPop)
+        # is stored in WGS84 while the deployment is configured for a projected CRS.
+        detected_crs = _detect_dataset_crs(ds)
+        if detected_crs:
+            template.extra_fields["proj:code"] = detected_crs
+        try:
+            reference_system = int(detected_crs.split(":")[-1]) if detected_crs else 4326
+        except ValueError:
+            reference_system = 4326
+        if time_dimension is None:
+            # xstac requires a temporal dimension; skip it for timeless (static)
+            # stores and build only spatial cube:dimensions by hand.
+            payload = template.to_dict(include_self_link=False)
+            payload["cube:dimensions"] = {
+                x_dimension: {"type": "spatial", "axis": "x", "reference_system": reference_system},
+                y_dimension: {"type": "spatial", "axis": "y", "reference_system": reference_system},
+            }
+            _cache_xstac_collection_payload(artifact.artifact_id, payload)
+            return deepcopy(payload)
+
+        # xstac crashes on a scalar (0-d) time coordinate when computing
+        # min/max for the temporal extent. Expand to a 1-element array first.
+        if hasattr(ds, "coords") and time_dimension in ds.coords and ds[time_dimension].ndim == 0:
+            ds = ds.expand_dims(time_dimension)
         result = xarray_to_stac(
             ds,
             template,
             temporal_dimension=time_dimension,
             x_dimension=x_dimension,
             y_dimension=y_dimension,
-            reference_system=4326,
+            reference_system=reference_system,
             # Schema validation can trigger outbound fetches for STAC extension schemas.
             validate=False,
         )
@@ -222,7 +259,7 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         # clear xstac/pystac-owned links before serialization to avoid root-link
         # resolution attempts during to_dict().
         result.clear_links()
-        payload: dict[str, Any] = result.to_dict(include_self_link=False)
+        payload = result.to_dict(include_self_link=False)
         _cache_xstac_collection_payload(artifact.artifact_id, payload)
         return deepcopy(payload)
     except HTTPException:
@@ -245,10 +282,6 @@ def _cache_xstac_collection_payload(artifact_id: str, payload: dict[str, Any]) -
         oldest_artifact_id = next(iter(_xstac_collection_cache))
         _xstac_collection_cache.pop(oldest_artifact_id, None)
     _xstac_collection_cache[artifact_id] = deepcopy(payload)
-
-
-def _clear_xstac_collection_cache() -> None:
-    _xstac_collection_cache.clear()
 
 
 def _link_to_dict(link: pystac.Link) -> dict[str, Any]:
@@ -282,8 +315,6 @@ def _required_zarr_asset(template: pystac.Collection) -> pystac.Asset:
 
 
 def _artifact_store_path(artifact: ArtifactRecord) -> str:
-    if artifact.path:
-        return artifact.path
     if artifact.asset_paths:
         return artifact.asset_paths[0]
     raise HTTPException(
@@ -298,9 +329,6 @@ def _public_zarr_asset_href(
     artifact: ArtifactRecord,
     source_dataset: dict[str, Any],
 ) -> str:
-    artifact_path = _artifact_store_path(artifact)
-    if _is_pyramid_zarr(artifact_path):
-        return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
 
 
@@ -308,7 +336,22 @@ def _is_pyramid_zarr(artifact_path: str) -> bool:
     """Return True if artifact_path is a multiscale pyramid zarr store."""
     if "://" in artifact_path:
         return False
-    return (Path(artifact_path) / "0").is_dir()
+    path = Path(artifact_path)
+    if (path / "0").is_dir():
+        return True
+    if path.suffix == ".icechunk":
+        try:
+            import zarr
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            repo = open_or_create_repo(path)
+            session = repo.readonly_session("main")
+            root = zarr.open_group(session.store, mode="r")
+            return "0" in root
+        except Exception:
+            return False
+    return False
 
 
 def _abs_url(request: Request, path: str) -> str:
@@ -349,14 +392,13 @@ def _override_spatial_extent_from_artifact(collection: dict[str, Any], artifact:
 
 def _override_temporal_extent_from_artifact(collection: dict[str, Any], artifact: ArtifactRecord) -> None:
     temporal = artifact.coverage.temporal
-    start = parse_period_string_to_datetime(temporal.start).isoformat().replace("+00:00", "Z")
-    end = parse_period_string_to_datetime(temporal.end).isoformat().replace("+00:00", "Z")
-    collection["extent"]["temporal"]["interval"] = [
-        [
-            start,
-            end,
-        ]
-    ]
+
+    def _fmt(period: str | None) -> str | None:
+        return parse_period_string_to_datetime(period).isoformat().replace("+00:00", "Z") if period else None
+
+    start = _fmt(temporal.start)
+    end = _fmt(temporal.end)
+    collection["extent"]["temporal"]["interval"] = [[start, end]]
     dimensions = collection.setdefault("cube:dimensions", {})
     for key, value in dimensions.items():
         if isinstance(value, dict) and value.get("type") == "temporal":
@@ -411,6 +453,9 @@ def _keywords(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> list[
 
 def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     metadata: dict[str, object] = {"zarr:node_type": "group"}
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        metadata["zarr:zarr_format"] = 3
+        return metadata
     artifact_path = _artifact_store_path(artifact)
     consolidated = _zarr_consolidated_flag(artifact_path)
     if consolidated is not None:
@@ -428,8 +473,31 @@ def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     return metadata
 
 
-def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, bool | None]:
-    return {"consolidated": _zarr_consolidated_flag(_artifact_store_path(artifact))}
+def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, object]:
+    artifact_path = _artifact_store_path(artifact)
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        # Icechunk stores served over HTTP must use consolidated=False so that
+        # xarray reads zarr.json metadata directly rather than attempting HTTP
+        # directory listings (which our endpoint doesn't support).
+        # Pyramid stores also need group="0" — the root URL is exposed for
+        # zarr-layer zoom selection but data variables live under group "0".
+        kwargs: dict[str, object] = {"consolidated": False}
+        try:
+            import zarr
+
+            from climate_api.ingest.store import open_or_create_repo
+
+            icechunk_path = Path(artifact_path)
+            if icechunk_path.exists():
+                repo = open_or_create_repo(icechunk_path)
+                session = repo.readonly_session("main")
+                root = zarr.open_group(session.store, mode="r")
+                if "multiscales" in root.attrs:
+                    kwargs["group"] = "0"
+        except Exception:
+            pass
+        return kwargs
+    return {"consolidated": _zarr_consolidated_flag(artifact_path)}
 
 
 def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> dict[str, Any] | None:
@@ -438,15 +506,21 @@ def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> 
         return None
     colormap_name = display.get("colormap")
     value_range = display.get("range")
-    if not isinstance(colormap_name, str) or not isinstance(value_range, list) or len(value_range) != 2:
-        return None
+    palette = display.get("palette")
+
     render: dict[str, Any] = {
         "title": artifact.dataset_name,
         "assets": ["zarr"],
-        "rescale": [[float(value_range[0]), float(value_range[1])]],
-        "colormap_name": colormap_name,
         "climate_api:variable": artifact.variable,
     }
+
+    if isinstance(palette, dict) and palette:
+        render["climate_api:palette"] = {str(k): str(v) for k, v in palette.items()}
+    elif isinstance(colormap_name, str) and isinstance(value_range, list) and len(value_range) == 2:
+        render["colormap_name"] = colormap_name
+        render["rescale"] = [[float(value_range[0]), float(value_range[1])]]
+    else:
+        return None
     nodata = display.get("nodata")
     if nodata is not None:
         render["nodata"] = float(nodata)
@@ -473,4 +547,39 @@ def _zarr_consolidated_flag(artifact_path: str) -> bool | None:
         return True
     if (store_root / ".zgroup").exists():
         return False
+    return None
+
+
+def _detect_dataset_crs(ds: Any) -> str | None:
+    """Read the EPSG CRS code from a dataset, or None if undetectable.
+
+    Checks (in order): spatial_ref WKT coordinate, then dimension units/standard_name.
+    Used to override the deployment-wide proj:code with the actual native CRS of the
+    data so that datasets stored in WGS84 (e.g. ERA5-Land, WorldPop) are not
+    misidentified as projected.
+    """
+    if not hasattr(ds, "coords"):
+        return None
+    if "spatial_ref" in ds.coords:
+        try:
+            import pyproj
+
+            attrs = dict(ds["spatial_ref"].attrs)
+            wkt = attrs.get("crs_wkt") or attrs.get("spatial_ref")
+            if wkt:
+                crs = pyproj.CRS.from_wkt(str(wkt))
+                epsg = crs.to_epsg()
+                if epsg:
+                    return f"EPSG:{epsg}"
+        except Exception:
+            pass
+    for dim in set(getattr(ds, "dims", {})):
+        if dim not in ds.coords:
+            continue
+        attrs = dict(ds[dim].attrs)
+        if attrs.get("units") in ("degrees_east", "degrees_north") or attrs.get("standard_name") in (
+            "longitude",
+            "latitude",
+        ):
+            return "EPSG:4326"
     return None
