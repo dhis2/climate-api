@@ -1015,7 +1015,7 @@ def _default_request_end(period_type: str) -> str:
     """Return the current dataset-native period string for omitted ingestion end values."""
     if period_type == "hourly":
         return datetime_to_period_string(utc_now(), period_type)
-    if period_type == "daily":
+    if period_type in ("daily", "dekadal"):
         return utc_today().isoformat()
     if period_type == "weekly":
         return datetime_to_period_string(utc_now(), period_type)
