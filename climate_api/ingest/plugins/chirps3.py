@@ -3,8 +3,8 @@
 Authentication: none required (public COG files on data.chc.ucsb.edu).
 
 Daily COG files are fetched with HTTP range requests so only the bbox
-window is downloaded per period. CHIRPS3 "final/rnl" data is released
-in complete months with a consistent ~2-month publication lag.
+window is downloaded per period. CHIRPS3 "final/rnl" data is released in
+complete months; the plugin probes the CDN to find the actual latest month.
 
 URL layout (final):
   https://data.chc.ucsb.edu/products/CHIRPS/v3.0/daily/final/{flavor}/cogs/
@@ -133,16 +133,32 @@ class Chirps3Plugin:
         )
 
     def _availability_cutoff(self) -> date:
-        """Return the last day of the most recent complete published month.
+        """Return the last day of the most recently published complete month.
 
-        CHIRPS3 final/rnl data lags ~2 months regardless of the current day,
-        so always go back 2 months to avoid requesting files that don't exist yet.
+        Scans backward from the most recent months with a HEAD request on the
+        last-day COG URL so the cutoff reflects the actual CDN state rather than
+        a hardcoded lag assumption.
         """
+        import requests
+
         today = date.today()
         y, m = today.year, today.month
-        for _ in range(2):
+        for _ in range(6):
             m -= 1
             if m == 0:
                 m, y = 12, y - 1
-        last_day = calendar.monthrange(y, m)[1]
-        return date(y, m, last_day)
+            last_day = calendar.monthrange(y, m)[1]
+            candidate = date(y, m, last_day)
+            try:
+                resp = requests.head(self._url_for_day(candidate), timeout=10, allow_redirects=True)
+                if resp.status_code == 200:
+                    return candidate
+            except Exception:
+                continue
+        # Fallback: 3 months back (safe)
+        y, m = today.year, today.month
+        for _ in range(3):
+            m -= 1
+            if m == 0:
+                m, y = 12, y - 1
+        return date(y, m, calendar.monthrange(y, m)[1])

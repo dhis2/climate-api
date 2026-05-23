@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import numpy as np
@@ -28,8 +28,6 @@ _STORAGE_OPTIONS = {"client_kwargs": {"trust_env": True}}
 
 # ERA5-Land native resolution: 0.1° × 0.1° (~9 km at equator).
 _ERA5_LAND_RES_DEG = 0.1
-# ERA5-Land on DestinE has roughly a 15-day publication lag.
-_LAG_DAYS = 15
 
 
 class Era5LandPlugin:
@@ -69,9 +67,19 @@ class Era5LandPlugin:
         )
 
     def periods(self, start: str, end: str) -> list[str]:
-        """Return hourly period IDs available within the provider's lag window."""
-        cutoff = date.today() - timedelta(days=_LAG_DAYS)
-        return enumerate_periods(start, end, "hourly", cutoff=cutoff)
+        """Return hourly period IDs up to the last timestamp published in the remote store."""
+        latest = self._latest_available()
+        return enumerate_periods(start, min(end, latest), "hourly")
+
+    def _latest_available(self) -> str:
+        """Read the last valid_time from the remote Zarr store (metadata only, no data loaded)."""
+        ds = xr.open_dataset(
+            _DESTINE_ZARR_URL,
+            engine="zarr",
+            storage_options=_STORAGE_OPTIONS,
+            chunks={},
+        )
+        return str(np.datetime64(ds.valid_time.values[-1], "h"))
 
     def fetch_period(self, period_id: str, bbox: list[float], **_: Any) -> xr.Dataset:
         """Fetch one hourly period from the remote zarr store."""

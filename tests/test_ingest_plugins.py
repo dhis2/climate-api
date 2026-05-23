@@ -250,69 +250,79 @@ class TestChirps3Plugin:
         assert "prelim/sat/2024" in url
         assert "chirps-v3.0.prelim.2024.11.05.tif" in url
 
-    # Period generation
+    # Period generation — mock _availability_cutoff to isolate periods() logic
+
+    def _periods_with_cutoff(self, plugin: Any, start: str, end: str, cutoff: date) -> list[str]:
+        with patch.object(plugin, "_availability_cutoff", return_value=cutoff):
+            return plugin.periods(start, end)
 
     def test_periods_returns_daily_dates(self) -> None:
         plugin = self._make_plugin()
-        # 2 months back from April = end of February (2024 is a leap year → Feb 29)
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 4, 15)
-            mock_date.fromisoformat = date.fromisoformat
-            mock_date.side_effect = date
-            periods = plugin.periods("2024-02-01", "2024-03-31")
-        # Cutoff: end of February 2024 (29 days — 2024 is leap)
+        periods = self._periods_with_cutoff(plugin, "2024-02-01", "2024-03-31", date(2024, 2, 29))
         assert periods[0] == "2024-02-01"
         assert periods[-1] == "2024-02-29"
         assert len(periods) == 29
 
-    def test_periods_respects_2month_lag(self) -> None:
+    def test_periods_respects_cutoff(self) -> None:
         plugin = self._make_plugin()
-        # 2 months back from March = end of January, regardless of day-of-month
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 3, 10)
-            mock_date.fromisoformat = date.fromisoformat
-            mock_date.side_effect = date
-            periods = plugin.periods("2024-01-01", "2024-03-31")
+        periods = self._periods_with_cutoff(plugin, "2024-01-01", "2024-03-31", date(2024, 1, 31))
         assert periods[-1] == "2024-01-31"
 
     def test_periods_empty_when_start_after_cutoff(self) -> None:
         plugin = self._make_plugin()
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 3, 25)
-            mock_date.fromisoformat = date.fromisoformat
-            mock_date.side_effect = date
-            periods = plugin.periods("2024-03-01", "2024-03-31")
+        periods = self._periods_with_cutoff(plugin, "2024-03-01", "2024-03-31", date(2024, 2, 29))
         assert periods == []
 
     def test_periods_consecutive(self) -> None:
         plugin = self._make_plugin()
-        # 2 months back from May = end of March
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 5, 25)
-            mock_date.fromisoformat = date.fromisoformat
-            mock_date.side_effect = date
-            periods = plugin.periods("2024-03-01", "2024-03-05")
+        periods = self._periods_with_cutoff(plugin, "2024-03-01", "2024-03-05", date(2024, 3, 31))
         assert periods == ["2024-03-01", "2024-03-02", "2024-03-03", "2024-03-04", "2024-03-05"]
 
     def test_periods_single_day(self) -> None:
         plugin = self._make_plugin()
-        # 2 months back from May = end of March
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 5, 25)
-            mock_date.fromisoformat = date.fromisoformat
-            mock_date.side_effect = date
-            periods = plugin.periods("2024-03-01", "2024-03-01")
+        periods = self._periods_with_cutoff(plugin, "2024-03-01", "2024-03-01", date(2024, 3, 31))
         assert periods == ["2024-03-01"]
 
     def test_periods_spans_months(self) -> None:
         plugin = self._make_plugin()
-        # 2 months back from June = end of April
-        with patch("climate_api.ingest.plugins.chirps3.date") as mock_date:
-            mock_date.today.return_value = date(2024, 6, 25)
+        periods = self._periods_with_cutoff(plugin, "2024-03-30", "2024-04-02", date(2024, 4, 30))
+        assert periods == ["2024-03-30", "2024-03-31", "2024-04-01", "2024-04-02"]
+
+    # _availability_cutoff — mock HTTP to test CDN probing logic
+
+    def test_availability_cutoff_returns_first_200_month(self) -> None:
+        plugin = self._make_plugin()
+        # CDN has Feb 29 but not March 31
+        def fake_head(url: str, **_: Any) -> MagicMock:
+            resp = MagicMock()
+            resp.status_code = 200 if "2024.02.29" in url else 404
+            return resp
+        with (
+            patch("climate_api.ingest.plugins.chirps3.date") as mock_date,
+            patch("requests.head", side_effect=fake_head),
+        ):
+            mock_date.today.return_value = date(2024, 4, 15)
             mock_date.fromisoformat = date.fromisoformat
             mock_date.side_effect = date
-            periods = plugin.periods("2024-03-30", "2024-04-02")
-        assert periods == ["2024-03-30", "2024-03-31", "2024-04-01", "2024-04-02"]
+            cutoff = plugin._availability_cutoff()
+        assert cutoff == date(2024, 2, 29)
+
+    def test_availability_cutoff_falls_back_on_all_404(self) -> None:
+        plugin = self._make_plugin()
+        def fake_head(url: str, **_: Any) -> MagicMock:
+            resp = MagicMock()
+            resp.status_code = 404
+            return resp
+        with (
+            patch("climate_api.ingest.plugins.chirps3.date") as mock_date,
+            patch("requests.head", side_effect=fake_head),
+        ):
+            mock_date.today.return_value = date(2024, 6, 1)
+            mock_date.fromisoformat = date.fromisoformat
+            mock_date.side_effect = date
+            cutoff = plugin._availability_cutoff()
+        # Fallback: 3 months back from June = end of March
+        assert cutoff == date(2024, 3, 31)
 
     # probe / GridSpec
 
