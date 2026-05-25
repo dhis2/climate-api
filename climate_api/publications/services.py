@@ -162,7 +162,7 @@ def _provider_format(artifact_format: ArtifactFormat) -> dict[str, str]:
     return {"name": "netcdf", "mimetype": "application/x-netcdf"}
 
 
-def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
+def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str | None]:
     """Inspect an artifact and return provider axis field names."""
     data_path = record.asset_paths[0]
     if record.format == ArtifactFormat.ICECHUNK:
@@ -174,7 +174,10 @@ def _provider_axes(record: ArtifactRecord) -> tuple[str, str, str]:
 
     try:
         x_field, y_field = get_x_y_dims(ds)
-        time_field = get_time_dim(ds)
+        try:
+            time_field: str | None = get_time_dim(ds)
+        except ValueError:
+            time_field = None
         return x_field, y_field, time_field
     finally:
         ds.close()
