@@ -412,7 +412,7 @@ def test_plan_sync_for_plugin_backed_icechunk_skips_non_local_store_path(
     assert result.action == SyncAction.APPEND
     assert result.current_end == "2026-01-15"
     assert read_calls == []
-    assert any("non-local" in message for message in warnings)
+    assert any("non-local URI" in message for message in warnings)
 
 
 def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_store_read_fails(
@@ -516,7 +516,7 @@ def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_unt
 
     assert result.action == SyncAction.APPEND
     assert result.current_end == "2026-01-15"
-    assert any("non-local" in message for message in warnings)
+    assert any("untrusted local path" in message for message in warnings)
 
 
 def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_committed_period_is_malformed(

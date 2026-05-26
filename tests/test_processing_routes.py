@@ -25,6 +25,7 @@ def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
     payload = response.json()
     assert payload["id"] == "resample"
     assert payload["title"] == "Temporal resampling"
+    assert len(payload["jobControlOptions"]) == 2
     assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
     assert "execution_function" not in payload
     assert payload["inputs"]["source_dataset_id"]["required"] is True
@@ -38,6 +39,7 @@ def test_get_ingest_process_detail_returns_public_metadata(client: TestClient) -
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "ingestion"
+    assert len(payload["jobControlOptions"]) == 2
     assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
     assert payload["inputs"]["dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True
@@ -50,6 +52,7 @@ def test_get_sync_process_detail_returns_public_metadata(client: TestClient) -> 
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "sync"
+    assert len(payload["jobControlOptions"]) == 2
     assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
     assert payload["inputs"]["dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True

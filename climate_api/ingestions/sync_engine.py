@@ -429,19 +429,19 @@ def _artifact_storage_roots() -> tuple[Path, ...]:
     return ((xdg_data / "climate-api" / "downloads").resolve(),)
 
 
-def _resolve_local_artifact_path(raw_path: str | None) -> Path | None:
-    """Return a trusted local artifact path, or None for non-local/unsupported paths."""
+def _resolve_local_artifact_path(raw_path: str | None) -> tuple[Path | None, str | None]:
+    """Return a trusted local artifact path plus a fallback reason when unavailable."""
     if raw_path is None:
-        return None
+        return None, None
     if len(raw_path) >= 3 and raw_path[1] == ":" and raw_path[0].isalpha() and raw_path[2] in ("\\", "/"):
         candidate = Path(raw_path)
     else:
         parsed = urlparse(raw_path)
         if parsed.scheme and parsed.scheme != "file":
-            return None
+            return None, "non-local URI"
         if parsed.scheme == "file":
             if parsed.netloc not in ("", "localhost"):
-                return None
+                return None, "non-local file URI"
             candidate = Path(unquote(parsed.path))
         else:
             candidate = Path(raw_path)
@@ -451,8 +451,8 @@ def _resolve_local_artifact_path(raw_path: str | None) -> Path | None:
             resolved.relative_to(root)
         except ValueError:
             continue
-        return resolved
-    return None
+        return resolved, None
+    return None, "untrusted local path"
 
 
 def _sync_current_end(*, source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> str:
@@ -474,11 +474,12 @@ def _sync_current_end(*, source_dataset: dict[str, Any], latest_artifact: Artifa
     )
     if raw_artifact_path is None:
         return latest_artifact.coverage.temporal.end
-    local_artifact_path = _resolve_local_artifact_path(raw_artifact_path)
+    local_artifact_path, path_reason = _resolve_local_artifact_path(raw_artifact_path)
     if local_artifact_path is None:
         logger.warning(
-            "Sync planning skipped committed-store inspection for dataset '%s' because artifact path is non-local: %s",
+            "Sync planning skipped committed-store inspection for dataset '%s' because artifact path is %s: %s",
             source_dataset.get("id", "<unknown>"),
+            path_reason or "unsupported",
             raw_artifact_path,
         )
         return latest_artifact.coverage.temporal.end
