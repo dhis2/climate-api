@@ -474,7 +474,10 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
 
 
 def test_load_streaming_plugin_rejects_non_callable_symbol() -> None:
-    with pytest.raises(services.HTTPException, match="is not callable"):
+    with pytest.raises(
+        services.HTTPException,
+        match="Failed to load ingestion.plugin 'climate_api.ingestions.services.logger'",
+    ):
         services._load_streaming_plugin(
             "climate_api.ingestions.services.logger",
             params={},
@@ -488,7 +491,10 @@ def test_load_streaming_plugin_rejects_symbol_outside_plugin_protocol(monkeypatc
 
     monkeypatch.setattr(services, "_NotAPlugin", _NotAPlugin, raising=False)
 
-    with pytest.raises(services.HTTPException, match="does not implement the required streaming plugin contract"):
+    with pytest.raises(
+        services.HTTPException,
+        match="Failed to load ingestion.plugin 'climate_api.ingestions.services._NotAPlugin'",
+    ):
         services._load_streaming_plugin(
             "climate_api.ingestions.services._NotAPlugin",
             params={"stage": "final"},
