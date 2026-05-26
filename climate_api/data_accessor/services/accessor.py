@@ -1,15 +1,16 @@
-"""Loading raster data from downloaded files into xarray."""
+"""Loading raster data from downloaded files and stores into xarray."""
 
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from ...data_manager.services.downloader import get_cache_files, get_zarr_path
+from ...data_manager.services.downloader import get_cache_files, get_icechunk_path, get_zarr_path
 from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
 
@@ -24,21 +25,26 @@ def get_data(
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
     logger.info("Opening dataset")
-    zarr_path = get_zarr_path(dataset)
-    if zarr_path:
-        logger.info(f"Using optimized zarr file: {zarr_path}")
-        ds = open_zarr_dataset(str(zarr_path))
+    icechunk_path = get_icechunk_path(dataset)
+    if icechunk_path.exists():
+        logger.info("Using Icechunk-backed store: %s", icechunk_path)
+        ds = open_icechunk_dataset(icechunk_path)
     else:
-        logger.warning(
-            f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
-        )
-        files = get_cache_files(dataset)
-        ds = xr.open_mfdataset(
-            files,
-            data_vars="minimal",
-            coords="minimal",  # pyright: ignore[reportArgumentType]
-            compat="override",
-        )
+        zarr_path = get_zarr_path(dataset)
+        if zarr_path:
+            logger.info(f"Using optimized zarr file: {zarr_path}")
+            ds = open_zarr_dataset(str(zarr_path))
+        else:
+            logger.warning(
+                f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
+            )
+            files = get_cache_files(dataset)
+            ds = xr.open_mfdataset(
+                files,
+                data_vars="minimal",
+                coords="minimal",  # pyright: ignore[reportArgumentType]
+                compat="override",
+            )
 
     if start and end:
         logger.info(f"Subsetting time to {start} and {end}")
@@ -73,15 +79,17 @@ def get_data_coverage_for_paths(
     dataset: dict[str, Any],
     *,
     zarr_path: str | None = None,
+    icechunk_path: str | None = None,
     netcdf_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     """Return coverage metadata for the concrete files created for one artifact."""
-    if zarr_path is not None and netcdf_paths:
-        raise ValueError("Provide either zarr_path or netcdf_paths when computing coverage, not both")
-    if zarr_path is None and not netcdf_paths:
-        raise ValueError("Coverage calculation requires either zarr_path or at least one netcdf path")
+    provided = sum(value is not None for value in (zarr_path, icechunk_path)) + int(bool(netcdf_paths))
+    if provided != 1:
+        raise ValueError("Coverage calculation requires exactly one artifact source")
 
-    if zarr_path is not None:
+    if icechunk_path is not None:
+        ds = open_icechunk_dataset(icechunk_path)
+    elif zarr_path is not None:
         ds = open_zarr_dataset(zarr_path)
     else:
         assert netcdf_paths is not None
@@ -118,6 +126,31 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
             raise ValueError(
                 f"Zarr store at {zarr_path!r} has no data variables at the root "
                 f"and base pyramid level {level0_path!r} could not be opened"
+            ) from exc
+        ds.close()
+        ds = level0
+    return ds
+
+
+def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
+    """Open an Icechunk-backed dataset through a readonly repository session."""
+    import icechunk
+
+    path = Path(store_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Icechunk store not found: {path}")
+    storage = icechunk.local_filesystem_storage(str(path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+    ds: xr.Dataset = xr.open_zarr(session.store)
+    if not ds.data_vars:
+        try:
+            level0: xr.Dataset = xr.open_zarr(session.store, group="0")
+        except Exception as exc:
+            ds.close()
+            raise ValueError(
+                f"Icechunk store at {path!r} has no data variables at the root "
+                "and base pyramid level '0' could not be opened"
             ) from exc
         ds.close()
         ds = level0

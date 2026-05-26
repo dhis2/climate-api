@@ -54,7 +54,15 @@ def download_dataset(
     """
     _validate_spatial_coverage(dataset, bbox if bbox is not None else _bbox_from_env())
     ingestion = dataset["ingestion"]
-    eo_download_func_path = ingestion["function"]
+    eo_download_func_path = ingestion.get("function")
+    if not isinstance(eo_download_func_path, str) or not eo_download_func_path:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Dataset '{dataset['id']}' does not expose the legacy download path. "
+                "Use the plugin-backed ingestion process instead."
+            ),
+        )
     eo_download_func = _get_dynamic_function(eo_download_func_path)
     before_files = {path.resolve(): path.stat().st_mtime_ns for path in get_cache_files(dataset)}
 
@@ -339,6 +347,12 @@ def get_zarr_path(dataset: dict[str, Any]) -> Path | None:
     if optimized.exists():
         return optimized
     return None
+
+
+def get_icechunk_path(dataset: dict[str, Any]) -> Path:
+    """Return the Icechunk store path for a dataset."""
+    prefix = _get_cache_prefix(dataset)
+    return DOWNLOAD_DIR / f"{prefix}.icechunk"
 
 
 def _validate_spatial_coverage(dataset: dict[str, Any], bbox: list[float] | None) -> None:

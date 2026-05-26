@@ -127,8 +127,41 @@ Omit `sync.availability` entirely for `static` datasets or when you always want 
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `ingestion.function` | Yes | Dotted path to the download function |
-| `ingestion.default_params` | No | Extra keyword arguments forwarded to the download function |
+| `ingestion.function` | Legacy | Dotted path to the download function |
+| `ingestion.plugin` | New path | Dotted path to a streaming plugin class |
+| `ingestion.default_params` | No | Extra keyword arguments applied to the selected ingestion contract (legacy download function and/or streaming plugin) |
+
+The platform currently supports two ingestion contracts:
+
+- `ingestion.function` for the legacy download-to-NetCDF path
+- `ingestion.plugin` for the new per-period streaming path
+
+The streaming plugin contract is:
+
+```python
+class MyStreamingPlugin:
+    max_concurrency = 4
+    commit_batch_size = 30
+
+    async def probe(self, bbox: list[float], **params) -> GridSpec:
+        ...
+
+    async def periods(self, start: str, end: str) -> list[str]:
+        ...
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+        ...
+```
+
+For streaming plugins, `ingestion.default_params` may be used both:
+
+- as constructor kwargs when the plugin class is instantiated
+- as `**params` forwarded into `probe(...)` and `fetch_period(...)`
+
+Current limitation: only the initial streaming ingest path is implemented.
+Plugin-backed datasets currently rematerialize on sync rather than using delta
+append. Rechunking, pyramid behavior, and full migration away from
+`ingestion.function` for all remaining built-ins are follow-up work.
 
 **Transforms** — applied after download, before writing to Zarr:
 

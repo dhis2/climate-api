@@ -34,6 +34,7 @@ dependencies = [
     "metpy>=1.7,<2",
     "xstac>=1.0,<2",
     "zarr>=3.1.6,<4",
+    "icechunk>=2.0,<3",
     "geozarr-toolkit==0.1.*",
     "topozarr==0.0.*",
     "rioxarray>=0.17",

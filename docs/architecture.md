@@ -16,11 +16,39 @@ A template defines:
 
 - the dataset identifier and display metadata
 - the variable name, units, and period type
-- how to download the data (`ingestion.function`)
+- how to ingest the data (`ingestion.function` today, `ingestion.plugin` for the
+  new streaming path)
 - what transforms to apply (`transforms`)
 - what sync strategy to use (`sync.kind`, `sync.execution`)
 
 Templates are config, not code. If a template needs custom logic, the logic goes into a Python function referenced by dotted path from the YAML.
+
+### Streaming ingest
+
+The platform is currently in a transition between two ingestion strategies:
+
+- the legacy download-and-rebuild path based on `ingestion.function`
+- the new per-period streaming path based on `ingestion.plugin`
+
+The new path is implemented internally in `climate_api.streaming`, while
+`climate_api.ingestions` remains the application-facing layer that owns routes,
+artifact records, and publication state.
+
+For the first implementation slice:
+
+- CHIRPS3 initial ingest uses the streaming path
+- CHIRPS3 no longer depends on `ingestion.function`
+- data is written directly into flat Icechunk-backed Zarr v3 stores with
+  GeoZarr metadata
+- resume is based on committed store state plus an optional job cursor
+- sync is not yet store-based; plugin-backed datasets currently rematerialize on
+  sync rather than using delta append
+- `/zarr/{dataset_id}` serving for Icechunk-backed datasets is not yet exposed
+- rechunking and pyramid behavior are deferred
+
+This split is intentional. It keeps the first streaming implementation
+end-to-end for one source without mixing in the later sync and storage-finality
+work.
 
 ### Artifact
 
@@ -58,10 +86,18 @@ Template (YAML)
     │  POST /ingestions  (or  POST /sync)
     ▼
 Ingestion
-    │  call ingestion function → NetCDF files on disk
-    │  apply transforms
-    │  reproject to instance CRS
-    │  write GeoZarr store
+    │  legacy path:
+    │    call ingestion function → NetCDF files on disk
+    │    apply transforms
+    │    reproject to instance CRS
+    │    write GeoZarr store
+    │
+    │  streaming path:
+    │    probe source grid
+    │    enumerate periods
+    │    fetch missing periods
+    │    append each period directly to Icechunk-backed Zarr v3
+    │
     │  compute coverage (spatial + temporal extent of actual data)
     ▼
 Artifact (internal record)
@@ -75,9 +111,14 @@ Managed dataset (public API)
     └── /ogcapi/collections/{id} — OGC API access
 ```
 
-The ingestion function is called identically by both `POST /ingestions` and `POST /sync` — the framework invokes it the same way regardless of the trigger. A correctly written ingestion function works for both without any changes.
+The legacy ingestion function is called identically by both `POST /ingestions`
+and `POST /sync` — the framework invokes it the same way regardless of the
+trigger. A correctly written ingestion function works for both without any
+changes.
 
-The framework is responsible for everything from "write zarr" onward. An ingestion function only needs to write NetCDF files to a given directory. The framework then:
+For the legacy path, the framework is responsible for everything from "write
+zarr" onward. An ingestion function only needs to write NetCDF files to a given
+directory. The framework then:
 
 1. reads and normalises the coordinate names
 2. applies transforms (unit conversion, etc.)
@@ -88,7 +129,133 @@ The framework is responsible for everything from "write zarr" onward. An ingesti
 7. stores the artifact record
 8. publishes the managed dataset through pygeoapi if `publish=true`
 
-This division means that ingestion functions do not need to know about zarr conventions, STAC, OGC, or pygeoapi. They write data files; the framework handles everything else.
+This division means that ingestion functions do not need to know about zarr
+conventions, STAC, OGC, or pygeoapi. They write data files; the framework
+handles everything else.
+
+For the streaming path, the division is different: the plugin owns source
+probing, period enumeration, and fetching one period as an `xarray.Dataset`.
+The framework still owns job callbacks, artifact persistence, publication
+metadata, and all public API integration.
+
+---
+
+## Processes, execution, and jobs
+
+The platform is moving toward a shared process-based execution model.
+
+The hierarchy is:
+
+```text
+/processes
+  |
+  +-- /processes/ingestion
+  |      |
+  |      +-- /execution
+  |             |
+  |             +-- creates or runs a job
+  |                    |
+  |                    +-- calls the ingestion execution function
+  |                           |
+  |                           +-- climate_api.ingestions.services
+  |                                  |
+  |                                  +-- climate_api.streaming      (new path)
+  |                                  +-- legacy download path       (old path)
+  |
+  +-- /processes/resample
+         |
+         +-- /execution
+                |
+                +-- creates or runs a job
+                       |
+                       +-- calls the resample execution function
+                              |
+                              +-- climate_api.processing.services
+                              +-- climate_api.ingestions.services
+```
+
+The important distinction is:
+
+- **process** — a named operation the system can perform
+- **execution** — an invocation of that operation
+- **job** — the persisted runtime record of one execution
+
+### Process
+
+A process is the catalog-level concept. It defines:
+
+- the public operation id, for example `ingestion` or `resample`
+- the input and output contract
+- whether sync and/or async execution is supported
+- the Python function that implements the operation
+
+Examples:
+
+- `ingestion` materializes a managed dataset from a dataset template
+- `resample` derives a new managed dataset from an existing one
+
+### Execution
+
+`/execution` means “run this process now”.
+
+Execution is an invocation surface shared by all processes. It is not specific
+to ingestion, resampling, or any one domain operation. This gives the platform
+one consistent way to run long-lived work.
+
+### Job
+
+A job is the operational state of one execution. Jobs sit at the runtime layer,
+not at the domain layer.
+
+Jobs provide:
+
+- status tracking
+- progress reporting
+- cursor/checkpoint persistence
+- cancellation
+- retry and recovery after restart
+- a durable result or error record
+
+This is why jobs belong under execution: they describe *how one invocation is
+running*, not *what the invocation means*.
+
+### Domain processes on the shared runtime
+
+Both ingestion and resampling use the same execution substrate:
+
+```text
+process definition
+    -> execution request
+        -> job runtime
+            -> domain service
+                -> artifact / dataset update
+```
+
+For ingestion:
+
+- the domain goal is to materialize a managed dataset
+- the implementation may use the new `streaming` engine or the old download
+  path depending on the dataset contract
+
+For resampling:
+
+- the domain goal is to derive a new managed dataset from an existing one
+- the implementation uses the processing/resample services, then persists the
+  result through the same artifact layer
+
+The jobs framework is therefore horizontal. It does not need to know whether a
+process is ingestion, resampling, or something else later. It only needs to run
+the registered execution function and persist lifecycle state.
+
+### Current API stance
+
+For ingestion specifically:
+
+- `/processes/ingestion/execution` is the forward execution path
+- `/ingestions` is the legacy synchronous surface and may be reworked or removed later
+
+This keeps the public domain noun consistent (`ingestion`) while moving actual
+runtime execution onto the shared async process + job framework.
 
 ---
 
@@ -169,6 +336,35 @@ ingestion:
 ```
 
 No framework changes are needed to support a new variable from the same source.
+
+### Streaming plugin
+
+The new streaming path replaces the download-function contract with a narrower
+three-method plugin:
+
+```python
+class MyStreamingPlugin:
+    max_concurrency = 4
+    commit_batch_size = 30
+
+    async def probe(self, bbox: list[float], **params) -> GridSpec:
+        ...
+
+    async def periods(self, start: str, end: str) -> list[str]:
+        ...
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+        ...
+```
+
+Responsibilities are intentionally split:
+
+- the plugin knows the source
+- the orchestrator knows resume, concurrency, and store commits
+- `climate_api.ingestions` knows artifacts, publication, and API responses
+
+Ticket 1 only uses this contract for direct CHIRPS3 ingest. Sync reuse and
+broader source migration are follow-up work.
 
 ### Transform function
 

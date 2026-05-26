@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from climate_api.ingestions.schemas import DatasetRecord
+from climate_api.ingestions.schemas import DatasetRecord, IngestionResponse
 from climate_api.processing import services as processing_services
 from tests.helpers import dataset_record
 
@@ -30,6 +30,18 @@ def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
     assert payload["inputs"]["source_dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True
     assert payload["outputs"]["artifact_id"]["type"] == "string"
+
+
+def test_get_ingest_process_detail_returns_public_metadata(client: TestClient) -> None:
+    response = client.get("/processes/ingestion")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "ingestion"
+    assert payload["jobControlOptions"] == ["sync-execute", "async-execute"]
+    assert payload["inputs"]["dataset_id"]["required"] is True
+    assert payload["inputs"]["publish"]["default"] is True
+    assert payload["outputs"]["ingestion_id"]["type"] == "string"
 
 
 def test_get_processes_omits_internal_only_processes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -172,6 +184,75 @@ def test_post_process_execution_honors_case_insensitive_prefer_tokens(
     payload = response.json()
     assert payload["status"] in {"accepted", "running", "successful"}
     assert response.headers["Location"].startswith("/jobs/")
+
+
+def test_post_ingest_execution_honors_respond_async(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.registry_datasets.get_dataset",
+        lambda dataset_id: {
+            "id": dataset_id,
+            "name": "CHIRPS3 precipitation",
+            "variable": "precip",
+            "period_type": "daily",
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+    )
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.get_extent_or_404",
+        lambda: {"bbox": [1.0, 2.0, 3.0, 4.0], "country_code": "SLE"},
+    )
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.services.create_artifact",
+        lambda **kwargs: type("Artifact", (), {"artifact_id": "artifact-123"})(),
+    )
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.services.get_ingestion_or_404",
+        lambda artifact_id: IngestionResponse(
+            ingestion_id=artifact_id,
+            status="completed",
+            dataset=dataset_record("chirps3_precipitation_daily"),
+        ),
+    )
+
+    response = client.post(
+        "/processes/ingestion/execution",
+        headers={"Prefer": "respond-async"},
+        json={
+            "dataset_id": "chirps3_precipitation_daily",
+            "start": "2026-01-01",
+            "end": "2026-01-03",
+            "publish": True,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] in {"accepted", "running", "successful"}
+    assert response.headers["Location"].startswith("/jobs/")
+
+
+def test_post_ingest_execution_returns_404_for_unknown_dataset(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.registry_datasets.get_dataset",
+        lambda dataset_id: None,
+    )
+
+    response = client.post(
+        "/processes/ingestion/execution",
+        json={
+            "dataset_id": "unknown_dataset",
+            "start": "2026-01-01",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dataset 'unknown_dataset' not found"
 
 
 def test_post_process_execution_rejects_async_when_process_is_sync_only(

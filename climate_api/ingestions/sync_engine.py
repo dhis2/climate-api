@@ -365,6 +365,16 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
+    ingestion = source_dataset.get("ingestion")
+    if isinstance(ingestion, dict):
+        plugin = ingestion.get("plugin")
+        if isinstance(plugin, str) and plugin:
+            logger.info(
+                "Sync append execution is not yet supported for plugin-backed dataset '%s'; "
+                "falling back to rematerialize",
+                source_dataset.get("id", "<unknown>"),
+            )
+            return False
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
     artifact_path = latest_artifact.path

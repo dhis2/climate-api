@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import icechunk
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +12,7 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_zarr_dataset
+from climate_api.data_accessor.services.accessor import _coverage_from_dataset, open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services import downloader
 from climate_api.ingestions import services as ingestion_services
 
@@ -266,6 +267,48 @@ def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(
     assert "does not cover this extent" in str(exc_info.value.detail)
 
 
+def test_download_dataset_returns_409_for_plugin_only_templates() -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=[-10.0, -10.0, 10.0, 10.0],
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "legacy download path" in str(exc_info.value.detail)
+
+
+def test_download_dataset_returns_409_for_empty_legacy_function_string() -> None:
+    dataset: dict[str, Any] = {
+        "id": "chirps3_precipitation_daily",
+        "ingestion": {"function": ""},
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        downloader.download_dataset(
+            dataset=dataset,
+            start="2020-01-01",
+            end="2020-01-31",
+            bbox=[-10.0, -10.0, 10.0, 10.0],
+            country_code=None,
+            overwrite=False,
+            background_tasks=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "legacy download path" in str(exc_info.value.detail)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -383,6 +426,42 @@ def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: 
         result.close()
 
 
+def test_open_icechunk_dataset_falls_back_to_level_0_when_root_has_no_data_vars(tmp_path: Path) -> None:
+    """Icechunk store with data only under group 0 falls back to the base level."""
+    store_path = tmp_path / "pyramid.icechunk"
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.create(storage)
+    session = repo.writable_session("main")
+    _make_dataset().to_zarr(session.store, group="0", mode="w", zarr_format=3)
+    session.commit("seed pyramid level 0")
+
+    result = open_icechunk_dataset(store_path)
+    try:
+        assert "pop_total" in result.data_vars
+        assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
+def test_open_icechunk_dataset_with_root_time_still_opens_level_0(tmp_path: Path) -> None:
+    """Root-level time coord does not confuse the Icechunk fallback."""
+    store_path = tmp_path / "pyramid.icechunk"
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.create(storage)
+    session = repo.writable_session("main")
+    ds = _make_dataset()
+    ds.to_zarr(session.store, group="0", mode="w", zarr_format=3)
+    ds[["time"]].to_zarr(session.store, mode="a", zarr_format=3)
+    session.commit("seed pyramid root time and level 0")
+
+    result = open_icechunk_dataset(store_path)
+    try:
+        assert "pop_total" in result.data_vars
+        assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
 # ---------------------------------------------------------------------------
 # build_dataset_zarr — flat path
 # ---------------------------------------------------------------------------
@@ -406,6 +485,10 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
         assert result.sizes["time"] == 2
     finally:
         result.close()
+
+    root = zarr.open_group(str(zarr_path), mode="r")
+    assert root.attrs["spatial:dimensions"] == ["x", "y"]
+    assert root.attrs["spatial:shape"] == [3, 3]
 
 
 def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -49,6 +49,9 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     collection_id = managed_dataset_id_for(record)
     data_path = record.path or record.asset_paths[0]
     is_pyramid_zarr = record.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir()
+    pygeoapi_path = (
+        None if record.format == ArtifactFormat.ICECHUNK or is_pyramid_zarr else f"/ogcapi/collections/{collection_id}"
+    )
     published_record = record.model_copy(
         update={
             "publication": record.publication.model_copy(
@@ -56,8 +59,8 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
                     "status": PublicationStatus.PUBLISHED,
                     "collection_id": collection_id,
                     "published_at": datetime.now(UTC),
-                    # Pyramid zarr stores are served via the /zarr endpoint, not pygeoapi.
-                    "pygeoapi_path": None if is_pyramid_zarr else f"/ogcapi/collections/{collection_id}",
+                    # Pyramid zarr stores and Icechunk artifacts are not served via pygeoapi.
+                    "pygeoapi_path": pygeoapi_path,
                 }
             )
         }
@@ -67,6 +70,10 @@ def publish_artifact(record: ArtifactRecord) -> ArtifactRecord:
     for artifact in list_artifacts().items:
         active = published_record if artifact.artifact_id == record.artifact_id else artifact
         if active.publication.status != PublicationStatus.PUBLISHED:
+            continue
+        if active.format == ArtifactFormat.ICECHUNK:
+            continue
+        if active.publication.collection_id == collection_id and published_record.publication.pygeoapi_path is None:
             continue
         data_path = active.path or active.asset_paths[0]
         if active.format == ArtifactFormat.ZARR and (Path(data_path) / "0").is_dir():

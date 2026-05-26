@@ -8,6 +8,7 @@ The same pattern applies at every extension point:
 | --------------- | ------------- | --------------- |
 | [Dataset templates](#dataset-templates) | YAML files | `plugins_dir/datasets/` |
 | [Ingestion functions](#ingestion-functions) | Python function, dotted path in YAML | any importable path |
+| [Streaming plugins](#streaming-plugins) | Python class, dotted path in YAML | any importable path |
 | [Transform functions](#transform-functions) | Python function, dotted path in YAML | any importable path |
 | [Processes](#processes) | YAML file + Python function | `plugins_dir/processes/` |
 
@@ -44,6 +45,51 @@ ingestion:
 ```
 
 The function must follow the download function contract (see [Adding custom datasets](adding_custom_datasets.md#step-1-write-the-download-function)). It can live anywhere that is importable — either an installed package or a module placed directly under `plugins_dir` (which is automatically added to `sys.path`).
+
+## Streaming plugins
+
+The `ingestion.plugin` field is a dotted Python path to a class implementing
+the new per-period streaming ingest contract:
+
+```yaml
+ingestion:
+  plugin: mypackage.sources.chirps3.CHIRPS3DailyPlugin
+  default_params:
+    stage: final
+```
+
+The class must expose:
+
+```python
+class MyStreamingPlugin:
+    max_concurrency = 4
+    commit_batch_size = 30
+
+    async def probe(self, bbox: list[float], **params) -> GridSpec:
+        ...
+
+    async def periods(self, start: str, end: str) -> list[str]:
+        ...
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params) -> xr.Dataset:
+        ...
+```
+
+`ingestion.default_params` are applied in two places:
+
+- they are passed to the plugin constructor as configuration kwargs
+- they are also forwarded into `probe(...)` and `fetch_period(...)` as `**params`
+
+Plugin authors may therefore keep source configuration in constructor state,
+per-call kwargs, or both.
+
+Streaming plugins are source adapters, not framework replacements. They should
+know how to enumerate and fetch source periods, while the framework handles
+resume, job callbacks, store commits, and artifact registration.
+
+Current scope note: the streaming path is implemented for initial ingest.
+Plugin-backed datasets currently rematerialize on sync, and broader sync reuse
+plus full migration away from `ingestion.function` are follow-up work.
 
 ---
 

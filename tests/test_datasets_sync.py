@@ -263,6 +263,46 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
     assert any("falling back to rematerialize" in message for message in warnings)
 
 
+def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_plugin_backed_dataset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
+        captured.update(kwargs)
+        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
+
+    infos: list[str] = []
+
+    def fake_info(message: str, *args: object) -> None:
+        infos.append(message % args if args else message)
+
+    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+    monkeypatch.setattr(sync_engine.logger, "info", fake_info)
+
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+
+    assert "download_start" in captured
+    assert captured["download_start"] is None
+    assert result.sync_detail.action == SyncAction.REMATERIALIZE
+    assert any("plugin-backed dataset" in message for message in infos)
+
+
 def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     dataset_id = "worldpop_population_yearly_sle"
     latest = _artifact(

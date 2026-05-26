@@ -11,6 +11,7 @@ class ArtifactFormat(StrEnum):
 
     ZARR = "zarr"
     NETCDF = "netcdf"
+    ICECHUNK = "icechunk"
 
 
 class PublicationStatus(StrEnum):
