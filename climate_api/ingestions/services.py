@@ -165,7 +165,18 @@ def create_artifact(
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, object]], None] | None = None,
 ) -> ArtifactRecord:
-    """Download a dataset, persist it locally, and store artifact metadata."""
+    """Materialize one managed dataset artifact and persist its metadata.
+
+    For legacy datasets this may download source files and optionally rebuild a
+    canonical Zarr artifact. For plugin-backed datasets the streaming engine is
+    always used and writes an Icechunk-backed store; `prefer_zarr` has no
+    effect there.
+
+    Plugin-backed sync requests may still pass `download_start` and
+    `download_end`, but those only inform the requested sync window. The
+    streaming engine remains store-authoritative and appends only periods that
+    are actually missing from the committed Icechunk store.
+    """
     period_type = str(dataset["period_type"])
     start = _normalize_request_period(start, period_type=period_type, field_name="start")
     end = _normalize_optional_request_period(end, period_type=period_type, field_name="end")
@@ -190,10 +201,12 @@ def create_artifact(
     )
     ingestion = dataset.get("ingestion")
     plugin_path = ingestion.get("plugin") if isinstance(ingestion, dict) else None
-    # Ticket 1 only moves direct ingest onto the streaming engine. Delta ingest
-    # still routes through the legacy download/rebuild path until sync is
-    # refactored to reuse committed store state.
-    if isinstance(plugin_path, str) and plugin_path and download_start is None and download_end is None:
+    # Plugin-backed datasets always route through the streaming engine.
+    # `download_start` / `download_end` may still be present for sync requests,
+    # but they describe the requested append window only. The streaming engine
+    # decides what to fetch from committed store state and always writes an
+    # Icechunk-backed store for plugin datasets.
+    if isinstance(plugin_path, str) and plugin_path:
         return _create_streaming_artifact(
             dataset=dataset,
             plugin_path=plugin_path,
@@ -359,11 +372,12 @@ def _create_streaming_artifact(
     is_cancel_requested: Callable[[], bool] | None = None,
     save_cursor: Callable[[dict[str, object]], None] | None = None,
 ) -> ArtifactRecord:
-    """Create or update one plugin-backed Icechunk artifact for initial ingest.
+    """Create or update one plugin-backed Icechunk artifact.
 
-    This helper is intentionally scoped to the direct ingest path. It does not
-    yet implement delta-download sync semantics or broader publication behavior
-    for Icechunk-backed datasets.
+    The same helper is used for both initial ingest and store-based sync. The
+    streaming orchestrator probes the plugin for the full requested range, then
+    appends only periods that are not already committed in the target
+    Icechunk-backed store.
     """
     if bbox is None:
         raise HTTPException(status_code=400, detail="Streaming ingest requires a bounding box")

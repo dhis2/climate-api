@@ -149,10 +149,8 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.reason == "new_periods_available"
-    assert (
-        result.sync_detail.message
-        == "Data exists through 2026-01-31. Sync will rematerialize the dataset through 2026-02-10."
-    )
+    assert "Data exists through 2026-01-31" in result.sync_detail.message
+    assert "Sync will rematerialize the dataset through 2026-02-10" in result.sync_detail.message
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
@@ -195,10 +193,9 @@ def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scop
     assert captured["download_end"] == "2026-02-10"
     assert result.sync_detail.action == SyncAction.APPEND
     assert result.sync_detail.reason == "new_periods_available_for_append"
-    assert (
-        result.sync_detail.message == "Data exists through 2026-01-31. Sync will download missing periods "
-        "2026-02-01 through 2026-02-10 and rebuild coverage through 2026-02-10."
-    )
+    assert "Data exists through 2026-01-31" in result.sync_detail.message
+    assert "Sync will download missing periods 2026-02-01 through 2026-02-10" in result.sync_detail.message
+    assert "rebuild coverage through 2026-02-10" in result.sync_detail.message
     assert result.sync_detail.current_start == "2026-01-01"
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
@@ -263,11 +260,17 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
     assert any("falling back to rematerialize" in message for message in warnings)
 
 
-def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_plugin_backed_dataset(
+def test_sync_dataset_append_policy_uses_store_based_append_for_plugin_backed_dataset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dataset_id = "chirps3_precipitation_daily_sle"
-    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id=dataset_id,
+        end="2026-01-31",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
     monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
     monkeypatch.setattr(
         services.registry_datasets,
@@ -286,7 +289,301 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_plugin_backe
         captured.update(kwargs)
         return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
 
+    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
+    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
+
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+
+    assert "download_start" in captured
+    assert captured["download_start"] == "2026-02-01"
+    assert captured["download_end"] == "2026-02-10"
+    assert result.sync_detail.action == SyncAction.APPEND
+    assert result.sync_detail.reason == "new_periods_available_for_append"
+    assert "Data exists through 2026-01-31" in result.sync_detail.message
+    assert "Sync will append missing periods 2026-02-01 through 2026-02-10" in result.sync_detail.message
+    assert "extend coverage through 2026-02-10" in result.sync_detail.message
+    assert result.message is not None
+    assert "appending missing periods" in result.message
+    assert "Icechunk store" in result.message
+
+
+def test_plan_sync_for_plugin_backed_icechunk_uses_committed_store_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-31",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+    latest.coverage.temporal.end = "2026-01-15"
+
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: {"2026-01-31"})
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.NO_OP
+    assert result.reason == "no_new_period"
+    assert result.current_end == "2026-01-31"
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_without_store_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+    latest.path = None
+    latest.asset_paths = []
+
+    read_calls: list[tuple[object, ...]] = []
+
+    def fake_read_committed_period_ids(*args: object, **kwargs: object) -> set[str]:
+        read_calls.append(args)
+        return {"2026-01-31"}
+
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", fake_read_committed_period_ids)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert read_calls == []
+
+
+def test_plan_sync_for_plugin_backed_icechunk_skips_non_local_store_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="s3://bucket/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    read_calls: list[tuple[object, ...]] = []
+    warnings: list[str] = []
+
+    def fake_read_committed_period_ids(*args: object, **kwargs: object) -> set[str]:
+        read_calls.append(args)
+        return {"2026-01-31"}
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", fake_read_committed_period_ids)
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert read_calls == []
+    assert any("non-local" in message for message in warnings)
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_store_read_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    warnings: list[str] = []
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(
+        sync_engine,
+        "read_committed_period_ids",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert any("falling back to artifact metadata" in message for message in warnings)
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_committed_set_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: set())
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_untrusted_local_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    warnings: list[str] = []
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/srv/app/data/downloads"),))
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert any("non-local" in message for message in warnings)
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_committed_period_is_malformed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    warnings: list[str] = []
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: {"not-a-period"})
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert any("malformed committed periods" in message for message in warnings)
+
+
+def test_sync_dataset_append_policy_falls_back_for_plugin_backed_non_icechunk_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset_id = "chirps3_precipitation_daily_sle"
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id=dataset_id,
+        end="2026-01-31",
+        path="/tmp/chirps3_precipitation_daily.zarr",
+    )
+    latest.format = ArtifactFormat.ZARR
+    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
+    monkeypatch.setattr(
+        services.registry_datasets,
+        "get_dataset",
+        lambda _: {
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+    )
+
+    captured: dict[str, object] = {}
     infos: list[str] = []
+
+    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
+        captured.update(kwargs)
+        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
 
     def fake_info(message: str, *args: object) -> None:
         infos.append(message % args if args else message)
@@ -299,8 +596,10 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_plugin_backe
 
     assert "download_start" in captured
     assert captured["download_start"] is None
+    assert captured["download_end"] is None
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert any("plugin-backed dataset" in message for message in infos)
+    assert result.sync_detail.reason == "new_periods_available"
+    assert any("requires an existing Icechunk artifact" in message for message in infos)
 
 
 def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,4 +1,4 @@
-"""Process execution wrappers for ingestion operations."""
+"""Process execution wrappers for ingestion and sync operations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent_or_404
 from climate_api.ingestions import services
-from climate_api.ingestions.schemas import IngestionResponse
+from climate_api.ingestions.schemas import IngestionResponse, SyncResponse
 
 
 def execute_ingestion(
@@ -45,3 +45,24 @@ def execute_ingestion(
         save_cursor=save_cursor,
     )
     return services.get_ingestion_or_404(artifact.artifact_id)
+
+
+def execute_sync(
+    *,
+    dataset_id: str,
+    end: str | None = None,
+    prefer_zarr: bool = True,
+    publish: bool = True,
+) -> SyncResponse:
+    """Execute one managed-dataset sync from existing artifact state.
+
+    `prefer_zarr` remains meaningful for legacy sync paths. Plugin-backed
+    Icechunk sync always uses the committed store append path and ignores that
+    preference.
+    """
+    return services.sync_dataset(
+        dataset_id=dataset_id,
+        end=end,
+        prefer_zarr=prefer_zarr,
+        publish=publish,
+    )
