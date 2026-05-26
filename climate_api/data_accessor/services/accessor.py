@@ -135,7 +135,6 @@ def open_zarr_dataset(zarr_path: str) -> xr.Dataset:
 def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
     """Open an Icechunk-backed dataset through a readonly repository session."""
     import icechunk
-    import zarr
 
     path = Path(store_path)
     if not path.exists():
@@ -143,9 +142,19 @@ def open_icechunk_dataset(store_path: str | Path) -> xr.Dataset:
     storage = icechunk.local_filesystem_storage(str(path))
     repo = icechunk.Repository.open(storage)
     session = repo.readonly_session("main")
-    root = zarr.open_group(session.store, mode="r")
-    group: str | None = "0" if not list(root.array_keys()) and "0" in root.group_keys() else None
-    return xr.open_zarr(session.store, group=group)  # type: ignore[no-any-return]
+    ds: xr.Dataset = xr.open_zarr(session.store)
+    if not ds.data_vars:
+        try:
+            level0: xr.Dataset = xr.open_zarr(session.store, group="0")
+        except Exception as exc:
+            ds.close()
+            raise ValueError(
+                f"Icechunk store at {path!r} has no data variables at the root "
+                "and base pyramid level '0' could not be opened"
+            ) from exc
+        ds.close()
+        ds = level0
+    return ds
 
 
 def _open_zarr(zarr_path: str) -> xr.Dataset:

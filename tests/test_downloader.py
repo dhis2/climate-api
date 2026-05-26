@@ -443,6 +443,25 @@ def test_open_icechunk_dataset_falls_back_to_level_0_when_root_has_no_data_vars(
         result.close()
 
 
+def test_open_icechunk_dataset_with_root_time_still_opens_level_0(tmp_path: Path) -> None:
+    """Root-level time coord does not confuse the Icechunk fallback."""
+    store_path = tmp_path / "pyramid.icechunk"
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.create(storage)
+    session = repo.writable_session("main")
+    ds = _make_dataset()
+    ds.to_zarr(session.store, group="0", mode="w", zarr_format=3)
+    ds[["time"]].to_zarr(session.store, mode="a", zarr_format=3)
+    session.commit("seed pyramid root time and level 0")
+
+    result = open_icechunk_dataset(store_path)
+    try:
+        assert "pop_total" in result.data_vars
+        assert result.sizes["time"] == 2
+    finally:
+        result.close()
+
+
 # ---------------------------------------------------------------------------
 # build_dataset_zarr — flat path
 # ---------------------------------------------------------------------------
