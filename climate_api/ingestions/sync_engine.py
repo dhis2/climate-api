@@ -445,6 +445,8 @@ def _resolve_local_artifact_path(raw_path: str | None) -> tuple[Path | None, str
             candidate = Path(unquote(parsed.path))
         else:
             candidate = Path(raw_path)
+            if not candidate.is_absolute():
+                return None, "relative path"
     resolved = candidate.resolve(strict=False)
     for root in _artifact_storage_roots():
         try:

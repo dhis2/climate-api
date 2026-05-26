@@ -519,6 +519,40 @@ def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_unt
     assert any("untrusted local path" in message for message in warnings)
 
 
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_relative_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="data/downloads/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    warnings: list[str] = []
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert any("relative path" in message for message in warnings)
+
+
 def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_committed_period_is_malformed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
