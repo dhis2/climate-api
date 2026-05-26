@@ -483,7 +483,8 @@ def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> In
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to load ingestion.plugin '{plugin_path}': {exc}") from exc
+        logger.error("Failed to load ingestion.plugin '%s'", plugin_path, exc_info=exc)
+        raise HTTPException(status_code=500, detail=f"Failed to load ingestion.plugin '{plugin_path}'") from exc
     return plugin
 
 

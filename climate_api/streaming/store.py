@@ -18,6 +18,8 @@ from typing import Any
 
 from geozarr_toolkit import create_geozarr_attrs
 
+from climate_api.streaming.protocol import GridSpec
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +89,7 @@ def is_store_empty(store_path: Path) -> bool:
         return False
 
 
-def write_geozarr_attrs(store: Any, *, spec: Any, bbox: list[float]) -> None:
+def write_geozarr_attrs(store: Any, *, spec: GridSpec, bbox: list[float]) -> None:
     """Write root metadata for a flat Zarr v3 store.
 
     The attrs are rewritten after each commit rather than only on first write so

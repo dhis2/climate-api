@@ -33,9 +33,17 @@ class GridSpec:
     - native CRS
     - value dtype / nodata
     - canonical time/x/y dimension names and any root attrs the writer should keep
+
+    `shape` is ordered as `(y, x)`, matching array axis order:
+    `(len(y_dim), len(x_dim))`.
+
+    In other words, the first element of `shape` is the size of the dimension
+    named by `y_dim`, and the second element is the size of the dimension named
+    by `x_dim`. Plugins should always return `shape` in this order, even if
+    downstream metadata serializes axes in a different convention.
     """
 
-    shape: tuple[int, int]
+    shape: tuple[int, int]  # (y, x) == (len(y_dim), len(x_dim))
     crs: int
     dtype: np.dtype[Any]
     nodata: float | None = None
