@@ -338,6 +338,41 @@ def test_plan_sync_for_plugin_backed_icechunk_uses_committed_store_state(
     assert result.current_end == "2026-01-31"
 
 
+def test_plan_sync_for_plugin_backed_icechunk_normalizes_committed_period_before_returning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-04-21T13",
+        path="/tmp/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+    latest.coverage.temporal.end = "2026-04-21T13"
+
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(
+        sync_engine,
+        "read_committed_period_ids",
+        lambda *args, **kwargs: {"2026-04-21T13:27:45"},
+    )
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "era5land_temperature_hourly",
+            "period_type": "hourly",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "example.HourlyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-04-21T13",
+    )
+
+    assert result.action == SyncAction.NO_OP
+    assert result.reason == "no_new_period"
+    assert result.current_end == "2026-04-21T13"
+
+
 def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_without_store_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

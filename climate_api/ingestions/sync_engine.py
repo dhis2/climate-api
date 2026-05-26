@@ -502,7 +502,10 @@ def _sync_current_end(*, source_dataset: dict[str, Any], latest_artifact: Artifa
     if not committed:
         return latest_artifact.coverage.temporal.end
     try:
-        return max(committed, key=parse_period_string_to_datetime)
+        return normalize_period_string(
+            max(committed, key=parse_period_string_to_datetime),
+            str(source_dataset["period_type"]),
+        )
     except Exception as exc:
         logger.warning(
             "Sync planning found malformed committed periods for dataset '%s' in '%s'; "
