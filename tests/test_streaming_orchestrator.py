@@ -45,6 +45,20 @@ class _ShapeMismatchPlugin(_FakePlugin):
         return await super().fetch_period(period_id, bbox, **params)
 
 
+class _CustomTimeDimPlugin(_FakePlugin):
+    async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
+        _ = bbox, params
+        return GridSpec(shape=(1, 1), crs=4326, dtype=np.dtype("float32"), time_dim="valid_time")
+
+    async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
+        _ = bbox, params
+        value = float(period_id[-2:])
+        return xr.Dataset(
+            {"precip": (("valid_time", "y", "x"), np.array([[[value]]], dtype=np.float32))},
+            coords={"valid_time": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
+        )
+
+
 class _FakeSession:
     def __init__(self, store: str) -> None:
         self.store = store
@@ -66,15 +80,15 @@ class _FakeRepo:
         return session
 
 
-def _read_committed_periods_from_zarr(store_path: Path, period_type: str) -> set[str]:
+def _read_committed_periods_from_zarr(store_path: Path, period_type: str, *, time_dim: str = "time") -> set[str]:
     _ = period_type
     if not store_path.exists():
         return set()
     ds = xr.open_zarr(store_path, consolidated=None)
     try:
-        if "time" not in ds.coords:
+        if time_dim not in ds.coords:
             return set()
-        return {str(item)[:10] for item in ds["time"].values}
+        return {str(item)[:10] for item in ds[time_dim].values}
     finally:
         ds.close()
 
@@ -89,7 +103,9 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type: _read_committed_periods_from_zarr(path, period_type),
+        lambda path, period_type, time_dim="time": _read_committed_periods_from_zarr(
+            path, period_type, time_dim=time_dim
+        ),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -150,7 +166,9 @@ def test_orchestrator_refuses_destructive_first_write_when_existing_store_is_not
     repo = _FakeRepo(str(store_path))
 
     monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
-    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: set())
+    monkeypatch.setattr(
+        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="time": set()
+    )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
 
     with pytest.raises(RuntimeError, match="committed periods could not be determined safely"):
@@ -181,7 +199,9 @@ def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type: _read_committed_periods_from_zarr(path, period_type),
+        lambda path, period_type, time_dim="time": _read_committed_periods_from_zarr(
+            path, period_type, time_dim=time_dim
+        ),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -214,7 +234,11 @@ def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
     existing.to_zarr(store_path, mode="w", zarr_format=3)
 
     monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
-    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: {"2026-01-02"})
+    monkeypatch.setattr(
+        streaming_orchestrator,
+        "read_committed_period_ids",
+        lambda path, period_type, time_dim="time": {"2026-01-02"},
+    )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
 
     result = run_streaming_ingest_sync(
@@ -243,7 +267,9 @@ def test_orchestrator_rejects_spatial_shape_changes_across_appends(
     repo = _FakeRepo(str(store_path))
 
     monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
-    monkeypatch.setattr(streaming_orchestrator, "read_committed_period_ids", lambda path, period_type: set())
+    monkeypatch.setattr(
+        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="time": set()
+    )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
     with pytest.raises(RuntimeError, match="has spatial shape"):
@@ -294,4 +320,30 @@ def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path
         period_type="daily",
     )
 
+    assert rerun.periods_written == 0
+
+
+def test_orchestrator_resume_supports_custom_time_dimension(tmp_path: Path) -> None:
+    store_path = tmp_path / "streaming-store-custom-time.icechunk"
+
+    first = run_streaming_ingest_sync(
+        plugin=_CustomTimeDimPlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+    )
+    assert first.periods_written == 3
+
+    rerun = run_streaming_ingest_sync(
+        plugin=_CustomTimeDimPlugin(),
+        params={},
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+    )
     assert rerun.periods_written == 0

@@ -34,7 +34,7 @@ def open_or_create_repo(store_path: Path) -> Any:
     return icechunk.Repository.create(storage)
 
 
-def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
+def read_committed_period_ids(store_path: Path, period_type: str, *, time_dim: str = "time") -> set[str]:
     """Return period ids already committed in the store, or an empty set.
 
     Resume correctness is store-first: if the repository already contains a
@@ -54,11 +54,11 @@ def read_committed_period_ids(store_path: Path, period_type: str) -> set[str]:
         session = repo.readonly_session("main")
         ds = xr.open_zarr(session.store)
         try:
-            if "time" not in ds.coords:
+            if time_dim not in ds.coords:
                 return set()
             return {
                 datetime_to_period_string(pd.Timestamp(item.item()).to_pydatetime(), period_type)
-                for item in ds["time"].values
+                for item in ds[time_dim].values
             }
         finally:
             ds.close()

@@ -91,7 +91,7 @@ async def run_streaming_ingest(
     if not all_periods:
         return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=0)
 
-    committed = read_committed_period_ids(store_path, period_type)
+    committed = read_committed_period_ids(store_path, period_type, time_dim=spec.time_dim)
     pending = [period for period in all_periods if period not in committed]
     if not pending:
         return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=0)

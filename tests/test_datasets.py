@@ -221,7 +221,7 @@ def test_find_existing_artifact_ignores_record_with_overwide_coverage() -> None:
     assert result == valid_artifact
 
 
-def test_find_existing_artifact_reuses_clamped_icechunk_artifact_for_later_requested_end() -> None:
+def test_find_existing_artifact_does_not_reuse_clamped_icechunk_artifact_for_later_requested_end() -> None:
     request_scope = ArtifactRequestScope(
         start="2026-01-01",
         end="2026-02-10",
@@ -244,7 +244,7 @@ def test_find_existing_artifact_reuses_clamped_icechunk_artifact_for_later_reque
         prefer_zarr=True,
     )
 
-    assert result == clamped
+    assert result is None
 
 
 def test_find_existing_artifact_ignores_stale_record(monkeypatch: pytest.MonkeyPatch) -> None:
