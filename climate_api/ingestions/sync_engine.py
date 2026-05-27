@@ -436,12 +436,7 @@ def _resolve_local_artifact_path(raw_path: str | None) -> tuple[Path | None, str
     # urlparse misreads Windows drive letters as URI schemes — "C:/path" produces
     # scheme="c". Detect drive-letter paths explicitly so they skip URI parsing
     # and reach the shared absolute-path and trusted-root checks below.
-    is_windows_path = (
-        len(raw_path) >= 3
-        and raw_path[0].isalpha()
-        and raw_path[1] == ":"
-        and raw_path[2] in ("\\", "/")
-    )
+    is_windows_path = len(raw_path) >= 3 and raw_path[0].isalpha() and raw_path[1] == ":" and raw_path[2] in ("\\", "/")
     if is_windows_path:
         candidate = Path(raw_path)
     else:
