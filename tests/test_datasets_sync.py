@@ -450,6 +450,97 @@ def test_plan_sync_for_plugin_backed_icechunk_skips_non_local_store_path(
     assert any("non-local URI" in message for message in warnings)
 
 
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_windows_drive_letter_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Windows drive-letter paths (C:\...) are detected explicitly before urlparse
+    # can misread the drive letter as a URI scheme. On Linux the path is not
+    # absolute, so _resolve_local_artifact_path returns "relative path" and
+    # committed-store inspection falls back to artifact metadata.
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="C:\\data\\downloads\\chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    read_calls: list[tuple[object, ...]] = []
+    warnings: list[str] = []
+
+    def fake_read_committed_period_ids(*args: object, **kwargs: object) -> set[str]:
+        read_calls.append(args)
+        return {"2026-01-31"}
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", fake_read_committed_period_ids)
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert read_calls == []
+    assert any("relative path" in message for message in warnings)
+
+
+def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_for_file_uri_with_windows_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # file:///C:/... URIs are valid on Windows but not within any trusted storage
+    # root on this Linux service. urlparse produces path "/C:/..." which is
+    # absolute on Linux but won't match any configured storage root, so
+    # _resolve_local_artifact_path returns "untrusted local path" and planning
+    # falls back to artifact metadata.
+    latest = _artifact(
+        artifact_id="a1",
+        managed_dataset_id="chirps3_precipitation_daily_sle",
+        end="2026-01-15",
+        path="file:///C:/data/downloads/chirps3_precipitation_daily.icechunk",
+    )
+    latest.format = ArtifactFormat.ICECHUNK
+
+    read_calls: list[tuple[object, ...]] = []
+    warnings: list[str] = []
+
+    def fake_read_committed_period_ids(*args: object, **kwargs: object) -> set[str]:
+        read_calls.append(args)
+        return {"2026-01-31"}
+
+    def fake_warning(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(sync_engine, "read_committed_period_ids", fake_read_committed_period_ids)
+    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+
+    result = sync_engine.plan_sync(
+        source_dataset={
+            "id": "chirps3_precipitation_daily",
+            "period_type": "daily",
+            "sync": {"kind": "temporal", "execution": "append"},
+            "ingestion": {"plugin": "climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        },
+        latest_artifact=latest,
+        requested_end="2026-01-31",
+    )
+
+    assert result.action == SyncAction.APPEND
+    assert result.current_end == "2026-01-15"
+    assert read_calls == []
+    assert any("untrusted local path" in message for message in warnings)
+
+
 def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_store_read_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
