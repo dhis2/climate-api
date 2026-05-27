@@ -14,11 +14,22 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
+import os
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
-from climate_api.ingestions.schemas import ArtifactRecord, SyncAction, SyncDetail, SyncKind, SyncResponse
+from climate_api import config as api_config
+from climate_api.ingestions.schemas import (
+    ArtifactFormat,
+    ArtifactRecord,
+    SyncAction,
+    SyncDetail,
+    SyncKind,
+    SyncResponse,
+)
 from climate_api.providers import availability as provider_availability
 from climate_api.publications.services import managed_dataset_id_for
 from climate_api.shared.time import (
@@ -29,6 +40,7 @@ from climate_api.shared.time import (
     utc_now,
     utc_today,
 )
+from climate_api.streaming.store import read_committed_period_ids
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +73,7 @@ def plan_sync(
         raise ValueError("source_dataset must define sync.kind for sync planning")
     sync_kind = SyncKind(sync_kind_value)
     current_start = latest_artifact.request_scope.start
-    current_end = latest_artifact.coverage.temporal.end
+    current_end = _sync_current_end(source_dataset=source_dataset, latest_artifact=latest_artifact)
 
     if sync_kind == SyncKind.STATIC:
         return SyncDetail(
@@ -109,6 +121,7 @@ def plan_sync(
             )
         action = SyncAction.APPEND if _supports_append(source_dataset, latest_artifact) else SyncAction.REMATERIALIZE
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
+        plugin_backed = _is_plugin_backed(source_dataset)
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
             sync_kind=sync_kind,
@@ -120,6 +133,7 @@ def plan_sync(
                 target_end=latest_available_end,
                 delta_start=next_period_start,
                 delta_end=latest_available_end,
+                plugin_backed=plugin_backed,
             ),
             current_start=current_start,
             current_end=current_end,
@@ -218,13 +232,16 @@ def run_sync(
         )
 
     # Execution always goes through the ingestion materialization path so sync
-    # does not grow a second downloader/storage implementation. APPEND is a V1
-    # delta-download plus canonical rebuild, not in-place Zarr mutation.
+    # does not grow a second downloader/storage implementation. APPEND now has
+    # two concrete execution modes:
+    # - legacy download-backed datasets use delta-download plus canonical rebuild
+    # - plugin-backed Icechunk datasets extend the committed store in place
     if sync_detail.current_start is None:
         raise ValueError("Sync execution requires current_start for rematerialize or append actions")
     if sync_detail.target_end is None:
         raise ValueError("Sync execution requires target_end for rematerialize or append actions")
     download_start = sync_detail.delta_start if sync_detail.action == SyncAction.APPEND else None
+    plugin_backed = _is_plugin_backed(source_dataset)
     logger.info(
         "Sync executing for dataset '%s': action=%s artifact_scope=%s..%s download_scope=%s..%s publish=%s",
         dataset_id,
@@ -256,15 +273,17 @@ def run_sync(
     return SyncResponse(
         sync_id=artifact.artifact_id,
         status="completed",
-        message=_sync_completed_message(sync_detail.action),
+        message=_sync_completed_message(sync_detail.action, plugin_backed=plugin_backed),
         dataset=get_dataset_fn(managed_dataset_id_for(artifact)),
         sync_detail=sync_detail,
     )
 
 
-def _sync_completed_message(action: SyncAction) -> str:
+def _sync_completed_message(action: SyncAction, *, plugin_backed: bool = False) -> str:
     """Return a user-facing completion message for the executed sync action."""
     if action == SyncAction.APPEND:
+        if plugin_backed:
+            return "Managed dataset was synced by appending missing periods to the committed Icechunk store."
         return "Managed dataset was synced by downloading the missing period range and rebuilding the artifact."
     return "Managed dataset was rematerialized against the latest planned upstream state."
 
@@ -276,9 +295,15 @@ def _sync_plan_message(
     target_end: str,
     delta_start: str,
     delta_end: str,
+    plugin_backed: bool = False,
 ) -> str:
     """Return a human-readable sync plan summary."""
     if action == SyncAction.APPEND:
+        if plugin_backed:
+            return (
+                f"Data exists through {current_end}. Sync will append missing periods "
+                f"{delta_start} through {delta_end} and extend coverage through {target_end}."
+            )
         return (
             f"Data exists through {current_end}. Sync will download missing periods "
             f"{delta_start} through {delta_end} and rebuild coverage through {target_end}."
@@ -365,16 +390,15 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
 
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
-    ingestion = source_dataset.get("ingestion")
-    if isinstance(ingestion, dict):
-        plugin = ingestion.get("plugin")
-        if isinstance(plugin, str) and plugin:
+    if _is_plugin_backed(source_dataset):
+        if latest_artifact.format != ArtifactFormat.ICECHUNK:
             logger.info(
-                "Sync append execution is not yet supported for plugin-backed dataset '%s'; "
+                "Sync append execution for plugin-backed dataset '%s' requires an existing Icechunk artifact; "
                 "falling back to rematerialize",
                 source_dataset.get("id", "<unknown>"),
             )
             return False
+        return True
     # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
     # Detect this from the existing artifact's on-disk structure rather than YAML.
     artifact_path = latest_artifact.path
@@ -385,6 +409,116 @@ def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRe
         )
         return False
     return True
+
+
+def _is_plugin_backed(source_dataset: dict[str, Any]) -> bool:
+    """Return whether the source dataset uses the streaming plugin contract."""
+    ingestion = source_dataset.get("ingestion")
+    if not isinstance(ingestion, dict):
+        return False
+    plugin = ingestion.get("plugin")
+    return isinstance(plugin, str) and bool(plugin)
+
+
+def _artifact_storage_roots() -> tuple[Path, ...]:
+    """Return the trusted local roots that may contain managed artifact stores."""
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return ((data_dir / "downloads").resolve(),)
+    xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return ((xdg_data / "climate-api" / "downloads").resolve(),)
+
+
+def _resolve_local_artifact_path(raw_path: str | None) -> tuple[Path | None, str | None]:
+    """Return a trusted local artifact path plus a fallback reason when unavailable."""
+    if raw_path is None:
+        return None, None
+    # urlparse misreads Windows drive letters as URI schemes — "C:/path" produces
+    # scheme="c". Detect drive-letter paths explicitly so they skip URI parsing
+    # and reach the shared absolute-path and trusted-root checks below.
+    is_windows_path = len(raw_path) >= 3 and raw_path[0].isalpha() and raw_path[1] == ":" and raw_path[2] in ("\\", "/")
+    if is_windows_path:
+        candidate = Path(raw_path)
+    else:
+        parsed = urlparse(raw_path)
+        if parsed.scheme and parsed.scheme != "file":
+            return None, "non-local URI"
+        if parsed.scheme == "file":
+            if parsed.netloc not in ("", "localhost"):
+                return None, "non-local file URI"
+            candidate = Path(unquote(parsed.path))
+        else:
+            candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        return None, "relative path"
+    resolved = candidate.resolve(strict=False)
+    for root in _artifact_storage_roots():
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        return resolved, None
+    return None, "untrusted local path"
+
+
+def _sync_current_end(*, source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> str:
+    """Return the current sync end using the same source of truth as execution.
+
+    For plugin-backed Icechunk datasets, sync execution consults committed store
+    periods directly. Planning should do the same so it does not depend on
+    potentially stale artifact metadata after prior interrupted or external
+    updates.
+
+    This adds a small read cost to plan-only requests for plugin-backed
+    datasets, but keeps planning aligned with execution on the committed store
+    state rather than a cached metadata snapshot.
+    """
+    if not _is_plugin_backed(source_dataset) or latest_artifact.format != ArtifactFormat.ICECHUNK:
+        return latest_artifact.coverage.temporal.end
+    raw_artifact_path = latest_artifact.path or (
+        latest_artifact.asset_paths[0] if latest_artifact.asset_paths else None
+    )
+    if raw_artifact_path is None:
+        return latest_artifact.coverage.temporal.end
+    local_artifact_path, path_reason = _resolve_local_artifact_path(raw_artifact_path)
+    if local_artifact_path is None:
+        logger.warning(
+            "Sync planning skipped committed-store inspection for dataset '%s' because artifact path is %s: %s",
+            source_dataset.get("id", "<unknown>"),
+            path_reason or "unsupported",
+            raw_artifact_path,
+        )
+        return latest_artifact.coverage.temporal.end
+    try:
+        committed = read_committed_period_ids(
+            local_artifact_path,
+            str(source_dataset["period_type"]),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Sync planning failed to read committed periods for dataset '%s' from '%s'; "
+            "falling back to artifact metadata: %s",
+            source_dataset.get("id", "<unknown>"),
+            str(local_artifact_path),
+            exc,
+        )
+        return latest_artifact.coverage.temporal.end
+    if not committed:
+        return latest_artifact.coverage.temporal.end
+    try:
+        return normalize_period_string(
+            max(committed, key=parse_period_string_to_datetime),
+            str(source_dataset["period_type"]),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Sync planning found malformed committed periods for dataset '%s' in '%s'; "
+            "falling back to artifact metadata: %s",
+            source_dataset.get("id", "<unknown>"),
+            str(local_artifact_path),
+            exc,
+        )
+        return latest_artifact.coverage.temporal.end
 
 
 def _provider_latest_available_end(

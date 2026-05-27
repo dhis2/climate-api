@@ -32,8 +32,14 @@ class SyncKind(StrEnum):
 class SyncAction(StrEnum):
     """Planner-selected sync action.
 
-    APPEND is V1 delta-download execution followed by canonical artifact rebuild;
-    it is not in-place Zarr mutation.
+    APPEND means Climate API updates an existing managed dataset by writing only
+    the missing periods needed to reach the planned target end. The underlying
+    execution path depends on the dataset contract:
+
+    - legacy download-backed datasets use V1 delta-download plus canonical
+      artifact rebuild
+    - plugin-backed Icechunk datasets append missing periods directly into the
+      committed store
     """
 
     REMATERIALIZE = "rematerialize"

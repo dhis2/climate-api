@@ -25,7 +25,8 @@ def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
     payload = response.json()
     assert payload["id"] == "resample"
     assert payload["title"] == "Temporal resampling"
-    assert payload["jobControlOptions"] == ["sync-execute", "async-execute"]
+    assert len(payload["jobControlOptions"]) == 2
+    assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
     assert "execution_function" not in payload
     assert payload["inputs"]["source_dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True
@@ -38,10 +39,24 @@ def test_get_ingest_process_detail_returns_public_metadata(client: TestClient) -
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "ingestion"
-    assert payload["jobControlOptions"] == ["sync-execute", "async-execute"]
+    assert len(payload["jobControlOptions"]) == 2
+    assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
     assert payload["inputs"]["dataset_id"]["required"] is True
     assert payload["inputs"]["publish"]["default"] is True
     assert payload["outputs"]["ingestion_id"]["type"] == "string"
+
+
+def test_get_sync_process_detail_returns_public_metadata(client: TestClient) -> None:
+    response = client.get("/processes/sync")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "sync"
+    assert len(payload["jobControlOptions"]) == 2
+    assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
+    assert payload["inputs"]["dataset_id"]["required"] is True
+    assert payload["inputs"]["publish"]["default"] is True
+    assert payload["outputs"]["sync_id"]["type"] == "string"
 
 
 def test_get_processes_omits_internal_only_processes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -253,6 +268,49 @@ def test_post_ingest_execution_returns_404_for_unknown_dataset(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Dataset 'unknown_dataset' not found"
+
+
+def test_post_sync_execution_honors_respond_async(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.processes.services.sync_dataset",
+        lambda **kwargs: {
+            "sync_id": "artifact-123",
+            "status": "completed",
+            "message": "Managed dataset was synced.",
+            "dataset": dataset_record("chirps3_precipitation_daily"),
+            "sync_detail": {
+                "source_dataset_id": "chirps3_precipitation_daily",
+                "sync_kind": "temporal",
+                "action": "append",
+                "reason": "new_periods_available_for_append",
+                "message": "Sync will append new periods.",
+                "current_start": "2026-01-01",
+                "current_end": "2026-01-31",
+                "target_end": "2026-02-10",
+                "target_end_source": "request",
+                "delta_start": "2026-02-01",
+                "delta_end": "2026-02-10",
+            },
+        },
+    )
+
+    response = client.post(
+        "/processes/sync/execution",
+        headers={"Prefer": "respond-async"},
+        json={
+            "dataset_id": "chirps3_precipitation_daily_sle",
+            "end": "2026-02-10",
+            "publish": True,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] in {"accepted", "running", "successful"}
+    assert response.headers["Location"].startswith("/jobs/")
 
 
 def test_post_process_execution_rejects_async_when_process_is_sync_only(
