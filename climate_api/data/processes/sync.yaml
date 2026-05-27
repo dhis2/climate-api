@@ -19,11 +19,6 @@
       type: string
       required: false
       description: Optional target end period. Defaults to today's UTC period for the dataset.
-    prefer_zarr:
-      type: boolean
-      required: false
-      default: true
-      description: Preserve the caller's preferred artifact mode where the sync path supports it. Plugin-backed Icechunk sync ignores this and always uses the committed store append path.
     publish:
       type: boolean
       required: false

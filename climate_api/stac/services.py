@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pystac
+import xarray as xr
 from fastapi import HTTPException, Request
 from xstac import xarray_to_stac
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
@@ -131,7 +132,7 @@ def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
         latest = max(artifacts, key=lambda artifact: artifact.created_at)
         if latest.publication.status != PublicationStatus.PUBLISHED:
             continue
-        if latest.format != ArtifactFormat.ZARR:
+        if latest.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
             continue
         result[dataset_id] = latest
     return dict(sorted(result.items()))
@@ -196,7 +197,7 @@ def _build_collection_with_xstac(*, artifact: ArtifactRecord, template: pystac.C
         return deepcopy(cached_payload)
 
     try:
-        ds = open_zarr_dataset(_artifact_store_path(artifact))
+        ds = _open_published_store(artifact)
     except HTTPException:
         raise
     except Exception as exc:
@@ -299,6 +300,8 @@ def _public_zarr_asset_href(
     source_dataset: dict[str, Any],
 ) -> str:
     artifact_path = _artifact_store_path(artifact)
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return _abs_url(request, f"/zarr/{dataset_id}")
     if _is_pyramid_zarr(artifact_path):
         return _abs_url(request, f"/zarr/{dataset_id}/0")
     return _abs_url(request, f"/zarr/{dataset_id}")
@@ -411,6 +414,9 @@ def _keywords(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> list[
 
 def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
     metadata: dict[str, object] = {"zarr:node_type": "group"}
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        metadata["zarr:zarr_format"] = 3
+        return metadata
     artifact_path = _artifact_store_path(artifact)
     consolidated = _zarr_consolidated_flag(artifact_path)
     if consolidated is not None:
@@ -429,7 +435,15 @@ def _zarr_asset_metadata(artifact: ArtifactRecord) -> dict[str, object]:
 
 
 def _zarr_open_kwargs(artifact: ArtifactRecord) -> dict[str, bool | None]:
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return {"consolidated": None}
     return {"consolidated": _zarr_consolidated_flag(_artifact_store_path(artifact))}
+
+
+def _open_published_store(artifact: ArtifactRecord) -> xr.Dataset:
+    if artifact.format == ArtifactFormat.ICECHUNK:
+        return open_icechunk_dataset(_artifact_store_path(artifact))
+    return open_zarr_dataset(_artifact_store_path(artifact))
 
 
 def _build_renders(artifact: ArtifactRecord, source_dataset: dict[str, Any]) -> dict[str, Any] | None:

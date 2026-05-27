@@ -38,7 +38,6 @@ def create_ingestion(request: CreateIngestionRequest) -> IngestionResponse:
         bbox=resolved_bbox,
         country_code=resolved_country_code,
         overwrite=request.overwrite,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
     return IngestionResponse(
@@ -105,7 +104,6 @@ def sync_dataset(dataset_id: str, request: SyncDatasetRequest) -> SyncResponse:
     return services.sync_dataset(
         dataset_id=dataset_id,
         end=request.end,
-        prefer_zarr=request.prefer_zarr,
         publish=request.publish,
     )
 

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import icechunk
 import numpy as np
 import pytest
 import xarray as xr
@@ -114,6 +115,63 @@ def test_materialize_resampled_artifact_builds_daily_dataset_from_hourly_source(
     try:
         assert result["value"].shape == (2, 1, 1)
         assert result["value"].values[:, 0, 0].tolist() == [11.5, 35.5]
+    finally:
+        result.close()
+
+
+def test_materialize_resampled_artifact_reads_icechunk_backed_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source_hourly.icechunk"
+    storage = icechunk.local_filesystem_storage(str(source_path))
+    repo = icechunk.Repository.create(storage)
+    session = repo.writable_session("main")
+    time = np.array("2026-01-01T00", dtype="datetime64[h]") + np.arange(24)
+    ds = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.arange(24, dtype=float).reshape(24, 1, 1))},
+        coords={"time": time, "lat": [2.0], "lon": [1.0]},
+    )
+    ds.to_zarr(session.store, mode="w", zarr_format=3)
+    session.commit("seed hourly source")
+    ds.close()
+
+    source_artifact = _artifact(
+        artifact_id="source-hourly-icechunk",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=source_path,
+        start="2026-01-01T00",
+        end="2026-01-01T23",
+    )
+    source_artifact.format = ArtifactFormat.ICECHUNK
+
+    monkeypatch.setattr(
+        resample.registry_datasets,
+        "get_dataset",
+        lambda dataset_id: (
+            {"id": dataset_id, "period_type": "hourly"} if dataset_id == "era5land_temperature_hourly" else None
+        ),
+    )
+    monkeypatch.setattr(
+        resample.ingestion_services,
+        "get_latest_artifact_for_dataset_or_404",
+        lambda _: source_artifact,
+    )
+
+    artifact = resample.materialize_resampled_artifact(
+        source_dataset_id="era5land_temperature_hourly",
+        frequency="1D",
+        method="mean",
+        start="2026-01-01",
+        end="2026-01-01",
+        overwrite=False,
+        publish=False,
+    )
+
+    result = xr.open_zarr(artifact.path, consolidated=True)
+    try:
+        assert result["value"].values[:, 0, 0].tolist() == [11.5]
     finally:
         result.close()
 
@@ -236,6 +294,21 @@ def test_materialize_resampled_artifact_drops_incomplete_trailing_week(
         assert result["value"].values[:, 0, 0].tolist() == [7.0]
     finally:
         result.close()
+
+
+def test_open_source_dataset_rejects_unsupported_artifact_formats() -> None:
+    artifact = _artifact(
+        artifact_id="source-hourly-netcdf",
+        dataset_id="era5land_temperature_hourly",
+        managed_dataset_id="era5land_temperature_hourly_sle",
+        path=Path("/tmp/source.nc"),
+        start="2026-01-01T00",
+        end="2026-01-01T23",
+    )
+    artifact.format = ArtifactFormat.NETCDF
+
+    with pytest.raises(resample.HTTPException, match="Zarr- or Icechunk-backed source artifact"):
+        resample._open_source_dataset(artifact)
 
 
 def test_materialize_resampled_artifact_drops_incomplete_leading_week(

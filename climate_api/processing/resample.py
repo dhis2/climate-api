@@ -15,7 +15,7 @@ import pandas as pd
 import xarray as xr
 from fastapi import HTTPException
 
-from climate_api.data_accessor.services.accessor import open_zarr_dataset
+from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
@@ -76,7 +76,6 @@ def materialize_resampled_artifact(
     existing = ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(start=start, end=resolved_end),
-        prefer_zarr=True,
     )
     if existing is not None and not overwrite:
         if publish and existing.publication.status != PublicationStatus.PUBLISHED:
@@ -88,13 +87,10 @@ def materialize_resampled_artifact(
         raise HTTPException(status_code=404, detail=f"Source dataset template '{source_dataset_id}' not found")
 
     source_artifact = _resolve_source_artifact(source_dataset_id=source_dataset_id)
-    if source_artifact.format != ArtifactFormat.ZARR:
-        raise HTTPException(status_code=409, detail="Resampling currently requires a Zarr-backed source artifact")
-
     target_managed_dataset_id = managed_dataset_id_for_scope(target_dataset_id)
     zarr_path = DERIVED_DATA_DIR / f"{target_managed_dataset_id}.zarr"
 
-    source_ds = open_zarr_dataset(source_artifact.path or source_artifact.asset_paths[0])
+    source_ds = _open_source_dataset(source_artifact)
     try:
         resampled = _resample_dataset(
             source_ds=source_ds,
@@ -140,6 +136,20 @@ def materialize_resampled_artifact(
 def _resolve_source_artifact(*, source_dataset_id: str) -> ArtifactRecord:
     managed_dataset_id = managed_dataset_id_for_scope(source_dataset_id)
     return ingestion_services.get_latest_artifact_for_dataset_or_404(managed_dataset_id)
+
+
+def _open_source_dataset(source_artifact: ArtifactRecord) -> xr.Dataset:
+    source_path = source_artifact.path or (source_artifact.asset_paths[0] if source_artifact.asset_paths else None)
+    if source_path is None:
+        raise HTTPException(status_code=409, detail="Source artifact has no resolvable store path")
+    if source_artifact.format == ArtifactFormat.ICECHUNK:
+        return open_icechunk_dataset(source_path)
+    if source_artifact.format == ArtifactFormat.ZARR:
+        return open_zarr_dataset(source_path)
+    raise HTTPException(
+        status_code=409,
+        detail="Resampling currently requires a Zarr- or Icechunk-backed source artifact",
+    )
 
 
 def _resample_dataset(
@@ -234,7 +244,6 @@ def _find_existing_resampled_artifact(
     return ingestion_services._find_existing_artifact(
         dataset_id=target_dataset_id,
         request_scope=ArtifactRequestScope(start=start, end=realized_end),
-        prefer_zarr=True,
     )
 
 

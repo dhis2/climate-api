@@ -23,8 +23,9 @@ def reproject_to_instance_crs(
     running a WGS84 source dataset). Override source_crs via the transform's
     ``params`` dict if your source uses a different input CRS.
 
-    The dataset must already have ``x`` and ``y`` as its spatial dimension names,
-    which is guaranteed by ``build_dataset_zarr`` before transforms are run.
+    The dataset must already have ``x`` and ``y`` as its spatial dimension names.
+    The streaming plugins and local Zarr materialization paths normalize those
+    coordinates before transforms are run.
     """
     target_crs = api_config.get_crs()
     if target_crs == source_crs:

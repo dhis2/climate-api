@@ -9,6 +9,7 @@ import pytest
 import xarray as xr
 
 import climate_api.streaming.orchestrator as streaming_orchestrator
+import climate_api.transforms.pipeline as transform_pipeline
 from climate_api.streaming.orchestrator import run_streaming_ingest_sync
 from climate_api.streaming.protocol import GridSpec
 
@@ -347,3 +348,47 @@ def test_orchestrator_resume_supports_custom_time_dimension(tmp_path: Path) -> N
         period_type="daily",
     )
     assert rerun.periods_written == 0
+
+
+def test_orchestrator_applies_dataset_transforms_before_write(tmp_path: Path) -> None:
+    store_path = tmp_path / "streaming-store-transformed.icechunk"
+    dataset = {
+        "id": "era5land_precipitation_hourly",
+        "variable": "precip",
+        "transforms": ["climate_api.transforms.metres_to_mm"],
+    }
+
+    result = run_streaming_ingest_sync(
+        plugin=_FakePlugin(),
+        params={},
+        dataset=dataset,
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+    )
+
+    assert result.periods_written == 3
+
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+    ds = xr.open_zarr(session.store)
+    try:
+        np.testing.assert_allclose(ds["precip"].values[:, 0, 0], [1000.0, 2000.0, 3000.0])
+        assert ds["precip"].attrs["units"] == "mm"
+    finally:
+        ds.close()
+
+
+def test_transform_pipeline_raises_clear_error_for_missing_attribute() -> None:
+    with pytest.raises(ValueError, match="does not exist"):
+        transform_pipeline._get_dynamic_function("climate_api.transforms.missing_function")
+
+
+def test_transform_pipeline_raises_clear_error_for_non_callable_attribute(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(transform_pipeline, "logger", object())
+
+    with pytest.raises(ValueError, match="is not callable"):
+        transform_pipeline._get_dynamic_function("climate_api.transforms.pipeline.logger")

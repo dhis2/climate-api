@@ -58,7 +58,7 @@ def test_dataset_registry_accepts_supported_sync_kind(
   sync:
     kind: temporal
   ingestion:
-    function: some.download.function
+    plugin: climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin
 """,
         encoding="utf-8",
     )
@@ -152,7 +152,7 @@ def test_dataset_registry_accepts_supported_sync_execution(
     kind: temporal
     execution: append
   ingestion:
-    function: some.download.function
+    plugin: climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin
 """,
         encoding="utf-8",
     )
@@ -177,7 +177,7 @@ def test_dataset_registry_rejects_invalid_sync_availability_function(
     availability:
       latest_available_function: 42
   ingestion:
-    function: some.download.function
+    plugin: climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin
 """,
         encoding="utf-8",
     )
@@ -203,7 +203,7 @@ def test_dataset_registry_accepts_sync_availability_function(
     availability:
       latest_available_function: climate_api.providers.availability.lagged_latest_available
   ingestion:
-    function: some.download.function
+    plugin: climate_api.streaming.plugins.chirps3.CHIRPS3DailyPlugin
 """,
         encoding="utf-8",
     )

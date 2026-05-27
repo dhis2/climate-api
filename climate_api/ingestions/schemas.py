@@ -33,13 +33,8 @@ class SyncAction(StrEnum):
     """Planner-selected sync action.
 
     APPEND means Climate API updates an existing managed dataset by writing only
-    the missing periods needed to reach the planned target end. The underlying
-    execution path depends on the dataset contract:
-
-    - legacy download-backed datasets use V1 delta-download plus canonical
-      artifact rebuild
-    - plugin-backed Icechunk datasets append missing periods directly into the
-      committed store
+    the missing periods needed to reach the planned target end by extending the
+    committed artifact store.
     """
 
     REMATERIALIZE = "rematerialize"
@@ -123,10 +118,6 @@ class CreateIngestionRequest(BaseModel):
     overwrite: bool = Field(
         default=False,
         description="Whether to force regeneration of an existing matching artifact.",
-    )
-    prefer_zarr: bool = Field(
-        default=True,
-        description="Whether to prefer GeoZarr materialization when available.",
     )
     publish: bool = Field(
         default=True,
@@ -279,7 +270,6 @@ class SyncDatasetRequest(BaseModel):
     """Request payload for syncing a managed dataset forward."""
 
     end: str | None = Field(default=None, description="Optional end period to sync through.")
-    prefer_zarr: bool = Field(default=True, description="Whether to prefer GeoZarr materialization when syncing.")
     publish: bool = Field(default=True, description="Whether to publish the resulting dataset version.")
 
 
@@ -316,11 +306,11 @@ class SyncDetail(BaseModel):
     )
     delta_start: str | None = Field(
         default=None,
-        description="First missing period planned for delta download, when applicable.",
+        description="First missing period planned for append execution, when applicable.",
     )
     delta_end: str | None = Field(
         default=None,
-        description="Last missing period planned for delta download, when applicable.",
+        description="Last missing period planned for append execution, when applicable.",
     )
 
 
