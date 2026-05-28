@@ -72,33 +72,54 @@ def create_app() -> FastAPI:
     )
 
     @_app.middleware("http")
-    async def add_zarr_browser_access_headers(
+    async def add_browser_access_headers(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        """Add browser access headers needed by remote Zarr inspectors calling localhost."""
+        """Handle Private Network Access preflights and Zarr browser CORS headers.
+
+        Chrome's Private Network Access policy blocks public-origin pages (e.g.
+        editor.openeo.org or inspect.geozarr.org) from fetching localhost resources
+        unless the server explicitly opts in via Access-Control-Allow-Private-Network.
+        We grant this for any origin that is already allowed by the CORS wildcard,
+        which covers both the openEO editor and remote Zarr inspectors.
+        """
         origin = request.headers.get("origin")
-        allowed_origin = origin if origin in _zarr_browser_access_origins() else None
-        if (
+        is_pna_preflight = (
             request.method == "OPTIONS"
-            and (request.url.path == "/zarr" or request.url.path.startswith("/zarr/"))
             and request.headers.get("access-control-request-private-network") == "true"
-            and allowed_origin is not None
-        ):
+            and origin is not None
+        )
+
+        # Short-circuit PNA preflight for all paths — CORS wildcard already covers auth.
+        if is_pna_preflight:
             response = Response(status_code=200)
-        else:
-            response = await call_next(request)
-        if request.url.path == "/zarr" or request.url.path.startswith("/zarr/"):
-            if allowed_origin is not None:
-                response.headers["Access-Control-Allow-Origin"] = allowed_origin
-                _append_vary_value(response, "Origin")
-                response.headers.setdefault("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-                response.headers.setdefault(
-                    "Access-Control-Allow-Headers",
-                    request.headers.get("access-control-request-headers", "*"),
-                )
-            if allowed_origin is not None and request.headers.get("access-control-request-private-network") == "true":
-                response.headers["Access-Control-Allow-Private-Network"] = "true"
+            response.headers["Access-Control-Allow-Origin"] = str(origin)
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = request.headers.get(
+                "access-control-request-method", "GET, POST, OPTIONS"
+            )
+            response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+                "access-control-request-headers", "*"
+            )
+            return response
+
+        response = await call_next(request)
+
+        # Extra CORS + PNA headers for Zarr inspector origins on /zarr paths.
+        allowed_zarr_origin = origin if origin in _zarr_browser_access_origins() else None
+        if allowed_zarr_origin and (
+            request.url.path == "/zarr" or request.url.path.startswith("/zarr/")
+        ):
+            response.headers["Access-Control-Allow-Origin"] = allowed_zarr_origin
+            _append_vary_value(response, "Origin")
+            response.headers.setdefault("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+            response.headers.setdefault(
+                "Access-Control-Allow-Headers",
+                request.headers.get("access-control-request-headers", "*"),
+            )
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+
         return response
 
     _app.include_router(system_routes.router, tags=["System"])
