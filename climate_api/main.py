@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
         return response
 
     _app.include_router(system_routes.router, tags=["System"])
+    _app.include_router(openeo_routes.capabilities_router, tags=["openEO"])
     _app.include_router(stac_routes.router, prefix="/stac", tags=["STAC"])
     _app.include_router(openeo_routes.collections_router, prefix="/collections", tags=["openEO"])
     _app.include_router(openeo_routes.jobs_router, prefix="/jobs", tags=["openEO"])

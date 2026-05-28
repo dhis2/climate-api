@@ -10,6 +10,32 @@ from fastapi import HTTPException, Request
 from climate_api.stac import services as stac_services
 
 
+def _normalize_cube_dimensions(collection: dict[str, Any]) -> dict[str, Any]:
+    """Normalize cube:dimensions to openEO conventions.
+
+    - Renames the temporal dimension key to "t" (openEO standard)
+    - Adds a "bands" dimension listing each published variable
+    """
+    dimensions: dict[str, Any] = collection.get("cube:dimensions")  # type: ignore[assignment]
+    if not isinstance(dimensions, dict):
+        return collection
+
+    new_dims: dict[str, Any] = {}
+    for key, value in dimensions.items():
+        if isinstance(value, dict) and value.get("type") == "temporal":
+            new_dims["t"] = value
+        else:
+            new_dims[key] = value
+
+    variables = collection.get("cube:variables")
+    if isinstance(variables, dict) and variables:
+        band_names = [k for k, v in variables.items() if isinstance(v, dict) and v.get("type") in ("data", None)]
+        if band_names:
+            new_dims["bands"] = {"type": "bands", "values": band_names}
+
+    return {**collection, "cube:dimensions": new_dims}
+
+
 def _rewrite_collection_links(collection: dict[str, Any], request: Request) -> dict[str, Any]:
     """Replace /stac/collections links with /collections links."""
     base_url = _abs_base(request)
@@ -34,6 +60,7 @@ def list_collections(request: Request) -> dict[str, Any]:
         try:
             col = stac_services.build_collection(dataset_id, request)
             col = _rewrite_collection_links(col, request)
+            col = _normalize_cube_dimensions(col)
             collections.append(col)
         except HTTPException:
             continue
@@ -51,7 +78,8 @@ def list_collections(request: Request) -> dict[str, Any]:
 def get_collection(dataset_id: str, request: Request) -> dict[str, Any]:
     """Return one openEO/STAC collection."""
     collection = stac_services.build_collection(dataset_id, request)
-    return _rewrite_collection_links(collection, request)
+    collection = _rewrite_collection_links(collection, request)
+    return _normalize_cube_dimensions(collection)
 
 
 def _abs_base(request: Request) -> str:

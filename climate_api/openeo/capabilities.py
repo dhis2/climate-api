@@ -18,6 +18,10 @@ def build_capabilities(base_url: str) -> OpenEOCapabilities:
 
     endpoints = [
         OpenEOEndpoint(path="/", methods=["GET"]),
+        OpenEOEndpoint(path="/credentials/oidc", methods=["GET"]),
+        OpenEOEndpoint(path="/file_formats", methods=["GET"]),
+        OpenEOEndpoint(path="/service_types", methods=["GET"]),
+        OpenEOEndpoint(path="/me", methods=["GET"]),
         OpenEOEndpoint(path="/collections", methods=["GET"]),
         OpenEOEndpoint(path="/collections/{collection_id}", methods=["GET"]),
         OpenEOEndpoint(path="/processes", methods=["GET"]),
@@ -38,11 +42,6 @@ def build_capabilities(base_url: str) -> OpenEOCapabilities:
             "href": f"{base_url}/collections",
             "type": "application/json",
             "title": "Published datasets",
-        },
-        {
-            "rel": "conformance",
-            "href": "https://openeo.org/documentation/1.0/developers/backends/api.html",
-            "type": "text/html",
         },
         {
             "rel": "related",

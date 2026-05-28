@@ -44,6 +44,40 @@ def get_openeo_capabilities(request: Request) -> JSONResponse:
     return JSONResponse(caps.model_dump())
 
 
+@capabilities_router.get("/credentials/oidc")
+def credentials_oidc() -> dict[str, Any]:
+    """Return OIDC authentication providers (empty = open/anonymous access)."""
+    return {"providers": []}
+
+
+@capabilities_router.get("/file_formats")
+def file_formats() -> dict[str, Any]:
+    """Return supported input and output file formats."""
+    zarr_format = {
+        "title": "Zarr",
+        "description": "Zarr v3 chunked array store",
+        "gis_data_types": ["raster"],
+        "parameters": {},
+        "links": [],
+    }
+    return {
+        "input": {},
+        "output": {"Zarr": zarr_format},
+    }
+
+
+@capabilities_router.get("/service_types")
+def service_types() -> dict[str, Any]:
+    """Return supported secondary web service types (none currently)."""
+    return {}
+
+
+@capabilities_router.get("/me")
+def me() -> dict[str, Any]:
+    """Return basic account info for this open/anonymous backend."""
+    return {"user_id": "anonymous", "links": []}
+
+
 # ---------------------------------------------------------------------------
 # Collections
 # ---------------------------------------------------------------------------
@@ -154,7 +188,14 @@ def execute_synchronous(
     """
     from climate_api.openeo.execution import run_process_graph
 
-    process = body.get("process")
+    # Accept both { "process": { "process_graph": ... } } (spec)
+    # and   { "process_graph": ... } (editor direct export)
+    if "process" in body:
+        process = body["process"]
+    elif "process_graph" in body:
+        process = body
+    else:
+        raise HTTPException(status_code=422, detail="Body must contain a 'process' object or 'process_graph' directly")
     if not isinstance(process, dict):
         raise HTTPException(status_code=422, detail="Body must contain a 'process' object")
     result = run_process_graph(process, request)

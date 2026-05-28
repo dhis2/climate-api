@@ -35,23 +35,31 @@ def load_collection(
     artifact = _get_published_artifact(collection_id)
     ds = _open_artifact(artifact)
 
+    # Normalize time dimension name to openEO standard "t"
+    rename_map = {d: "t" for d in ("time", "valid_time") if d in ds.dims}
+    if rename_map:
+        ds = ds.rename(rename_map)
+
     if temporal_extent is not None:
         start, end = temporal_extent[0], temporal_extent[1] if len(temporal_extent) > 1 else None
-        if "time" in ds.dims:
+        start = _strip_tz(start)
+        end = _strip_tz(end)
+        if "t" in ds.dims:
             if start is not None:
-                ds = ds.sel(time=slice(start, end))
+                ds = ds.sel(t=slice(start, end))
             elif end is not None:
-                ds = ds.sel(time=slice(None, end))
+                ds = ds.sel(t=slice(None, end))
 
-    if spatial_extent is not None and "longitude" in ds.dims and "latitude" in ds.dims:
-        west = spatial_extent.get("west")
-        east = spatial_extent.get("east")
-        south = spatial_extent.get("south")
-        north = spatial_extent.get("north")
-        if west is not None and east is not None:
-            ds = ds.sel(longitude=slice(west, east))
-        if south is not None and north is not None:
-            ds = ds.sel(latitude=slice(south, north))
+    if spatial_extent is not None:
+        extent = {k.lower(): v for k, v in spatial_extent.items()}
+        x_dim = next((d for d in ("x", "longitude") if d in ds.dims), None)
+        y_dim = next((d for d in ("y", "latitude") if d in ds.dims), None)
+        west, east = extent.get("west"), extent.get("east")
+        south, north = extent.get("south"), extent.get("north")
+        if x_dim and west is not None and east is not None:
+            ds = ds.sel({x_dim: slice(west, east)})
+        if y_dim and south is not None and north is not None:
+            ds = ds.sel({y_dim: slice(south, north)})
 
     if bands is not None:
         available = [b for b in bands if b in ds]
@@ -199,31 +207,47 @@ class ProcessGraphRunner:
     def _filter_temporal(self, args: dict[str, Any]) -> Any:
         data = args.get("data")
         extent = args.get("extent", [None, None])
-        if not isinstance(data, xr.Dataset) or "time" not in data.dims:
+        if not isinstance(data, xr.Dataset):
             return data
-        start, end = (extent[0] if len(extent) > 0 else None), (extent[1] if len(extent) > 1 else None)
-        return data.sel(time=slice(start, end))
+        time_dim = next((d for d in ("t", "time") if d in data.dims), None)
+        if time_dim is None:
+            return data
+        start = _strip_tz(extent[0] if len(extent) > 0 else None)
+        end = _strip_tz(extent[1] if len(extent) > 1 else None)
+        return data.sel({time_dim: slice(start, end)})
 
     def _filter_bbox(self, args: dict[str, Any]) -> Any:
         data = args.get("data")
-        extent = args.get("extent", {})
+        raw_extent = args.get("extent", {})
         if not isinstance(data, xr.Dataset):
             return data
-        if "longitude" in data.dims:
+        # Normalise keys to lowercase so both "west" and "West" work
+        extent = {k.lower(): v for k, v in raw_extent.items()} if isinstance(raw_extent, dict) else {}
+        x_dim = next((d for d in ("x", "longitude") if d in data.dims), None)
+        y_dim = next((d for d in ("y", "latitude") if d in data.dims), None)
+        if x_dim:
             west, east = extent.get("west"), extent.get("east")
             if west is not None and east is not None:
-                data = data.sel(longitude=slice(west, east))
-        if "latitude" in data.dims:
+                data = data.sel({x_dim: slice(west, east)})
+        if y_dim:
             south, north = extent.get("south"), extent.get("north")
             if south is not None and north is not None:
-                data = data.sel(latitude=slice(south, north))
+                coord = data[y_dim].values
+                # Slice high→low for descending axes (e.g. ERA5 / WorldPop latitude)
+                if len(coord) > 1 and coord[0] > coord[-1]:
+                    data = data.sel({y_dim: slice(north, south)})
+                else:
+                    data = data.sel({y_dim: slice(south, north)})
         return data
 
     def _aggregate_temporal_period(self, args: dict[str, Any]) -> Any:
         data = args.get("data")
         period = args.get("period", "month")
         reducer_arg = args.get("reducer")
-        if not isinstance(data, xr.Dataset) or "time" not in data.dims:
+        if not isinstance(data, xr.Dataset):
+            return data
+        time_dim = next((d for d in ("t", "time") if d in data.dims), None)
+        if time_dim is None:
             return data
         freq_map = {
             "day": "D",
@@ -238,12 +262,12 @@ class ProcessGraphRunner:
         freq = freq_map.get(period, "MS")
         reducer_name = _extract_reducer_name(reducer_arg)
         if reducer_name == "sum":
-            return data.resample(time=freq).sum()
+            return data.resample({time_dim: freq}).sum()
         if reducer_name in {"min", "minimum"}:
-            return data.resample(time=freq).min()
+            return data.resample({time_dim: freq}).min()
         if reducer_name in {"max", "maximum"}:
-            return data.resample(time=freq).max()
-        return data.resample(time=freq).mean()
+            return data.resample({time_dim: freq}).max()
+        return data.resample({time_dim: freq}).mean()
 
     def _reducer(self, process_id: str, args: dict[str, Any]) -> Any:
         data = args.get("data")
@@ -266,6 +290,17 @@ class ProcessGraphRunner:
                 return max(float(v) for v in data)
             return statistics.mean(float(v) for v in data)
         return data
+
+
+def _strip_tz(value: str | None) -> str | None:
+    """Strip timezone suffix from an ISO datetime string so it matches naive xarray time coords."""
+    if value is None:
+        return None
+    # Remove trailing Z or ±HH:MM offset
+    for suffix in ("Z", "+00:00"):
+        if value.endswith(suffix):
+            return value[: -len(suffix)]
+    return value
 
 
 def _extract_reducer_name(reducer_arg: Any) -> str:
