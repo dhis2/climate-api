@@ -133,4 +133,4 @@ class CHIRPS3DailyPlugin:
         da = da.squeeze("band", drop=True)
         da = da.where(da != _CHIRPS3_NODATA).load()
         ds = da.to_dataset(name="precip")
-        return ds.expand_dims(time=[np.datetime64(period_id, "D")])  # type: ignore[no-any-return]
+        return ds.expand_dims(t=[np.datetime64(period_id, "D")])  # type: ignore[no-any-return]

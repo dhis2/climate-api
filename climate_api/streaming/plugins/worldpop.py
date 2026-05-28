@@ -73,9 +73,13 @@ class WorldPopYearlyPlugin:
         return fetch_country_year(year, country_code, self.version)
 
     def _normalize_dataset(self, dataset: xr.Dataset) -> xr.Dataset:
-        rename_map = {}
+        rename_map: dict[str, str] = {}
         if {"lon", "lat"} <= set(dataset.dims):
             rename_map.update({"lon": "x", "lat": "y"})
+        for t_name in ("time", "valid_time"):
+            if t_name in dataset.dims:
+                rename_map[t_name] = "t"
+                break
         if self.variant.source_variable != self.variant.output_variable:
             rename_map[self.variant.source_variable] = self.variant.output_variable
         if rename_map:

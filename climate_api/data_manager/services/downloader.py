@@ -142,7 +142,7 @@ def build_dataset_zarr(dataset: dict[str, Any], *, start: str | None = None, end
     # Normalise to canonical names so all stored Zarr files are consistent.
     crs = api_config.get_crs()
     time_dim = get_time_dim(ds)
-    rename_map = {k: v for k, v in [(time_dim, "time"), (x_dim, "x"), (y_dim, "y")] if k != v}
+    rename_map = {k: v for k, v in [(time_dim, "t"), (x_dim, "x"), (y_dim, "y")] if k != v}
     if rename_map:
         ds = ds.rename(rename_map)
     x_dim, y_dim = "x", "y"
