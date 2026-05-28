@@ -1,8 +1,4 @@
-"""Shared dataset transform pipeline.
-
-This is used by both the legacy downloader path and the newer streaming/plugin
-path so dataset templates keep the same transform semantics during migration.
-"""
+"""Shared dataset transform pipeline for managed dataset materialization."""
 
 from __future__ import annotations
 

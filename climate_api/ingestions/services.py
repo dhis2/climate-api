@@ -9,7 +9,7 @@ import mimetypes
 import os
 import shutil
 import threading
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 
 
 class _IcechunkReadableStore(Protocol):
-    def list_dir(self, prefix: str) -> Any: ...
-    def exists(self, key: str) -> Any: ...
-    def get(self, key: str, prototype: Any) -> Any: ...
+    def list_dir(self, prefix: str) -> AsyncIterator[str]: ...
+    def exists(self, key: str) -> Awaitable[bool]: ...
+    def get(self, key: str, prototype: Any) -> Awaitable[Any]: ...
 
 
 def _resolve_artifacts_dir() -> Path:
@@ -653,7 +653,9 @@ def _run_async(awaitable: Any) -> Any:
     thread.join()
     if "value" in error:
         raise error["value"]
-    return result.get("value")
+    if "value" not in result:
+        raise RuntimeError("async runner completed without a result or error")
+    return result["value"]
 
 
 def _icechunk_list_dir(store: _IcechunkReadableStore, prefix: str) -> list[str]:
@@ -706,13 +708,16 @@ def _icechunk_entries(
     names = child_names if child_names is not None else _icechunk_list_dir(store, prefix)
 
     async def collect_entries() -> list[dict[str, str]]:
-        entries: list[dict[str, str]] = []
-        for name in sorted(names):
-            relative_path = f"{base}{name}" if base else name
-            children = [item async for item in store.list_dir(relative_path)]
-            href = f"/zarr/{dataset_id}/{relative_path}" if relative_path else f"/zarr/{dataset_id}"
-            entries.append({"name": name, "kind": "directory" if children else "file", "href": href})
-        return entries
+        sem = asyncio.Semaphore(16)
+
+        async def probe(name: str) -> dict[str, str]:
+            async with sem:
+                relative_path = f"{base}{name}" if base else name
+                href = f"/zarr/{dataset_id}/{relative_path}" if relative_path else f"/zarr/{dataset_id}"
+                children = [item async for item in store.list_dir(relative_path)]
+                return {"name": name, "kind": "directory" if children else "file", "href": href}
+
+        return list(await asyncio.gather(*[probe(name) for name in sorted(names)]))
 
     return cast(list[dict[str, str]], _run_async(collect_entries()))
 
