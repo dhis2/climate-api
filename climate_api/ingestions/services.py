@@ -269,7 +269,7 @@ def _create_streaming_artifact(
         params["country_code"] = country_code
 
     plugin = _load_streaming_plugin(plugin_path, params=params)
-    store_path = get_icechunk_path(dataset["id"])
+    store_path = get_icechunk_path(str(dataset["id"]))
     if overwrite and store_path.exists():
         if store_path.is_dir():
             shutil.rmtree(store_path)
