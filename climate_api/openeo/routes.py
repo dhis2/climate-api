@@ -44,6 +44,21 @@ def get_openeo_capabilities(request: Request) -> JSONResponse:
     return JSONResponse(caps.model_dump())
 
 
+@capabilities_router.get("/.well-known/openeo")
+def well_known_openeo(request: Request) -> dict[str, Any]:
+    """OpenEO service discovery — lets clients find the versioned API URL."""
+    base_url = _abs_base(request)
+    return {
+        "versions": [
+            {
+                "url": base_url,
+                "api_version": "1.2.0",
+                "production": False,
+            }
+        ]
+    }
+
+
 @capabilities_router.get("/credentials/oidc")
 def credentials_oidc() -> dict[str, Any]:
     """Return OIDC authentication providers (empty = open/anonymous access)."""
