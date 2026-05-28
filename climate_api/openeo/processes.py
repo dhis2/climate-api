@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import importlib
 import inspect
-import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from climate_api.data_registry.services import processes as process_registry
@@ -73,48 +70,44 @@ _BACKEND_PROCESSES: list[dict[str, Any]] = [
 
 
 def _load_standard_processes() -> list[dict[str, Any]]:
-    """Load openEO process specs from the openeo-processes-dask specs directory."""
+    """Return process descriptions for all openeo-processes-dask implementations.
+
+    Derives the list from the same execution registry used for process graph
+    execution, guaranteeing that listed processes are actually callable.
+    """
+    # Use the execution registry as the authoritative source of available processes.
+    # This avoids duplicating the openeo-processes-dask import logic and ensures
+    # the listed processes exactly match what run_process_graph can execute.
+    from climate_api.openeo.execution import _build_process_registry
+
     try:
-        specs_module = importlib.import_module("openeo_processes_dask.specs")
-        specs_dir = Path(specs_module.__file__ or "").parent / "openeo-processes"
-        if specs_dir.is_dir():
-            processes = []
-            for json_file in sorted(specs_dir.glob("*.json")):
-                try:
-                    with json_file.open() as f:
-                        processes.append(json.load(f))
-                except Exception:
-                    logger.debug("Could not load process spec %s", json_file)
-            if processes:
-                return processes
+        registry = _build_process_registry()
+        predefined: dict[str, Any] = registry.store.get("predefined", {})
     except Exception:
-        logger.debug("Could not load openeo-processes-dask specs", exc_info=True)
-
-    # Fallback: enumerate implemented functions and synthesise minimal specs
-    return _synthesise_process_specs()
-
-
-def _synthesise_process_specs() -> list[dict[str, Any]]:
-    """Build minimal process descriptions from the implemented functions."""
-    try:
-        impls_module = importlib.import_module("openeo_processes_dask.process_implementations")
-        result = []
-        for name, func in inspect.getmembers(impls_module, inspect.isfunction):
-            doc = inspect.getdoc(func) or ""
-            result.append(
-                {
-                    "id": name,
-                    "summary": doc.splitlines()[0] if doc else name,
-                    "description": doc,
-                    "parameters": [],
-                    "returns": {"description": "Result.", "schema": {}},
-                    "links": [{"rel": "about", "href": f"https://processes.openeo.org/#{name}"}],
-                }
-            )
-        return result
-    except Exception:
-        logger.debug("Could not synthesise process specs", exc_info=True)
+        logger.warning("Could not load process registry for listing", exc_info=True)
         return []
+
+    # Backend-specific processes are listed separately via _BACKEND_PROCESSES;
+    # skip them here to avoid duplicates.
+    _backend_ids = {p["id"] for p in _BACKEND_PROCESSES}
+
+    result = []
+    for process_id, proc in sorted(predefined.items()):
+        if process_id in _backend_ids:
+            continue
+        impl = proc.implementation
+        doc = inspect.getdoc(impl) or ""
+        result.append(
+            {
+                "id": process_id,
+                "summary": doc.splitlines()[0] if doc else process_id,
+                "description": doc,
+                "parameters": [],
+                "returns": {"description": "Result.", "schema": {}},
+                "links": [{"rel": "about", "href": f"https://processes.openeo.org/#{process_id}"}],
+            }
+        )
+    return result
 
 
 def list_openeo_processes() -> list[dict[str, Any]]:

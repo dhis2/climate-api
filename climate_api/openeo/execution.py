@@ -74,6 +74,8 @@ def _register_native_plugins(registry: Any) -> None:
         try:
             func = process_registry_svc.get_process_function(p["id"])
             registry[p["id"]] = Process(spec=None, implementation=func)
+        except ImportError:
+            logger.debug("Native plugin '%s' skipped: module not found", p["id"])
         except Exception:
             logger.warning("Could not register native plugin '%s' in process registry", p["id"])
 
