@@ -82,7 +82,7 @@ def test_temporal_to_list_temporal_interval_object() -> None:
 def _make_process(impl: Any) -> Any:
     from openeo_pg_parser_networkx.process_registry import Process
 
-    return Process(spec=None, implementation=impl)
+    return Process(spec={}, implementation=impl)
 
 
 def test_registry_overlay_falls_back_to_base() -> None:
@@ -132,7 +132,7 @@ def test_augment_with_udps_registers_udp(monkeypatch: pytest.MonkeyPatch) -> Non
     from openeo_pg_parser_networkx.process_registry import Process, ProcessRegistry
 
     base = ProcessRegistry()
-    base["save_result"] = Process(spec=None, implementation=lambda data, **kw: data)
+    base["save_result"] = Process(spec={}, implementation=lambda data, **kw: data)
 
     overlay = _augment_with_udps(base)
     assert isinstance(overlay, _RegistryOverlay)

@@ -16,7 +16,7 @@ def _normalize_cube_dimensions(collection: dict[str, Any]) -> dict[str, Any]:
     - Renames the temporal dimension key to "t" (openEO standard)
     - Adds a "bands" dimension listing each published variable
     """
-    dimensions: dict[str, Any] = collection.get("cube:dimensions")  # type: ignore[assignment]
+    dimensions = collection.get("cube:dimensions")
     if not isinstance(dimensions, dict):
         return collection
 

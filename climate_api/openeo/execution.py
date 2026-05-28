@@ -20,7 +20,7 @@ from climate_api.ingestions.schemas import ArtifactFormat, PublicationStatus
 
 logger = logging.getLogger(__name__)
 
-_REGISTRY: Any = None  # lazy singleton
+_registry: Any = None  # lazy singleton
 
 
 def _build_process_registry() -> Any:
@@ -30,9 +30,9 @@ def _build_process_registry() -> Any:
     save_result, and any exposed native YAML-configured processing plugins.
     UDPs are NOT included here — they are added per-execution by _augment_with_udps.
     """
-    global _REGISTRY
-    if _REGISTRY is not None:
-        return _REGISTRY
+    global _registry
+    if _registry is not None:
+        return _registry
 
     from openeo_pg_parser_networkx.process_registry import Process, ProcessRegistry
     from openeo_processes_dask.process_implementations.core import process as wrap_fn
@@ -43,18 +43,18 @@ def _build_process_registry() -> Any:
     registry = ProcessRegistry(wrap_funcs=[wrap_fn])
 
     for name, func in inspect.getmembers(impls_module, inspect.isfunction):
-        spec = getattr(specs_module, name, None)
+        spec: dict[str, Any] = getattr(specs_module, name, None) or {}
         registry[name] = Process(spec=spec, implementation=func)
 
     # Backend-specific processes override any stub from the standard library.
-    registry["load_collection"] = Process(spec=None, implementation=_load_collection_impl)
-    registry["save_result"] = Process(spec=None, implementation=_save_result_impl)
+    registry["load_collection"] = Process(spec={}, implementation=_load_collection_impl)
+    registry["save_result"] = Process(spec={}, implementation=_save_result_impl)
 
     # Native YAML-configured processing plugins (exposed ones only).
     # Plugins with the same id as a standard process shadow the built-in.
     _register_native_plugins(registry)
 
-    _REGISTRY = registry
+    _registry = registry
     return registry
 
 
@@ -73,7 +73,7 @@ def _register_native_plugins(registry: Any) -> None:
             continue
         try:
             func = process_registry_svc.get_process_function(p["id"])
-            registry[p["id"]] = Process(spec=None, implementation=func)
+            registry[p["id"]] = Process(spec={}, implementation=func)
         except ImportError:
             logger.debug("Native plugin '%s' skipped: module not found", p["id"])
         except Exception:
@@ -117,17 +117,17 @@ def _augment_with_udps(base_registry: Any) -> Any:
     for udp in udp_records:
         if not udp.process_graph:
             continue
-        pg_dict: dict[str, Any] = udp.process_graph if isinstance(udp.process_graph, dict) else dict(udp.process_graph)
+        pg_dict: dict[str, Any] = dict(udp.process_graph)
 
         def _make_udp_impl(pg: dict[str, Any]) -> Any:
             def _udp_impl(**kwargs: Any) -> Any:
                 from openeo_pg_parser_networkx import OpenEOProcessGraph
 
-                return OpenEOProcessGraph(pg).to_callable(overlay, parameters=kwargs)()
+                return OpenEOProcessGraph(pg).to_callable(overlay, parameters=kwargs)()  # pyright: ignore[reportArgumentType]
 
             return _udp_impl
 
-        udp_map[udp.id] = Process(spec=None, implementation=_make_udp_impl(pg_dict))
+        udp_map[udp.id] = Process(spec={}, implementation=_make_udp_impl(pg_dict))
 
     return overlay
 
