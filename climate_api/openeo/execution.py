@@ -24,7 +24,12 @@ _REGISTRY: Any = None  # lazy singleton
 
 
 def _build_process_registry() -> Any:
-    """Build the openeo-processes-dask process registry (lazy-initialised singleton)."""
+    """Build the base process registry (lazy-initialised singleton).
+
+    Contains: all openeo-processes-dask standard processes, backend load_collection /
+    save_result, and any exposed native YAML-configured processing plugins.
+    UDPs are NOT included here — they are added per-execution by _augment_with_udps.
+    """
     global _REGISTRY
     if _REGISTRY is not None:
         return _REGISTRY
@@ -45,8 +50,86 @@ def _build_process_registry() -> Any:
     registry["load_collection"] = Process(spec=None, implementation=_load_collection_impl)
     registry["save_result"] = Process(spec=None, implementation=_save_result_impl)
 
+    # Native YAML-configured processing plugins (exposed ones only).
+    # Plugins with the same id as a standard process shadow the built-in.
+    _register_native_plugins(registry)
+
     _REGISTRY = registry
     return registry
+
+
+def _register_native_plugins(registry: Any) -> None:
+    """Import and register exposed native processing plugins into the registry."""
+    from openeo_pg_parser_networkx.process_registry import Process
+
+    from climate_api.data_registry.services import processes as process_registry_svc
+
+    for p in process_registry_svc.list_processes():
+        if not p.get("expose"):
+            continue
+        execution = p.get("execution") or {}
+        fn_path = execution.get("function") if isinstance(execution, dict) else None
+        if not fn_path:
+            continue
+        try:
+            func = process_registry_svc.get_process_function(p["id"])
+            registry[p["id"]] = Process(spec=None, implementation=func)
+        except Exception:
+            logger.warning("Could not register native plugin '%s' in process registry", p["id"])
+
+
+class _RegistryOverlay:
+    """Thin read-only overlay that resolves UDPs before falling back to the base registry.
+
+    pg-parser only calls __getitem__ on the registry, so we only need to implement that.
+    """
+
+    def __init__(self, base: Any, udp_map: dict[str, Any]) -> None:
+        self._base = base
+        self._udps = udp_map
+
+    def __getitem__(self, key: Any) -> Any:
+        name = key[1] if isinstance(key, tuple) else key
+        if name in self._udps:
+            return self._udps[name]
+        return self._base[key]
+
+
+def _augment_with_udps(base_registry: Any) -> Any:
+    """Return a registry overlay that adds currently stored UDPs to the base registry.
+
+    UDPs are loaded fresh on every call so that PUT /process_graphs changes take effect
+    without restarting the server.  Returns the base registry unchanged when no UDPs exist.
+    """
+    from openeo_pg_parser_networkx.process_registry import Process
+
+    from climate_api.openeo import udps as udp_store
+
+    udp_records = udp_store.list_udps().processes
+    if not udp_records:
+        return base_registry
+
+    udp_map: dict[str, Any] = {}
+    overlay = _RegistryOverlay(base_registry, udp_map)
+
+    for udp in udp_records:
+        if not udp.process_graph:
+            continue
+        pg_dict: dict[str, Any] = (
+            udp.process_graph if isinstance(udp.process_graph, dict) else dict(udp.process_graph)
+        )
+
+        def _make_udp_impl(pg: dict[str, Any]) -> Any:
+            def _udp_impl(**kwargs: Any) -> Any:
+                from openeo_pg_parser_networkx import OpenEOProcessGraph
+
+                return OpenEOProcessGraph(pg).to_callable(overlay, parameters=kwargs)()
+
+            return _udp_impl
+
+        udp_map[udp.id] = Process(spec=None, implementation=_make_udp_impl(pg_dict))
+
+    return overlay
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +301,7 @@ def run_process_graph(
     if not isinstance(process_graph, dict):
         raise HTTPException(status_code=422, detail="process.process_graph must be an object")
 
-    registry = _build_process_registry()
+    registry = _augment_with_udps(_build_process_registry())
     try:
         graph = OpenEOProcessGraph(process_graph)
         return graph.to_callable(registry)()

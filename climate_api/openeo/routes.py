@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from climate_api.openeo import collections as collections_service
 from climate_api.openeo import processes as processes_service
@@ -169,6 +169,27 @@ def cancel_job(job_id: str) -> Response:
     """Cancel a running or queued job."""
     get_openeo_job_service().cancel_job(job_id)
     return Response(status_code=204)
+
+
+@jobs_router.get("/{job_id}/results/{filename}")
+def download_result_file(job_id: str, filename: str) -> FileResponse:
+    """Serve a result file produced by a finished batch job."""
+    from climate_api.openeo.jobs import _JOBS_DIR
+
+    # Only allow the two known output file names — no path traversal.
+    allowed = {"result.zarr", "result.geojson"}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="Result file not found")
+
+    path = _JOBS_DIR / job_id / "results" / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Result file not found")
+
+    media_types = {
+        "result.zarr": "application/vnd+zarr",
+        "result.geojson": "application/geo+json",
+    }
+    return FileResponse(str(path), media_type=media_types[filename], filename=filename)
 
 
 # ---------------------------------------------------------------------------

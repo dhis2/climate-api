@@ -338,13 +338,37 @@ class OpenEOJobService:
     def _persist_result(self, job_id: str, result: Any) -> str | None:
         import xarray as xr
 
-        if not isinstance(result, xr.Dataset):
-            return None
         results_dir = _JOBS_DIR / job_id / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
-        output_path = str(results_dir / "result.zarr")
-        result.to_zarr(output_path, mode="w")
-        return output_path
+
+        # Raster: DataArray → Dataset → Zarr
+        if isinstance(result, xr.DataArray):
+            result = result.to_dataset(name=result.name or "result")
+        if isinstance(result, xr.Dataset):
+            output_path = str(results_dir / "result.zarr")
+            result.to_zarr(output_path, mode="w")
+            return output_path
+
+        # Tabular: vector cube (GeoDataFrame or dask_geopandas) → GeoJSON
+        try:
+            import geopandas as gpd
+
+            try:
+                import dask_geopandas
+
+                if isinstance(result, dask_geopandas.GeoDataFrame):
+                    result = result.compute()
+            except ImportError:
+                pass
+
+            if isinstance(result, gpd.GeoDataFrame):
+                output_path = str(results_dir / "result.geojson")
+                result.to_file(output_path, driver="GeoJSON")
+                return output_path
+        except ImportError:
+            pass
+
+        return None
 
 
 def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
@@ -352,14 +376,25 @@ def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
     output_path = usage.get("output_path")
     if not output_path or not isinstance(output_path, str):
         return {}
-    return {
-        "result": {
-            "href": f"/jobs/{record.id}/results/result.zarr",
-            "type": "application/vnd+zarr",
-            "title": "Zarr result store",
-            "roles": ["data"],
+    if output_path.endswith(".zarr"):
+        return {
+            "result": {
+                "href": f"/jobs/{record.id}/results/result.zarr",
+                "type": "application/vnd+zarr",
+                "title": "Zarr result store",
+                "roles": ["data"],
+            }
         }
-    }
+    if output_path.endswith(".geojson"):
+        return {
+            "result": {
+                "href": f"/jobs/{record.id}/results/result.geojson",
+                "type": "application/geo+json",
+                "title": "GeoJSON result",
+                "roles": ["data"],
+            }
+        }
+    return {}
 
 
 _service: OpenEOJobService | None = None
