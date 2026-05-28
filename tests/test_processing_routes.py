@@ -1,12 +1,7 @@
 from pathlib import Path
-from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-
-from climate_api.ingestions.schemas import DatasetRecord, IngestionResponse
-from climate_api.processing import services as processing_services
-from tests.helpers import dataset_record
 
 
 def test_get_processes_lists_registered_processes(client: TestClient) -> None:
@@ -14,23 +9,8 @@ def test_get_processes_lists_registered_processes(client: TestClient) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(item["id"] == "resample" for item in payload["processes"])
-    assert any(link["href"] == "/processes" for link in payload["links"])
-
-
-def test_get_process_detail_returns_public_metadata(client: TestClient) -> None:
-    response = client.get("/processes/resample")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["id"] == "resample"
-    assert payload["title"] == "Temporal resampling"
-    assert len(payload["jobControlOptions"]) == 2
-    assert set(payload["jobControlOptions"]) == {"sync-execute", "async-execute"}
-    assert "execution_function" not in payload
-    assert payload["inputs"]["source_dataset_id"]["required"] is True
-    assert payload["inputs"]["publish"]["default"] is True
-    assert payload["outputs"]["artifact_id"]["type"] == "string"
+    assert any(item["id"] == "ingestion" for item in payload["processes"])
+    assert any(item["id"] == "sync" for item in payload["processes"])
 
 
 def test_get_ingest_process_detail_returns_public_metadata(client: TestClient) -> None:
@@ -143,68 +123,13 @@ def test_expose_false_yaml_fixture_is_hidden_from_catalog_and_routes(
     assert execution_response.status_code == 404
 
 
-def test_post_resample_execution_returns_completed_response(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        processing_services,
-        "run_resample_process",
-        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
-    )
-
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-            "end": "2026-01-12",
-            "publish": True,
-        },
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["artifact_id"] == "artifact-123"
-    assert payload["status"] == "completed"
-    assert payload["dataset"]["dataset_id"] == "chirps3_precipitation_daily_w_mon_sum"
-
-
-def test_post_process_execution_honors_case_insensitive_prefer_tokens(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        processing_services,
-        "run_resample_process",
-        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
-    )
-
-    response = client.post(
-        "/processes/resample/execution",
-        headers={"Prefer": "Respond-Async, wait=10"},
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-            "end": "2026-01-12",
-            "publish": True,
-        },
-    )
-
-    assert response.status_code == 202
-    payload = response.json()
-    assert payload["status"] in {"accepted", "running", "successful"}
-    assert response.headers["Location"].startswith("/internal/jobs/")
-
-
 def test_post_ingest_execution_honors_respond_async(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from climate_api.ingestions.schemas import IngestionResponse
+    from tests.helpers import dataset_record
+
     monkeypatch.setattr(
         "climate_api.ingestions.processes.registry_datasets.get_dataset",
         lambda dataset_id: {
@@ -274,6 +199,8 @@ def test_post_sync_execution_honors_respond_async(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from tests.helpers import dataset_record
+
     monkeypatch.setattr(
         "climate_api.ingestions.processes.services.sync_dataset",
         lambda **kwargs: {
@@ -355,100 +282,10 @@ def test_post_internal_process_execution_returns_404(client: TestClient, monkeyp
     assert response.status_code == 404
 
 
-def test_post_resample_execution_passes_params_to_service(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured: dict[str, Any] = {}
-
-    def fake_run_resample_process(**kwargs: object) -> tuple[str, DatasetRecord]:
-        captured.update(kwargs)
-        return "artifact-456", dataset_record("chirps3_precipitation_daily_w_mon_sum")
-
-    monkeypatch.setattr(processing_services, "run_resample_process", fake_run_resample_process)
-
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-            "end": "2026-01-12",
-            "overwrite": True,
-            "publish": False,
-        },
-    )
-
-    assert response.status_code == 200
-    assert captured["source_dataset_id"] == "chirps3_precipitation_daily"
-    assert captured["frequency"] == "W-MON"
-    assert captured["method"] == "sum"
-    assert captured["start"] == "2026-01-05"
-    assert captured["end"] == "2026-01-12"
-    assert captured["overwrite"] is True
-    assert captured["publish"] is False
-
-
-def test_post_resample_execution_returns_400_for_invalid_frequency(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "invalid",
-            "method": "sum",
-            "start": "2026-01-01",
-        },
-    )
-    assert response.status_code == 400
-
-
-def test_post_resample_execution_returns_400_for_null_frequency(client: TestClient) -> None:
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": None,
-            "method": "sum",
-            "start": "2026-01-01",
-        },
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "frequency is required"
-
-
-def test_post_resample_execution_returns_400_for_unsupported_method(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    response = client.post(
-        "/processes/resample/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "median",
-            "start": "2026-01-05",
-        },
-    )
-    assert response.status_code == 400
-
-
-def test_post_unknown_process_id_returns_404(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_post_unknown_process_id_returns_404(client: TestClient) -> None:
     response = client.post(
         "/processes/unknown_process/execution",
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-        },
+        json={"dataset_id": "chirps3_precipitation_daily", "start": "2026-01-05"},
     )
     assert response.status_code == 404
 
