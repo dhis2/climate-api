@@ -12,6 +12,10 @@ bug is tracked upstream at:
 
   https://github.com/EarthyScience/RQADeforestation.py/issues/3
 
+The fix in `openeo-processes-dask` (make `rqadeforestation` optional) is tracked at:
+
+  https://github.com/Open-EO/openeo-processes-dask/issues/377
+
 ## Changes
 
 **`pyproject.toml`** — removed `rqadeforestation` direct dependency.
