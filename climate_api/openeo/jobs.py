@@ -138,8 +138,12 @@ def store_delete_job(job_id: str) -> bool:
 
 
 def _serialize(record: OpenEOJobRecord) -> dict[str, object]:
-    # Persist all fields including internal ones (cancel_requested, error_message)
-    data = record.model_dump(mode="json", exclude_none=False)
+    # model_dump() respects Field(exclude=True) on error_message and cancel_requested,
+    # which is correct for HTTP responses but wrong for disk persistence.
+    # Explicitly re-add those fields so they survive a server restart.
+    data: dict[str, object] = record.model_dump(mode="json", exclude_none=False)
+    data["error_message"] = record.error_message
+    data["cancel_requested"] = record.cancel_requested
     return data
 
 
@@ -200,6 +204,11 @@ class OpenEOJobService:
         )
 
     def create_job(self, body: OpenEOJobCreate) -> OpenEOJobRecord:
+        if not isinstance(body.process.get("process_graph"), dict):
+            raise HTTPException(
+                status_code=422,
+                detail="process.process_graph must be an object",
+            )
         job_id = str(uuid4())
         now = utc_now()
         record = OpenEOJobRecord(

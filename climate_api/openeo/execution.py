@@ -17,6 +17,7 @@ from fastapi import HTTPException, Request
 from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.ingestions import services as ingestion_services
 from climate_api.ingestions.schemas import ArtifactFormat, PublicationStatus
+from climate_api.shared.xarray_utils import get_time_dim
 
 logger = logging.getLogger(__name__)
 
@@ -119,15 +120,26 @@ def _augment_with_udps(base_registry: Any) -> Any:
             continue
         pg_dict: dict[str, Any] = dict(udp.process_graph)
 
-        def _make_udp_impl(pg: dict[str, Any]) -> Any:
+        def _make_udp_impl(pg: dict[str, Any], udp_id: str) -> Any:
+            _executing: set[str] = set()
+
             def _udp_impl(**kwargs: Any) -> Any:
                 from openeo_pg_parser_networkx import OpenEOProcessGraph
 
-                return OpenEOProcessGraph(pg).to_callable(overlay, parameters=kwargs)()  # pyright: ignore[reportArgumentType]
+                if udp_id in _executing:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Recursive UDP call detected: '{udp_id}' called itself",
+                    )
+                _executing.add(udp_id)
+                try:
+                    return OpenEOProcessGraph(pg).to_callable(overlay, parameters=kwargs)()  # pyright: ignore[reportArgumentType]
+                finally:
+                    _executing.discard(udp_id)
 
             return _udp_impl
 
-        udp_map[udp.id] = Process(spec={}, implementation=_make_udp_impl(pg_dict))
+        udp_map[udp.id] = Process(spec={}, implementation=_make_udp_impl(pg_dict, udp.id))
 
     return overlay
 
@@ -194,8 +206,11 @@ def _load_collection_impl(
     if t_extent is not None:
         start = t_extent[0] if len(t_extent) > 0 else None
         end = t_extent[1] if len(t_extent) > 1 else None
-        if "t" in ds.dims:
-            ds = ds.sel(t=slice(start, end))
+        try:
+            t_dim = get_time_dim(ds)
+            ds = ds.sel({t_dim: slice(start, end)})
+        except ValueError:
+            pass  # dataset has no recognisable time dimension
 
     if bbox is not None:
         x_dim = next((d for d in ("x", "longitude") if d in ds.dims), None)
@@ -215,6 +230,13 @@ def _load_collection_impl(
     available_vars = list(ds.data_vars)
     if isinstance(bands, list) and bands:
         available_vars = [b for b in bands if b in ds]
+        if not available_vars:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"None of the requested bands {bands!r} exist in collection '{id}'. Available: {list(ds.data_vars)}"
+                ),
+            )
 
     if len(available_vars) == 1:
         return ds[available_vars[0]]

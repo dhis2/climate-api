@@ -126,6 +126,30 @@ def list_processes(request: Request) -> dict[str, Any]:
     }
 
 
+@processes_router.get("/{process_id}")
+def get_process_spec(process_id: str) -> Any:
+    """Return one process description by id.
+
+    Native admin processes (ingestion, sync, …) are returned in their native
+    format (with jobControlOptions, inputs, outputs).  Standard openEO processes
+    are returned in openEO format.
+    """
+    from climate_api.data_registry.services import processes as process_registry
+    from climate_api.processing.routes import _public_process_detail
+
+    # Native YAML process — return in native format (preserves jobControlOptions etc.)
+    native = process_registry.get_process(process_id)
+    if native is not None and native.get("expose"):
+        return _public_process_detail(native)
+
+    # Standard openEO process
+    for p in processes_service.list_openeo_processes():
+        if p.get("id") == process_id:
+            return p
+
+    raise HTTPException(status_code=404, detail=f"Process '{process_id}' not found")
+
+
 # ---------------------------------------------------------------------------
 # Jobs
 # ---------------------------------------------------------------------------
