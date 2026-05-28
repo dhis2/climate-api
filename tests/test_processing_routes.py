@@ -198,7 +198,7 @@ def test_post_process_execution_honors_case_insensitive_prefer_tokens(
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] in {"accepted", "running", "successful"}
-    assert response.headers["Location"].startswith("/jobs/")
+    assert response.headers["Location"].startswith("/internal/jobs/")
 
 
 def test_post_ingest_execution_honors_respond_async(
@@ -246,7 +246,7 @@ def test_post_ingest_execution_honors_respond_async(
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] in {"accepted", "running", "successful"}
-    assert response.headers["Location"].startswith("/jobs/")
+    assert response.headers["Location"].startswith("/internal/jobs/")
 
 
 def test_post_ingest_execution_returns_404_for_unknown_dataset(
@@ -310,7 +310,7 @@ def test_post_sync_execution_honors_respond_async(
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] in {"accepted", "running", "successful"}
-    assert response.headers["Location"].startswith("/jobs/")
+    assert response.headers["Location"].startswith("/internal/jobs/")
 
 
 def test_post_process_execution_rejects_async_when_process_is_sync_only(

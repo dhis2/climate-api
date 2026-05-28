@@ -145,7 +145,7 @@ def run_process_execution(
             )
         job = get_job_service().submit_process_job(process_id=process_id, request=request)
         response.status_code = 202
-        response.headers["Location"] = f"/jobs/{job.job_id}"
+        response.headers["Location"] = f"/internal/jobs/{job.job_id}"
         return job
 
     try:

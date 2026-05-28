@@ -28,7 +28,7 @@ def _temp_jobs_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generat
 def _wait_for_terminal_job(client: TestClient, job_id: str, *, timeout: float = 3.0) -> dict[str, object]:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        response = client.get(f"/jobs/{job_id}")
+        response = client.get(f"/internal/jobs/{job_id}")
         assert response.status_code == 200
         payload = response.json()
         if payload["status"] in {"successful", "failed", "cancelled"}:
@@ -63,7 +63,7 @@ def test_async_process_execution_creates_job_and_exposes_status(
     assert response.status_code == 202
     payload = cast(dict[str, Any], response.json())
     job_id = payload["jobID"]
-    assert response.headers["Location"] == f"/jobs/{job_id}"
+    assert response.headers["Location"] == f"/internal/jobs/{job_id}"
     assert payload["processID"] == "resample"
 
     finished = _wait_for_terminal_job(client, job_id)
@@ -71,7 +71,7 @@ def test_async_process_execution_creates_job_and_exposes_status(
     result = cast(dict[str, Any], finished["result"])
     assert result["artifact_id"] == "artifact-123"
 
-    jobs_response = client.get("/jobs")
+    jobs_response = client.get("/internal/jobs")
     assert jobs_response.status_code == 200
     jobs_payload = cast(dict[str, Any], jobs_response.json())
     assert any(item["jobID"] == job_id for item in jobs_payload["jobs"])
@@ -118,7 +118,7 @@ def test_delete_job_requests_cooperative_cancellation(
     assert response.status_code == 202
     job_id = response.json()["jobID"]
 
-    cancel_response = client.delete(f"/jobs/{job_id}")
+    cancel_response = client.delete(f"/internal/jobs/{job_id}")
     assert cancel_response.status_code == 200
     assert cancel_response.json()["cancelRequested"] is True
 
@@ -126,8 +126,8 @@ def test_delete_job_requests_cooperative_cancellation(
     assert finished["status"] == JobStatus.CANCELLED
 
 
-def test_delete_unknown_job_returns_404(client: TestClient) -> None:
-    response = client.delete("/jobs/missing-job")
+def test_delete_unknown_internal_job_returns_404(client: TestClient) -> None:
+    response = client.delete("/internal/jobs/missing-job")
 
     assert response.status_code == 404
 
@@ -158,7 +158,7 @@ def test_delete_terminal_job_leaves_record_unchanged(
     finished = _wait_for_terminal_job(client, job_id)
     assert finished["status"] == JobStatus.SUCCESSFUL
 
-    cancel_response = client.delete(f"/jobs/{job_id}")
+    cancel_response = client.delete(f"/internal/jobs/{job_id}")
     assert cancel_response.status_code == 200
     payload = cast(dict[str, Any], cancel_response.json())
     assert payload["status"] == JobStatus.SUCCESSFUL

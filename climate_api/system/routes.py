@@ -9,17 +9,20 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.responses import RedirectResponse
 
 from .schemas import AppInfo, HealthStatus, Status
-from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, root_json, wants_json
+from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, wants_json
 
 router = APIRouter()
 
 
 @router.get("/", response_class=Response, responses=ROOT_RESPONSES)
 def read_index(request: Request) -> Response:
-    """Return the landing page (HTML) or a navigation object (JSON with ?f=json)."""
+    """Return openEO capabilities (JSON) or the landing page (HTML)."""
     base = str(request.base_url).rstrip("/")
     if wants_json(request):
-        return JSONResponse(root_json(base).model_dump())
+        from climate_api.openeo.capabilities import build_capabilities
+
+        caps = build_capabilities(base)
+        return JSONResponse(caps.model_dump())
     return HTMLResponse(render_landing(app_version, base))
 
 

@@ -1,0 +1,220 @@
+"""openEO HTTP routes."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import APIRouter, Body, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+
+from climate_api.openeo import collections as collections_service
+from climate_api.openeo import processes as processes_service
+from climate_api.openeo import udps as udp_store
+from climate_api.openeo.capabilities import build_capabilities
+from climate_api.openeo.jobs import get_openeo_job_service
+from climate_api.openeo.schemas import (
+    OpenEOJobCreate,
+    OpenEOJobListResponse,
+    OpenEOJobRecord,
+    OpenEOJobResults,
+    OpenEOJobUpdate,
+    UDPListResponse,
+    UDPRecord,
+)
+
+capabilities_router = APIRouter(tags=["openEO"])
+collections_router = APIRouter(tags=["openEO"])
+processes_router = APIRouter(tags=["openEO"])
+jobs_router = APIRouter(tags=["openEO"])
+udp_router = APIRouter(tags=["openEO"])
+result_router = APIRouter(tags=["openEO"])
+
+
+# ---------------------------------------------------------------------------
+# Capabilities  GET /
+# (registered without prefix in main.py so it overlays the system route)
+# ---------------------------------------------------------------------------
+
+
+def get_openeo_capabilities(request: Request) -> JSONResponse:
+    """Return openEO capabilities when the client requests JSON."""
+    base_url = _abs_base(request)
+    caps = build_capabilities(base_url)
+    return JSONResponse(caps.model_dump())
+
+
+# ---------------------------------------------------------------------------
+# Collections
+# ---------------------------------------------------------------------------
+
+
+@collections_router.get("")
+def list_collections(request: Request) -> dict[str, Any]:
+    """Return all published collections (openEO + STAC compatible)."""
+    return collections_service.list_collections(request)
+
+
+@collections_router.get("/{collection_id}")
+def get_collection(collection_id: str, request: Request) -> dict[str, Any]:
+    """Return one published collection."""
+    return collections_service.get_collection(collection_id, request)
+
+
+# ---------------------------------------------------------------------------
+# Processes
+# ---------------------------------------------------------------------------
+
+
+@processes_router.get("")
+def list_processes(request: Request) -> dict[str, Any]:
+    """Return all available openEO processes."""
+    procs = processes_service.list_openeo_processes()
+    base_url = _abs_base(request)
+    return {
+        "processes": procs,
+        "links": [{"rel": "self", "href": f"{base_url}/processes", "type": "application/json"}],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+
+
+@jobs_router.get("", response_model=OpenEOJobListResponse)
+def list_jobs() -> OpenEOJobListResponse:
+    """Return all openEO jobs."""
+    return get_openeo_job_service().list_jobs()
+
+
+@jobs_router.post("", status_code=201)
+def create_job(body: OpenEOJobCreate, response: Response) -> OpenEOJobRecord:
+    """Create a new openEO job."""
+    record = get_openeo_job_service().create_job(body)
+    response.headers["Location"] = f"/jobs/{record.id}"
+    response.headers["OpenEO-Identifier"] = record.id
+    return record
+
+
+@jobs_router.get("/{job_id}", response_model=OpenEOJobRecord)
+def get_job(job_id: str) -> OpenEOJobRecord:
+    """Return one openEO job."""
+    return get_openeo_job_service().get_job_or_404(job_id)
+
+
+@jobs_router.patch("/{job_id}", status_code=204)
+def update_job(job_id: str, body: OpenEOJobUpdate) -> Response:
+    """Update job metadata (title, description, process, etc.)."""
+    get_openeo_job_service().update_job(job_id, body)
+    return Response(status_code=204)
+
+
+@jobs_router.delete("/{job_id}", status_code=204)
+def delete_job(job_id: str) -> Response:
+    """Delete a job and its results."""
+    get_openeo_job_service().delete_job(job_id)
+    return Response(status_code=204)
+
+
+@jobs_router.post("/{job_id}/results", status_code=202)
+def start_job(job_id: str) -> Response:
+    """Queue a job for processing."""
+    get_openeo_job_service().start_job(job_id)
+    return Response(status_code=202)
+
+
+@jobs_router.get("/{job_id}/results", response_model=OpenEOJobResults)
+def get_results(job_id: str) -> OpenEOJobResults:
+    """Return result links for a finished job."""
+    return get_openeo_job_service().get_results(job_id)
+
+
+@jobs_router.delete("/{job_id}/results", status_code=204)
+def cancel_job(job_id: str) -> Response:
+    """Cancel a running or queued job."""
+    get_openeo_job_service().cancel_job(job_id)
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Synchronous result  POST /result
+# ---------------------------------------------------------------------------
+
+
+@result_router.post("")
+def execute_synchronous(
+    body: dict[str, Any] = Body(...),
+    request: Request = None,  # type: ignore[assignment]
+) -> Any:
+    """Execute a process graph synchronously and return the result.
+
+    Returns JSON for scalar/dict results, or a 200 response with Zarr
+    metadata for dataset results.
+    """
+    from climate_api.openeo.execution import run_process_graph
+
+    process = body.get("process")
+    if not isinstance(process, dict):
+        raise HTTPException(status_code=422, detail="Body must contain a 'process' object")
+    result = run_process_graph(process, request)
+
+    import xarray as xr
+
+    if isinstance(result, xr.Dataset):
+        # Return basic metadata for dataset results
+        info = {
+            "type": "datacube",
+            "dims": dict(result.dims),
+            "variables": list(result.data_vars),
+            "coords": list(result.coords),
+        }
+        return JSONResponse(info)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# User-defined processes  /process_graphs
+# ---------------------------------------------------------------------------
+
+
+@udp_router.get("", response_model=UDPListResponse)
+def list_udps() -> UDPListResponse:
+    """Return all stored user-defined processes."""
+    return udp_store.list_udps()
+
+
+@udp_router.get("/{process_graph_id}", response_model=UDPRecord)
+def get_udp(process_graph_id: str) -> UDPRecord:
+    """Return one user-defined process."""
+    record = udp_store.get_udp(process_graph_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Process graph '{process_graph_id}' not found")
+    return record
+
+
+@udp_router.put("/{process_graph_id}", status_code=200)
+def put_udp(process_graph_id: str, body: dict[str, Any] = Body(...)) -> UDPRecord:
+    """Store or replace a user-defined process."""
+    return udp_store.put_udp(process_graph_id, body)
+
+
+@udp_router.delete("/{process_graph_id}", status_code=204)
+def delete_udp(process_graph_id: str) -> Response:
+    """Delete a user-defined process."""
+    found = udp_store.delete_udp(process_graph_id)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Process graph '{process_graph_id}' not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _abs_base(request: Request) -> str:
+    base_url = os.getenv("CLIMATE_API_BASE_URL")
+    if base_url:
+        return base_url.rstrip("/")
+    return str(request.base_url).rstrip("/")

@@ -14,6 +14,8 @@ from climate_api.extents import routes as extent_routes
 from climate_api.ingestions import routes as ingestion_routes
 from climate_api.jobs import routes as job_routes
 from climate_api.jobs.service import get_job_service
+from climate_api.openeo import routes as openeo_routes
+from climate_api.openeo.jobs import get_openeo_job_service
 from climate_api.processing import routes as processing_routes
 from climate_api.pygeoapi_app import mount_pygeoapi
 from climate_api.stac import routes as stac_routes
@@ -43,10 +45,12 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Run lightweight startup recovery hooks for the application lifecycle."""
     job_service = get_job_service()
     job_service.recover_pending_jobs()
+    openeo_service = get_openeo_job_service()
     try:
         yield
     finally:
         job_service.shutdown()
+        openeo_service.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -99,14 +103,19 @@ def create_app() -> FastAPI:
 
     _app.include_router(system_routes.router, tags=["System"])
     _app.include_router(stac_routes.router, prefix="/stac", tags=["STAC"])
+    _app.include_router(openeo_routes.collections_router, prefix="/collections", tags=["openEO"])
+    _app.include_router(openeo_routes.jobs_router, prefix="/jobs", tags=["openEO"])
+    _app.include_router(openeo_routes.udp_router, prefix="/process_graphs", tags=["openEO"])
+    _app.include_router(openeo_routes.result_router, prefix="/result", tags=["openEO"])
     _app.include_router(extent_routes.router, prefix="/extent", tags=["Extent"])
     _app.include_router(dataset_template_routes.router, prefix="/dataset-templates", tags=["Dataset templates"])
     _app.include_router(ingestion_routes.datasets_router, prefix="/datasets", tags=["Datasets"])
     _app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
-    _app.include_router(job_routes.router, prefix="/jobs", tags=["Jobs"])
     _app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
     _app.include_router(ingestion_routes.sync_router, prefix="/sync", tags=["Sync"])
     _app.include_router(processing_routes.router, prefix="/processes", tags=["Processes"])
+    # Internal job tracker for native /processes execution (separate from the openEO jobs API at /jobs).
+    _app.include_router(job_routes.router, prefix="/internal/jobs", tags=["Internal"])
 
     mount_pygeoapi(_app)
 

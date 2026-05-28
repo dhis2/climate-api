@@ -1,0 +1,385 @@
+"""openEO job persistence and execution service."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import threading
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
+from typing import Any, TypeVar
+from uuid import uuid4
+
+import portalocker
+from fastapi import HTTPException
+
+from climate_api import config as api_config
+from climate_api.openeo.schemas import (
+    OpenEOJobCreate,
+    OpenEOJobListResponse,
+    OpenEOJobRecord,
+    OpenEOJobResults,
+    OpenEOJobStatus,
+    OpenEOJobUpdate,
+)
+from climate_api.shared.time import utc_now
+
+_T = TypeVar("_T")
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Store
+# ---------------------------------------------------------------------------
+
+
+def _resolve_openeo_jobs_dir() -> Path:
+    data_dir = api_config.get_data_dir()
+    if data_dir is not None:
+        return data_dir / "openeo_jobs"
+    xdg_data = Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return xdg_data / "climate-api" / "openeo_jobs"
+
+
+_JOBS_DIR = _resolve_openeo_jobs_dir()
+_JOBS_INDEX = _JOBS_DIR / "jobs.json"
+
+
+def _ensure_store() -> None:
+    _JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    if not _JOBS_INDEX.exists():
+        _JOBS_INDEX.write_text("[]\n", encoding="utf-8")
+
+
+def _load_raw_records() -> list[dict[str, object]]:
+    _ensure_store()
+    with open(_JOBS_INDEX, encoding="utf-8") as fh:
+        portalocker.lock(fh, portalocker.LOCK_SH)
+        try:
+            payload = json.load(fh)
+        finally:
+            portalocker.unlock(fh)
+    if not isinstance(payload, list):
+        raise ValueError("openeo jobs.json must contain a list")
+    return payload
+
+
+def _mutate_store(mutation: Callable[[list[dict[str, object]]], _T]) -> _T:
+    _ensure_store()
+    with open(_JOBS_INDEX, "r+", encoding="utf-8") as fh:
+        portalocker.lock(fh, portalocker.LOCK_EX)
+        try:
+            payload = json.load(fh)
+            records: list[dict[str, object]] = payload if isinstance(payload, list) else []
+            result = mutation(records)
+            fh.seek(0)
+            json.dump(records, fh, indent=2, default=str)
+            fh.write("\n")
+            fh.truncate()
+            return result
+        finally:
+            portalocker.unlock(fh)
+
+
+def store_list_jobs() -> list[OpenEOJobRecord]:
+    """Return all persisted openEO job records."""
+    return [OpenEOJobRecord.model_validate(r) for r in _load_raw_records()]
+
+
+def store_get_job(job_id: str) -> OpenEOJobRecord | None:
+    """Return one job record, or None if not found."""
+    for raw in _load_raw_records():
+        if raw.get("id") == job_id:
+            return OpenEOJobRecord.model_validate(raw)
+    return None
+
+
+def store_create_job(record: OpenEOJobRecord) -> OpenEOJobRecord:
+    """Persist a newly created job; raises ValueError if id already exists."""
+
+    def _mutation(records: list[dict[str, object]]) -> OpenEOJobRecord:
+        if any(r.get("id") == record.id for r in records):
+            raise ValueError(f"Job '{record.id}' already exists")
+        records.append(_serialize(record))
+        return record
+
+    return _mutate_store(_mutation)
+
+
+def store_update_job(job_id: str, mutation: Callable[[OpenEOJobRecord], OpenEOJobRecord]) -> OpenEOJobRecord:
+    """Load, mutate, and persist one existing job record."""
+
+    def _apply(records: list[dict[str, object]]) -> OpenEOJobRecord:
+        for idx, raw in enumerate(records):
+            if raw.get("id") != job_id:
+                continue
+            updated = mutation(OpenEOJobRecord.model_validate(raw))
+            records[idx] = _serialize(updated)
+            return updated
+        raise KeyError(job_id)
+
+    return _mutate_store(_apply)
+
+
+def store_delete_job(job_id: str) -> bool:
+    """Delete a job; returns True if it existed."""
+
+    def _mutation(records: list[dict[str, object]]) -> bool:
+        for idx, raw in enumerate(records):
+            if raw.get("id") == job_id:
+                records.pop(idx)
+                return True
+        return False
+
+    return _mutate_store(_mutation)
+
+
+def _serialize(record: OpenEOJobRecord) -> dict[str, object]:
+    # Persist all fields including internal ones (cancel_requested, error_message)
+    data = record.model_dump(mode="json", exclude_none=False)
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+
+
+class OpenEOJobService:
+    """Manages openEO job lifecycle and asynchronous execution."""
+
+    def __init__(self, *, max_workers: int = 4) -> None:
+        self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="openeo-job")
+        self._futures: dict[str, Future[None]] = {}
+        self._lock = threading.Lock()
+
+    def shutdown(self) -> None:
+        self._pool.shutdown(wait=False, cancel_futures=True)
+
+    # ------------------------------------------------------------------
+    # HTTP-layer helpers
+    # ------------------------------------------------------------------
+
+    def list_jobs(self) -> OpenEOJobListResponse:
+        records = sorted(store_list_jobs(), key=lambda r: r.created, reverse=True)
+        return OpenEOJobListResponse(
+            jobs=records,
+            links=[{"rel": "self", "href": "/jobs", "type": "application/json"}],
+        )
+
+    def create_job(self, body: OpenEOJobCreate) -> OpenEOJobRecord:
+        job_id = str(uuid4())
+        now = utc_now()
+        record = OpenEOJobRecord(
+            id=job_id,
+            title=body.title,
+            description=body.description,
+            process=body.process,
+            status=OpenEOJobStatus.CREATED,
+            created=now,
+            updated=now,
+            plan=body.plan,
+            budget=body.budget,
+            links=[
+                {"rel": "self", "href": f"/jobs/{job_id}", "type": "application/json"},
+                {"rel": "results", "href": f"/jobs/{job_id}/results", "type": "application/json"},
+                {"rel": "logs", "href": f"/jobs/{job_id}/logs", "type": "application/json"},
+            ],
+        )
+        return store_create_job(record)
+
+    def get_job_or_404(self, job_id: str) -> OpenEOJobRecord:
+        record = store_get_job(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        return record
+
+    def update_job(self, job_id: str, body: OpenEOJobUpdate) -> OpenEOJobRecord:
+        record = self.get_job_or_404(job_id)
+        if record.status in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
+            raise HTTPException(status_code=400, detail="Cannot update a job that is queued or running")
+        updates: dict[str, Any] = {}
+        if body.title is not None:
+            updates["title"] = body.title
+        if body.description is not None:
+            updates["description"] = body.description
+        if body.process is not None:
+            updates["process"] = body.process
+        if body.plan is not None:
+            updates["plan"] = body.plan
+        if body.budget is not None:
+            updates["budget"] = body.budget
+        if updates:
+            updates["updated"] = utc_now()
+            return store_update_job(job_id, lambda r: r.model_copy(update=updates))
+        return record
+
+    def delete_job(self, job_id: str) -> None:
+        record = self.get_job_or_404(job_id)
+        if record.status in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
+            raise HTTPException(status_code=400, detail="Cannot delete a running job; cancel it first")
+        store_delete_job(job_id)
+
+    def start_job(self, job_id: str) -> None:
+        """Queue a job for processing (POST /jobs/{id}/results)."""
+        record = self.get_job_or_404(job_id)
+        if record.status == OpenEOJobStatus.RUNNING:
+            raise HTTPException(status_code=400, detail="Job is already running")
+        if record.status == OpenEOJobStatus.QUEUED:
+            return
+        store_update_job(
+            job_id,
+            lambda r: r.model_copy(update={"status": OpenEOJobStatus.QUEUED, "updated": utc_now()}),
+        )
+        self._enqueue(job_id)
+
+    def cancel_job(self, job_id: str) -> None:
+        """Request cancellation (DELETE /jobs/{id}/results)."""
+        record = self.get_job_or_404(job_id)
+        if record.status not in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
+            raise HTTPException(status_code=400, detail="Job is not running or queued")
+        store_update_job(
+            job_id,
+            lambda r: r.model_copy(update={"cancel_requested": True, "updated": utc_now()}),
+        )
+        with self._lock:
+            future = self._futures.get(job_id)
+        if future is not None:
+            future.cancel()
+
+    def get_results(self, job_id: str) -> OpenEOJobResults:
+        """Return result asset links for a finished job."""
+        record = self.get_job_or_404(job_id)
+        if record.status == OpenEOJobStatus.ERROR:
+            raise HTTPException(
+                status_code=424,
+                detail=record.error_message or "Job finished with an error",
+            )
+        if record.status != OpenEOJobStatus.FINISHED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Results not available yet; job status is '{record.status}'",
+            )
+        assets = _result_assets(record)
+        return OpenEOJobResults(
+            stac_version="1.1.0",
+            id=job_id,
+            assets=assets,
+            links=[{"rel": "self", "href": f"/jobs/{job_id}/results", "type": "application/json"}],
+        )
+
+    # ------------------------------------------------------------------
+    # Internal execution
+    # ------------------------------------------------------------------
+
+    def _enqueue(self, job_id: str) -> None:
+        with self._lock:
+            existing = self._futures.get(job_id)
+            if existing is not None and not existing.done():
+                return
+            future = self._pool.submit(self._run_job, job_id)
+            self._futures[job_id] = future
+
+    def _run_job(self, job_id: str) -> None:
+        try:
+            self._execute(job_id)
+        finally:
+            with self._lock:
+                self._futures.pop(job_id, None)
+
+    def _execute(self, job_id: str) -> None:
+        from climate_api.openeo.execution import run_process_graph
+
+        record = store_get_job(job_id)
+        if record is None:
+            return
+        if record.cancel_requested:
+            store_update_job(
+                job_id,
+                lambda r: r.model_copy(
+                    update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}
+                ),
+            )
+            return
+
+        store_update_job(
+            job_id,
+            lambda r: r.model_copy(
+                update={"status": OpenEOJobStatus.RUNNING, "updated": utc_now()}
+            ),
+        )
+
+        try:
+            result = run_process_graph(record.process)
+            output_path = self._persist_result(job_id, result)
+            store_update_job(
+                job_id,
+                lambda r: r.model_copy(
+                    update={
+                        "status": OpenEOJobStatus.FINISHED,
+                        "updated": utc_now(),
+                        "usage": {"output_path": output_path} if output_path else {},
+                    }
+                ),
+            )
+        except Exception as job_exc:
+            logger.exception("openEO job %s failed", job_id)
+            error_msg = f"{type(job_exc).__name__}: {job_exc}"
+            store_update_job(
+                job_id,
+                lambda r: r.model_copy(
+                    update={
+                        "status": OpenEOJobStatus.ERROR,
+                        "error_message": error_msg,
+                        "updated": utc_now(),
+                    }
+                ),
+            )
+
+    def _persist_result(self, job_id: str, result: Any) -> str | None:
+        import xarray as xr
+
+        if not isinstance(result, xr.Dataset):
+            return None
+        results_dir = _JOBS_DIR / job_id / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(results_dir / "result.zarr")
+        result.to_zarr(output_path, mode="w")
+        return output_path
+
+
+def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
+    usage = record.usage or {}
+    output_path = usage.get("output_path")
+    if not output_path or not isinstance(output_path, str):
+        return {}
+    return {
+        "result": {
+            "href": f"/jobs/{record.id}/results/result.zarr",
+            "type": "application/vnd+zarr",
+            "title": "Zarr result store",
+            "roles": ["data"],
+        }
+    }
+
+
+_service: OpenEOJobService | None = None
+
+
+def get_openeo_job_service() -> OpenEOJobService:
+    """Return the singleton openEO job service."""
+    global _service
+    if _service is None:
+        _service = OpenEOJobService()
+    return _service
+
+
+def reset_openeo_job_service() -> None:
+    """Reset singleton for tests."""
+    global _service
+    if _service is not None:
+        _service.shutdown()
+    _service = None
