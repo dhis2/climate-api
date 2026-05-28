@@ -1,5 +1,6 @@
 """Root API endpoints."""
 
+import asyncio
 import sys
 import urllib.parse
 from importlib.metadata import version as _pkg_version
@@ -71,14 +72,18 @@ async def manage_ingest(request: Request) -> RedirectResponse:
         resolved_bbox = list(extent["bbox"])
         country_code = extent.get("country_code")
 
-        create_artifact(
-            dataset=template,
-            start=start,
-            end=end,
-            bbox=resolved_bbox,
-            country_code=country_code,
-            overwrite=overwrite,
-            publish=publish,
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: create_artifact(
+                dataset=template,
+                start=start,
+                end=end,
+                bbox=resolved_bbox,
+                country_code=country_code,
+                overwrite=overwrite,
+                publish=publish,
+            ),
         )
         name = urllib.parse.quote(template.get("name", dataset_id))
         return RedirectResponse(f"{base}/manage?message=Ingested+{name}", status_code=303)
@@ -103,7 +108,8 @@ async def manage_sync(request: Request) -> RedirectResponse:
         dataset_id = str(form.get("dataset_id", ""))
         publish = "publish" in form
 
-        sync_dataset(dataset_id=dataset_id, end=None, publish=publish)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: sync_dataset(dataset_id=dataset_id, end=None, publish=publish))
         return RedirectResponse(f"{base}/manage?message=Sync+completed", status_code=303)
     except HTTPException as exc:
         msg = urllib.parse.quote(str(exc.detail))

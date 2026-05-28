@@ -47,6 +47,7 @@ dependencies = [
     "portalocker>=3.2.0",
     "dhis2eo>=1.2.1",
     "openeo-pg-parser-networkx>=2026.3.3",
+    "python-multipart>=0.0.29",
 ]
 
 [project.urls]
