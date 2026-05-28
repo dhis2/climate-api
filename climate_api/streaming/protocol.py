@@ -47,7 +47,7 @@ class GridSpec:
     crs: int
     dtype: np.dtype[Any]
     nodata: float | None = None
-    time_dim: str = "time"
+    time_dim: str = "t"
     x_dim: str = "x"
     y_dim: str = "y"
     attrs: dict[str, Any] = field(default_factory=dict)
