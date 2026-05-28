@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     _app.include_router(ingestion_routes.ingestions_router, prefix="/ingestions", tags=["Ingestions"])
     _app.include_router(ingestion_routes.zarr_router, prefix="/zarr", tags=["Zarr"])
     _app.include_router(ingestion_routes.sync_router, prefix="/sync", tags=["Sync"])
+    _app.include_router(openeo_routes.processes_router, prefix="/processes", tags=["openEO"])
     _app.include_router(processing_routes.router, prefix="/processes", tags=["Processes"])
     # Internal job tracker for native /processes execution (separate from the openEO jobs API at /jobs).
     _app.include_router(job_routes.router, prefix="/internal/jobs", tags=["Internal"])
