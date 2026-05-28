@@ -35,11 +35,6 @@ def load_collection(
     artifact = _get_published_artifact(collection_id)
     ds = _open_artifact(artifact)
 
-    # Normalize time dimension name to openEO standard "t"
-    rename_map = {d: "t" for d in ("time", "valid_time") if d in ds.dims}
-    if rename_map:
-        ds = ds.rename(rename_map)
-
     if temporal_extent is not None:
         start, end = temporal_extent[0], temporal_extent[1] if len(temporal_extent) > 1 else None
         start = _strip_tz(start)
@@ -209,12 +204,11 @@ class ProcessGraphRunner:
         extent = args.get("extent", [None, None])
         if not isinstance(data, xr.Dataset):
             return data
-        time_dim = next((d for d in ("t", "time") if d in data.dims), None)
-        if time_dim is None:
+        if "t" not in data.dims:
             return data
         start = _strip_tz(extent[0] if len(extent) > 0 else None)
         end = _strip_tz(extent[1] if len(extent) > 1 else None)
-        return data.sel({time_dim: slice(start, end)})
+        return data.sel(t=slice(start, end))
 
     def _filter_bbox(self, args: dict[str, Any]) -> Any:
         data = args.get("data")
@@ -244,10 +238,7 @@ class ProcessGraphRunner:
         data = args.get("data")
         period = args.get("period", "month")
         reducer_arg = args.get("reducer")
-        if not isinstance(data, xr.Dataset):
-            return data
-        time_dim = next((d for d in ("t", "time") if d in data.dims), None)
-        if time_dim is None:
+        if not isinstance(data, xr.Dataset) or "t" not in data.dims:
             return data
         freq_map = {
             "day": "D",
@@ -262,12 +253,12 @@ class ProcessGraphRunner:
         freq = freq_map.get(period, "MS")
         reducer_name = _extract_reducer_name(reducer_arg)
         if reducer_name == "sum":
-            return data.resample({time_dim: freq}).sum()
+            return data.resample(t=freq).sum()
         if reducer_name in {"min", "minimum"}:
-            return data.resample({time_dim: freq}).min()
+            return data.resample(t=freq).min()
         if reducer_name in {"max", "maximum"}:
-            return data.resample({time_dim: freq}).max()
-        return data.resample({time_dim: freq}).mean()
+            return data.resample(t=freq).max()
+        return data.resample(t=freq).mean()
 
     def _reducer(self, process_id: str, args: dict[str, Any]) -> Any:
         data = args.get("data")
