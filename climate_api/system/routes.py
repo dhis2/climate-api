@@ -9,6 +9,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.responses import RedirectResponse
 
+from climate_api import config as api_config
+
 from .schemas import AppInfo, HealthStatus, Status
 from .templates import (
     ROOT_RESPONSES,
@@ -16,7 +18,6 @@ from .templates import (
     render_landing,
     render_manage,
     render_maps,
-    render_openeo_editor,
     wants_json,
 )
 
@@ -43,10 +44,11 @@ def maps(request: Request) -> HTMLResponse:
 
 
 @router.get("/openeo", response_class=HTMLResponse, include_in_schema=False)
-def openeo_editor(request: Request) -> HTMLResponse:
-    """Return the openEO Web Editor pre-connected to this backend."""
+def openeo_editor(request: Request) -> RedirectResponse:
+    """Redirect to the openEO Web Editor pre-connected to this backend."""
     base = str(request.base_url).rstrip("/")
-    return HTMLResponse(render_openeo_editor(base))
+    params = urllib.parse.urlencode({"server": base, "server-title": api_config.get_name()})
+    return RedirectResponse(f"https://editor.openeo.org/?{params}", status_code=302)
 
 
 @router.get("/manage", response_class=HTMLResponse, include_in_schema=False)
