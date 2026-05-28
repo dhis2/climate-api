@@ -63,7 +63,7 @@ def read_committed_period_ids(store_path: Path, period_type: str, *, time_dim: s
         finally:
             ds.close()
     except Exception:
-        logger.warning("Could not read committed periods from %s", store_path, exc_info=True)
+        logger.debug("Could not read committed periods from %s", store_path, exc_info=True)
         return set()
 
 
