@@ -46,6 +46,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     job_service = get_job_service()
     job_service.recover_pending_jobs()
     openeo_service = get_openeo_job_service()
+    openeo_service.recover_pending_jobs()
     try:
         yield
     finally:

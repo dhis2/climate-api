@@ -142,7 +142,8 @@ def _bbox_to_dict(extent: Any) -> dict[str, float] | None:
     if extent is None:
         return None
     if isinstance(extent, dict):
-        return {k.lower(): float(v) for k, v in extent.items() if v is not None}
+        _coord_keys = {"west", "south", "east", "north"}
+        return {k.lower(): float(v) for k, v in extent.items() if k.lower() in _coord_keys and v is not None}
     # openeo_pg_parser_networkx BoundingBox pydantic model
     return {
         "west": float(extent.west),

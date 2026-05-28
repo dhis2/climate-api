@@ -159,6 +159,35 @@ class OpenEOJobService:
     def shutdown(self) -> None:
         self._pool.shutdown(wait=False, cancel_futures=True)
 
+    def recover_pending_jobs(self) -> None:
+        """Recover jobs left in a non-terminal state from a previous server run.
+
+        QUEUED jobs are re-enqueued.  RUNNING jobs are marked ERROR because their
+        executor thread no longer exists after the restart.
+        """
+        for record in store_list_jobs():
+            if record.status == OpenEOJobStatus.RUNNING:
+                logger.warning("openEO job %s was RUNNING at restart — marking as error", record.id)
+                try:
+                    store_update_job(
+                        record.id,
+                        lambda r: r.model_copy(
+                            update={
+                                "status": OpenEOJobStatus.ERROR,
+                                "error_message": "Interrupted by server restart",
+                                "updated": utc_now(),
+                            }
+                        ),
+                    )
+                except KeyError:
+                    pass
+            elif record.status == OpenEOJobStatus.QUEUED:
+                logger.info("openEO job %s was QUEUED at restart — re-enqueueing", record.id)
+                try:
+                    self._enqueue(record.id)
+                except Exception:
+                    logger.exception("Failed to re-enqueue openEO job %s", record.id)
+
     # ------------------------------------------------------------------
     # HTTP-layer helpers
     # ------------------------------------------------------------------
@@ -379,7 +408,9 @@ def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
     if output_path.endswith(".zarr"):
         return {
             "result": {
-                "href": f"/jobs/{record.id}/results/result.zarr",
+                # Trailing slash signals a directory root; Zarr HTTP clients
+                # append chunk paths (e.g. .zmetadata, t/0.0) to this href.
+                "href": f"/jobs/{record.id}/results/result.zarr/",
                 "type": "application/vnd+zarr",
                 "title": "Zarr result store",
                 "roles": ["data"],

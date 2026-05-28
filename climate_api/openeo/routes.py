@@ -186,25 +186,37 @@ def cancel_job(job_id: str) -> Response:
     return Response(status_code=204)
 
 
-@jobs_router.get("/{job_id}/results/{filename}")
-def download_result_file(job_id: str, filename: str) -> FileResponse:
-    """Serve a result file produced by a finished batch job."""
+@jobs_router.get("/{job_id}/results/result.geojson")
+def download_geojson_result(job_id: str) -> FileResponse:
+    """Serve the GeoJSON result file for a finished batch job."""
     from climate_api.openeo.jobs import _JOBS_DIR
 
-    # Only allow the two known output file names — no path traversal.
-    allowed = {"result.zarr", "result.geojson"}
-    if filename not in allowed:
-        raise HTTPException(status_code=404, detail="Result file not found")
-
-    path = _JOBS_DIR / job_id / "results" / filename
+    path = _JOBS_DIR / job_id / "results" / "result.geojson"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Result file not found")
+    return FileResponse(str(path), media_type="application/geo+json", filename="result.geojson")
 
-    media_types = {
-        "result.zarr": "application/vnd+zarr",
-        "result.geojson": "application/geo+json",
-    }
-    return FileResponse(str(path), media_type=media_types[filename], filename=filename)
+
+@jobs_router.get("/{job_id}/results/result.zarr/{zarr_path:path}")
+def download_zarr_chunk(job_id: str, zarr_path: str) -> FileResponse:
+    """Serve one file from within the Zarr result store (chunk or metadata)."""
+    from climate_api.openeo.jobs import _JOBS_DIR
+
+    store_dir = _JOBS_DIR / job_id / "results" / "result.zarr"
+    if not store_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Result Zarr store not found")
+
+    # Reject path traversal attempts.
+    try:
+        chunk_path = (store_dir / zarr_path).resolve()
+        chunk_path.relative_to(store_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Zarr path")
+
+    if not chunk_path.exists() or not chunk_path.is_file():
+        raise HTTPException(status_code=404, detail="Zarr chunk not found")
+
+    return FileResponse(str(chunk_path))
 
 
 # ---------------------------------------------------------------------------

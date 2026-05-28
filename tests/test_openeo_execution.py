@@ -211,7 +211,7 @@ def _record(output_path: str | None) -> OpenEOJobRecord:
 def test_result_assets_zarr() -> None:
     assets = _result_assets(_record("/some/path/result.zarr"))
     assert assets["result"]["type"] == "application/vnd+zarr"
-    assert assets["result"]["href"].endswith("result.zarr")
+    assert assets["result"]["href"].endswith("result.zarr/")
 
 
 def test_result_assets_geojson() -> None:

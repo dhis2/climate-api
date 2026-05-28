@@ -20,7 +20,9 @@ override-dependencies = [
     "xvec>=0.3",
     "rioxarray>=0.17",
     "pystac>=1.10",
-    # gdal Python bindings must match system libgdal
+    # gdal Python bindings must match system libgdal.
+    # Update this version when your system libgdal changes: gdal-config --version
+    # CI rewrites this line dynamically before uv sync (see .github/workflows/ci.yml).
     "gdal==3.12.2",
 ]
 
