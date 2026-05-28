@@ -133,6 +133,23 @@ class JobService:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         return record
 
+    def submit_internal_process_job(
+        self,
+        *,
+        process_id: str,
+        request: dict[str, Any],
+        max_attempts: int = 1,
+    ) -> JobRecord:
+        """Submit an internal (non-exposed) process job, bypassing the expose check.
+
+        Used by routes that manage their own authorisation (e.g. POST /ingestions,
+        POST /sync/{id}) and don't need the process to be listed in GET /processes.
+        """
+        process = process_registry.get_process(process_id)
+        if process is None:
+            raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+        return self._create_and_enqueue(process_id=process_id, request=request, max_attempts=max_attempts)
+
     def submit_process_job(
         self,
         *,
@@ -144,7 +161,15 @@ class JobService:
         process = process_registry.get_process(process_id)
         if process is None or not process["expose"]:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+        return self._create_and_enqueue(process_id=process_id, request=request, max_attempts=max_attempts)
 
+    def _create_and_enqueue(
+        self,
+        *,
+        process_id: str,
+        request: dict[str, Any],
+        max_attempts: int,
+    ) -> JobRecord:
         job_id = str(uuid4())
         record = JobRecord(
             job_id=job_id,
