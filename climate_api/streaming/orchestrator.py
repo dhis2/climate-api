@@ -16,6 +16,7 @@ fetched and committed safely.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -32,6 +33,8 @@ from climate_api.streaming.store import (
     write_geozarr_attrs,
 )
 from climate_api.transforms.pipeline import run_dataset_transforms
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -192,6 +195,20 @@ async def run_streaming_ingest(
         close_plugin = getattr(plugin, "close", None)
         if callable(close_plugin):
             close_plugin()
+
+    # Prune intermediate ingest snapshots: each period commit created one snapshot;
+    # only the final HEAD state needs to be retained.  expire_snapshots marks older
+    # snapshots as expired without deleting chunk data — garbage_collect would be
+    # needed to reclaim manifest storage.  The "main" branch ref preserves HEAD.
+    from datetime import datetime, timezone
+
+    try:
+        final_repo = open_or_create_repo(store_path)
+        expired = final_repo.expire_snapshots(older_than=datetime.now(tz=timezone.utc))
+        if expired:
+            logger.info("Expired %d intermediate snapshots from %s", len(expired), store_path)
+    except Exception:
+        logger.warning("expire_snapshots failed for %s — store remains valid", store_path, exc_info=True)
 
     return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=written)
 
