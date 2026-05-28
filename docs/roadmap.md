@@ -36,7 +36,7 @@ The second step adds the ability to derive new datasets from ingested data and c
 **Data processing**
 
 - Compute derived variables: climate normals, anomalies, exposure indices
-- We will investigate whether OGC API Processes and/or openEO is the right fit for process execution and chaining
+- openEO has been adopted as the process execution and chaining standard — the API exposes `POST /result` (synchronous) and `POST /jobs` (batch) backed by openeo-pg-parser-networkx and openeo-processes-dask (120+ standard processes)
 
 **DHIS2 integration**
 
