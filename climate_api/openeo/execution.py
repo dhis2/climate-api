@@ -117,9 +117,7 @@ def _augment_with_udps(base_registry: Any) -> Any:
     for udp in udp_records:
         if not udp.process_graph:
             continue
-        pg_dict: dict[str, Any] = (
-            udp.process_graph if isinstance(udp.process_graph, dict) else dict(udp.process_graph)
-        )
+        pg_dict: dict[str, Any] = udp.process_graph if isinstance(udp.process_graph, dict) else dict(udp.process_graph)
 
         def _make_udp_impl(pg: dict[str, Any]) -> Any:
             def _udp_impl(**kwargs: Any) -> Any:

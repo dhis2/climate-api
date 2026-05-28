@@ -146,7 +146,7 @@ def _native_to_openeo(process: dict[str, Any]) -> dict[str, Any]:
     pid = process.get("id", "")
     raw_inputs = process.get("inputs") or {}
     parameters = []
-    for name, spec in (raw_inputs.items() if isinstance(raw_inputs, dict) else []):
+    for name, spec in raw_inputs.items() if isinstance(raw_inputs, dict) else []:
         if not isinstance(spec, dict):
             continue
         param: dict[str, Any] = {"name": name}

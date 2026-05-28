@@ -108,9 +108,7 @@ def create_app() -> FastAPI:
 
         # Extra CORS + PNA headers for Zarr inspector origins on /zarr paths.
         allowed_zarr_origin = origin if origin in _zarr_browser_access_origins() else None
-        if allowed_zarr_origin and (
-            request.url.path == "/zarr" or request.url.path.startswith("/zarr/")
-        ):
+        if allowed_zarr_origin and (request.url.path == "/zarr" or request.url.path.startswith("/zarr/")):
             response.headers["Access-Control-Allow-Origin"] = allowed_zarr_origin
             _append_vary_value(response, "Origin")
             response.headers.setdefault("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
