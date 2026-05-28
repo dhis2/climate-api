@@ -223,16 +223,43 @@ def execute_synchronous(
 
     import xarray as xr
 
+    if isinstance(result, xr.DataArray):
+        info: dict[str, Any] = {
+            "type": "datacube",
+            "name": result.name,
+            "dims": dict(zip(result.dims, result.shape)),
+            "dtype": str(result.dtype),
+            "coords": {k: _coord_summary(v) for k, v in result.coords.items()},
+        }
+        return JSONResponse(info)
     if isinstance(result, xr.Dataset):
-        # Return basic metadata for dataset results
         info = {
             "type": "datacube",
             "dims": dict(result.dims),
             "variables": list(result.data_vars),
-            "coords": list(result.coords),
+            "coords": {k: _coord_summary(v) for k, v in result.coords.items()},
         }
         return JSONResponse(info)
     return result
+
+
+def _coord_summary(coord: Any) -> Any:
+    """Compact coordinate summary safe for JSON serialization."""
+    import numpy as np
+
+    vals = coord.values
+    if vals.ndim == 0:
+        v = vals.item()
+        return str(v) if not isinstance(v, (int, float, bool)) else v
+    if vals.size == 0:
+        return []
+
+    def _fmt(v: Any) -> Any:
+        return v.item() if isinstance(v, np.generic) else str(v)
+
+    if vals.size <= 4:
+        return [_fmt(v) for v in vals]
+    return {"first": _fmt(vals[0]), "last": _fmt(vals[-1]), "size": int(vals.size)}
 
 
 # ---------------------------------------------------------------------------
