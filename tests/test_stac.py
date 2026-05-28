@@ -86,6 +86,20 @@ def test_catalog_lists_published_zarr_datasets(client: TestClient, monkeypatch: 
     assert any(link["rel"] == "child" for link in payload["links"])
 
 
+def test_catalog_lists_published_icechunk_datasets(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ingestion_services,
+        "list_artifacts",
+        lambda: SimpleNamespace(items=[_artifact(artifact_id="a1", format=ArtifactFormat.ICECHUNK)]),
+    )
+
+    response = client.get("/stac/catalog.json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(link["rel"] == "child" for link in payload["links"])
+
+
 def test_catalog_self_link_reflects_request_path(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         ingestion_services,
@@ -322,6 +336,40 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
     assert response.status_code == 200
     payload = response.json()
     assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily/0")
+
+
+def test_collection_uses_root_href_for_icechunk_store(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    artifact = _artifact(artifact_id="a1", format=ArtifactFormat.ICECHUNK, path="/tmp/chirps3.icechunk")
+    monkeypatch.setattr(
+        ingestion_services,
+        "list_artifacts",
+        lambda: SimpleNamespace(items=[artifact]),
+    )
+    monkeypatch.setattr(
+        stac_services.registry_datasets,
+        "get_dataset",
+        lambda _: {"period_type": "daily", "source": "CHIRPS v3", "ingestion": {}},
+    )
+    monkeypatch.setattr(
+        stac_services,
+        "_build_collection_with_xstac",
+        lambda **_: {
+            "type": "Collection",
+            "id": "chirps3_precipitation_daily",
+            "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
+            "cube:dimensions": {"time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}},
+            "cube:variables": {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}},
+            "assets": {"zarr": {}},
+        },
+    )
+
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assets"]["zarr"]["href"].endswith("/zarr/chirps3_precipitation_daily")
+    assert payload["assets"]["zarr"]["xarray:open_kwargs"] == {"consolidated": None}
+    assert payload["assets"]["zarr"]["zarr:zarr_format"] == 3
 
 
 def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(

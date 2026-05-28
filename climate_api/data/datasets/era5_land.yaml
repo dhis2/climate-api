@@ -16,9 +16,9 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
-    function: dhis2eo.data.destine.era5_land.hourly.download
+    plugin: climate_api.streaming.plugins.era5_land.ERA5LandHourlySingleBandPlugin
     default_params:
-      variables: ['t2m']
+      variable: t2m
   transforms:
     - climate_api.transforms.kelvin_to_celsius
   units: degC
@@ -47,9 +47,8 @@
       begin: "1950-01-01"
       resolution: PT1H
   ingestion:
-    function: dhis2eo.data.destine.era5_land.hourly.download
-    default_params:
-      variables: ['tp']
+    plugin: climate_api.streaming.plugins.era5_land.ERA5LandPrecipitationPlugin
+    default_params: {}
   transforms:
     - climate_api.transforms.metres_to_mm
   units: mm

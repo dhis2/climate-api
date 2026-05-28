@@ -31,6 +31,7 @@ from climate_api.streaming.store import (
     read_committed_period_ids,
     write_geozarr_attrs,
 )
+from climate_api.transforms.pipeline import run_dataset_transforms
 
 
 @dataclass
@@ -67,6 +68,7 @@ async def run_streaming_ingest(
     *,
     plugin: IngestionPlugin,
     params: dict[str, Any],
+    dataset: dict[str, Any] | None = None,
     bbox: list[float],
     start: str,
     end: str,
@@ -136,6 +138,8 @@ async def run_streaming_ingest(
 
             period_id, task = in_flight.popleft()
             ds = await task
+            if dataset is not None:
+                ds = run_dataset_transforms(ds, dataset)
             _strip_cf_encoding(ds, period_type, time_dim=spec.time_dim)
             try:
                 spatial_shape = (int(ds.sizes[spec.y_dim]), int(ds.sizes[spec.x_dim]))
@@ -185,6 +189,9 @@ async def run_streaming_ingest(
             task.cancel()
         if tasks_to_cancel:
             await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+        close_plugin = getattr(plugin, "close", None)
+        if callable(close_plugin):
+            close_plugin()
 
     return StreamingIngestResult(store_path=store_path, period_type=period_type, periods_written=written)
 
@@ -193,6 +200,7 @@ def run_streaming_ingest_sync(
     *,
     plugin: IngestionPlugin,
     params: dict[str, Any],
+    dataset: dict[str, Any] | None = None,
     bbox: list[float],
     start: str,
     end: str,
@@ -219,6 +227,7 @@ def run_streaming_ingest_sync(
         run_streaming_ingest(
             plugin=plugin,
             params=params,
+            dataset=dataset,
             bbox=bbox,
             start=start,
             end=end,

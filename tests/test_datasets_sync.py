@@ -104,7 +104,7 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-01-31", publish=True)
 
     assert result.sync_id is None
     assert result.status == "up_to_date"
@@ -137,7 +137,7 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
 
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", publish=True)
 
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2026-02-10"
@@ -159,58 +159,11 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_detail.delta_end == "2026-02-10"
 
 
-def test_sync_dataset_append_policy_downloads_only_delta_but_preserves_full_scope(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dataset_id = "chirps3_precipitation_daily_sle"
-    latest = _artifact(artifact_id="a1", managed_dataset_id=dataset_id, end="2026-01-31")
-    monkeypatch.setattr(services, "get_latest_artifact_for_dataset_or_404", lambda _: latest)
-    monkeypatch.setattr(
-        services.registry_datasets,
-        "get_dataset",
-        lambda _: {
-            "id": "chirps3_precipitation_daily",
-            "period_type": "daily",
-            "sync": {"kind": "temporal", "execution": "append"},
-            "ingestion": {},
-        },
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_create_artifact(**kwargs: object) -> ArtifactRecord:
-        captured.update(kwargs)
-        return _artifact(artifact_id="a2", managed_dataset_id=dataset_id, end="2026-02-10")
-
-    monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
-    monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
-
-    assert captured["start"] == "2026-01-01"
-    assert captured["end"] == "2026-02-10"
-    assert captured["download_start"] == "2026-02-01"
-    assert captured["download_end"] == "2026-02-10"
-    assert result.sync_detail.action == SyncAction.APPEND
-    assert result.sync_detail.reason == "new_periods_available_for_append"
-    assert "Data exists through 2026-01-31" in result.sync_detail.message
-    assert "Sync will download missing periods 2026-02-01 through 2026-02-10" in result.sync_detail.message
-    assert "rebuild coverage through 2026-02-10" in result.sync_detail.message
-    assert result.sync_detail.current_start == "2026-01-01"
-    assert result.sync_detail.current_end == "2026-01-31"
-    assert result.sync_detail.target_end == "2026-02-10"
-    assert result.sync_detail.target_end_source == "request"
-    assert result.sync_detail.delta_start == "2026-02-01"
-    assert result.sync_detail.delta_end == "2026-02-10"
-
-
-def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr(
+def test_sync_dataset_append_policy_falls_back_to_rematerialize_without_icechunk_artifact(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    # Simulate a pyramid zarr on disk by creating a "0/" subdirectory.
     zarr_path = tmp_path / "worldpop_population_yearly.zarr"
-    (zarr_path / "0").mkdir(parents=True)
 
     dataset_id = "worldpop_population_yearly_sle"
     latest = _artifact(
@@ -243,21 +196,21 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_for_pyramid_zarr
             end="2025",
         )
 
-    warnings: list[str] = []
+    messages: list[str] = []
 
-    def fake_warning(message: str, *args: object) -> None:
-        warnings.append(message % args if args else message)
+    def fake_info(message: str, *args: object) -> None:
+        messages.append(message % args if args else message)
 
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
-    monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
+    monkeypatch.setattr(sync_engine.logger, "info", fake_info)
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2025", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2025", publish=True)
 
     assert "download_start" in captured
     assert captured["download_start"] is None
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert any("falling back to rematerialize" in message for message in warnings)
+    assert any("requires an existing Icechunk artifact" in message for message in messages)
 
 
 def test_sync_dataset_append_policy_uses_store_based_append_for_plugin_backed_dataset(
@@ -292,7 +245,7 @@ def test_sync_dataset_append_policy_uses_store_based_append_for_plugin_backed_da
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", publish=True)
 
     assert "download_start" in captured
     assert captured["download_start"] == "2026-02-01"
@@ -304,7 +257,7 @@ def test_sync_dataset_append_policy_uses_store_based_append_for_plugin_backed_da
     assert "extend coverage through 2026-02-10" in result.sync_detail.message
     assert result.message is not None
     assert "appending missing periods" in result.message
-    assert "Icechunk store" in result.message
+    assert "committed store" in result.message
 
 
 def test_plan_sync_for_plugin_backed_icechunk_uses_committed_store_state(
@@ -752,7 +705,7 @@ def test_sync_dataset_append_policy_falls_back_for_plugin_backed_non_icechunk_ar
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
     monkeypatch.setattr(sync_engine.logger, "info", fake_info)
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026-02-10", publish=True)
 
     assert "download_start" in captured
     assert captured["download_start"] is None
@@ -778,7 +731,7 @@ def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(mon
     )
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2024", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2024", publish=True)
 
     assert result.sync_id is None
     assert result.status == "up_to_date"
@@ -827,7 +780,7 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     monkeypatch.setattr(services, "create_artifact", fake_create_artifact)
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="2026", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="2026", publish=True)
 
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2025"
@@ -903,7 +856,7 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
     monkeypatch.setattr(services, "create_artifact", lambda **_: pytest.fail("static sync should not create artifacts"))
     monkeypatch.setattr(services, "get_dataset_or_404", lambda _: _dataset_detail(dataset_id))
 
-    result = services.sync_dataset(dataset_id=dataset_id, end="ignored", prefer_zarr=True, publish=True)
+    result = services.sync_dataset(dataset_id=dataset_id, end="ignored", publish=True)
 
     assert result.sync_id is None
     assert result.status == "not_syncable"
@@ -1060,7 +1013,7 @@ def test_sync_route_executes_rematerialize_and_returns_structured_detail(
 
     response = client.post(
         f"/sync/{dataset_id}",
-        json={"end": "2026-02-10", "prefer_zarr": True, "publish": True},
+        json={"end": "2026-02-10", "publish": True},
     )
 
     assert response.status_code == 200
@@ -1305,7 +1258,6 @@ def test_run_sync_raises_clear_error_when_append_invariants_are_missing(monkeypa
             source_dataset={"id": "chirps3_precipitation_daily", "period_type": "daily", "sync": {"kind": "temporal"}},
             requested_end="2026-02-11",
             country_code=None,
-            prefer_zarr=True,
             publish=True,
             create_artifact_fn=lambda **_: pytest.fail("create_artifact should not be called"),
             get_dataset_fn=lambda _: pytest.fail("get_dataset should not be called"),
@@ -1356,6 +1308,6 @@ def test_sync_dataset_forwards_country_code_from_extent(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(services, "run_sync", fake_run_sync)
 
-    services.sync_dataset(dataset_id=dataset_id, end="2021", prefer_zarr=True, publish=True)
+    services.sync_dataset(dataset_id=dataset_id, end="2021", publish=True)
 
     assert captured["country_code"] == "SLE"

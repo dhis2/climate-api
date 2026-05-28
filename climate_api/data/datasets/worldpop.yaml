@@ -17,9 +17,11 @@
       end: "2030"
       resolution: P1Y
   ingestion:
-    function: dhis2eo.data.worldpop.pop_total.yearly.download
+    plugin: climate_api.streaming.plugins.worldpop.WorldPopYearlyPlugin
     default_params:
       version: global2
+      product: total
+      variable: pop_total
   units: people
   resolution: 100m x 100m
   source: WorldPop Global2

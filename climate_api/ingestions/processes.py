@@ -19,7 +19,6 @@ def execute_ingestion(
     start: str,
     end: str | None = None,
     overwrite: bool = False,
-    prefer_zarr: bool = True,
     publish: bool = True,
     on_progress: Callable[[int | None, int | None, str | None], None] | None = None,
     is_cancel_requested: Callable[[], bool] | None = None,
@@ -38,7 +37,6 @@ def execute_ingestion(
         bbox=list(extent["bbox"]),
         country_code=extent.get("country_code"),
         overwrite=overwrite,
-        prefer_zarr=prefer_zarr,
         publish=publish,
         on_progress=on_progress,
         is_cancel_requested=is_cancel_requested,
@@ -51,18 +49,11 @@ def execute_sync(
     *,
     dataset_id: str,
     end: str | None = None,
-    prefer_zarr: bool = True,
     publish: bool = True,
 ) -> SyncResponse:
-    """Execute one managed-dataset sync from existing artifact state.
-
-    `prefer_zarr` remains meaningful for legacy sync paths. Plugin-backed
-    Icechunk sync always uses the committed store append path and ignores that
-    preference.
-    """
+    """Execute one managed-dataset sync from existing artifact state."""
     return services.sync_dataset(
         dataset_id=dataset_id,
         end=end,
-        prefer_zarr=prefer_zarr,
         publish=publish,
     )

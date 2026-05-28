@@ -121,7 +121,6 @@ def plan_sync(
             )
         action = SyncAction.APPEND if _supports_append(source_dataset, latest_artifact) else SyncAction.REMATERIALIZE
         reason = "new_periods_available_for_append" if action == SyncAction.APPEND else "new_periods_available"
-        plugin_backed = _is_plugin_backed(source_dataset)
         return SyncDetail(
             source_dataset_id=latest_artifact.dataset_id,
             sync_kind=sync_kind,
@@ -133,7 +132,6 @@ def plan_sync(
                 target_end=latest_available_end,
                 delta_start=next_period_start,
                 delta_end=latest_available_end,
-                plugin_backed=plugin_backed,
             ),
             current_start=current_start,
             current_end=current_end,
@@ -178,7 +176,6 @@ def run_sync(
     source_dataset: dict[str, Any],
     requested_end: str | None,
     country_code: str | None,
-    prefer_zarr: bool,
     publish: bool,
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
@@ -232,16 +229,14 @@ def run_sync(
         )
 
     # Execution always goes through the ingestion materialization path so sync
-    # does not grow a second downloader/storage implementation. APPEND now has
-    # two concrete execution modes:
-    # - legacy download-backed datasets use delta-download plus canonical rebuild
-    # - plugin-backed Icechunk datasets extend the committed store in place
+    # does not grow a second write/storage implementation. Temporal APPEND
+    # extends the committed store; release-style REMATERIALIZE rewrites the
+    # managed artifact against the latest planned upstream state.
     if sync_detail.current_start is None:
         raise ValueError("Sync execution requires current_start for rematerialize or append actions")
     if sync_detail.target_end is None:
         raise ValueError("Sync execution requires target_end for rematerialize or append actions")
     download_start = sync_detail.delta_start if sync_detail.action == SyncAction.APPEND else None
-    plugin_backed = _is_plugin_backed(source_dataset)
     logger.info(
         "Sync executing for dataset '%s': action=%s artifact_scope=%s..%s download_scope=%s..%s publish=%s",
         dataset_id,
@@ -261,7 +256,6 @@ def run_sync(
         bbox=list(latest_artifact.request_scope.bbox) if latest_artifact.request_scope.bbox is not None else None,
         country_code=country_code,
         overwrite=False,
-        prefer_zarr=prefer_zarr,
         publish=publish,
     )
     logger.info(
@@ -273,18 +267,16 @@ def run_sync(
     return SyncResponse(
         sync_id=artifact.artifact_id,
         status="completed",
-        message=_sync_completed_message(sync_detail.action, plugin_backed=plugin_backed),
+        message=_sync_completed_message(sync_detail.action),
         dataset=get_dataset_fn(managed_dataset_id_for(artifact)),
         sync_detail=sync_detail,
     )
 
 
-def _sync_completed_message(action: SyncAction, *, plugin_backed: bool = False) -> str:
+def _sync_completed_message(action: SyncAction) -> str:
     """Return a user-facing completion message for the executed sync action."""
     if action == SyncAction.APPEND:
-        if plugin_backed:
-            return "Managed dataset was synced by appending missing periods to the committed Icechunk store."
-        return "Managed dataset was synced by downloading the missing period range and rebuilding the artifact."
+        return "Managed dataset was synced by appending missing periods to the committed store."
     return "Managed dataset was rematerialized against the latest planned upstream state."
 
 
@@ -295,18 +287,12 @@ def _sync_plan_message(
     target_end: str,
     delta_start: str,
     delta_end: str,
-    plugin_backed: bool = False,
 ) -> str:
     """Return a human-readable sync plan summary."""
     if action == SyncAction.APPEND:
-        if plugin_backed:
-            return (
-                f"Data exists through {current_end}. Sync will append missing periods "
-                f"{delta_start} through {delta_end} and extend coverage through {target_end}."
-            )
         return (
-            f"Data exists through {current_end}. Sync will download missing periods "
-            f"{delta_start} through {delta_end} and rebuild coverage through {target_end}."
+            f"Data exists through {current_end}. Sync will append missing periods "
+            f"{delta_start} through {delta_end} and extend coverage through {target_end}."
         )
     return f"Data exists through {current_end}. Sync will rematerialize the dataset through {target_end}."
 
@@ -385,26 +371,13 @@ def _latest_available_end(*, source_dataset: dict[str, Any], requested_end: str)
 
 
 def _supports_append(source_dataset: dict[str, Any], latest_artifact: ArtifactRecord) -> bool:
-    """Return whether this template opts into V1 delta-download sync execution."""
-    from pathlib import Path
-
+    """Return whether this template opts into store-based append sync execution."""
     if source_dataset.get("sync", {}).get("execution") != SyncAction.APPEND.value:
         return False
-    if _is_plugin_backed(source_dataset):
-        if latest_artifact.format != ArtifactFormat.ICECHUNK:
-            logger.info(
-                "Sync append execution for plugin-backed dataset '%s' requires an existing Icechunk artifact; "
-                "falling back to rematerialize",
-                source_dataset.get("id", "<unknown>"),
-            )
-            return False
-        return True
-    # Pyramid zarr stores cannot be appended to — they must be rebuilt in full.
-    # Detect this from the existing artifact's on-disk structure rather than YAML.
-    artifact_path = latest_artifact.path
-    if artifact_path and "://" not in artifact_path and (Path(artifact_path) / "0").is_dir():
-        logger.warning(
-            "Sync append execution is not supported for pyramid zarr dataset '%s'; falling back to rematerialize",
+    if latest_artifact.format != ArtifactFormat.ICECHUNK:
+        logger.info(
+            "Sync append execution for dataset '%s' requires an existing Icechunk artifact; "
+            "falling back to rematerialize",
             source_dataset.get("id", "<unknown>"),
         )
         return False
