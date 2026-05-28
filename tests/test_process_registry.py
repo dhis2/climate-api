@@ -5,13 +5,15 @@ import pytest
 from climate_api.data_registry.services import processes as process_registry
 
 
-def test_builtin_processes_include_ingestion_and_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_builtin_processes_are_empty_without_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ingestion/sync/ingest YAMLs were removed — admin operations are served
+    # by dedicated endpoints (/ingestions, /sync/{id}), not as processes.
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
 
     ids = {p["id"] for p in process_registry.list_processes()}
-    assert "ingestion" in ids
-    assert "sync" in ids
+    assert "ingestion" not in ids
+    assert "sync" not in ids
     assert "resample" not in ids
 
 
@@ -73,7 +75,7 @@ def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.Monkey
 
     ids = {p["id"] for p in process_registry.list_processes()}
     assert "custom_process" in ids
-    assert "ingestion" in ids
+    assert "ingestion" not in ids  # ingestion.yaml removed; use /ingestions endpoint
 
 
 def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
