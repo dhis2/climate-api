@@ -10,7 +10,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.responses import RedirectResponse
 
 from .schemas import AppInfo, HealthStatus, Status
-from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, wants_json
+from .templates import (
+    ROOT_RESPONSES,
+    app_version,
+    render_landing,
+    render_manage,
+    render_maps,
+    render_openeo_editor,
+    wants_json,
+)
 
 router = APIRouter()
 
@@ -32,6 +40,13 @@ def maps(request: Request) -> HTMLResponse:
     """Return the interactive map viewer."""
     base = str(request.base_url).rstrip("/")
     return HTMLResponse(render_maps(base))
+
+
+@router.get("/openeo", response_class=HTMLResponse, include_in_schema=False)
+def openeo_editor(request: Request) -> HTMLResponse:
+    """Return the openEO Web Editor pre-connected to this backend."""
+    base = str(request.base_url).rstrip("/")
+    return HTMLResponse(render_openeo_editor(base))
 
 
 @router.get("/manage", response_class=HTMLResponse, include_in_schema=False)

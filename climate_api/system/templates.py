@@ -109,6 +109,14 @@ def render_maps(base: str) -> str:
     return get_template("map-viewer.html").render(base=base, name=api_config.get_name())
 
 
+def render_openeo_editor(base: str) -> str:
+    """Render the openEO Web Editor page."""
+    return get_template("openeo-editor.html").render(
+        server_url=base,
+        name=api_config.get_name(),
+    )
+
+
 def _load_extent() -> dict[str, Any] | None:
     try:
         return get_extent()
