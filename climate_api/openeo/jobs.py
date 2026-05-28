@@ -299,17 +299,13 @@ class OpenEOJobService:
         if record.cancel_requested:
             store_update_job(
                 job_id,
-                lambda r: r.model_copy(
-                    update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}
-                ),
+                lambda r: r.model_copy(update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}),
             )
             return
 
         store_update_job(
             job_id,
-            lambda r: r.model_copy(
-                update={"status": OpenEOJobStatus.RUNNING, "updated": utc_now()}
-            ),
+            lambda r: r.model_copy(update={"status": OpenEOJobStatus.RUNNING, "updated": utc_now()}),
         )
 
         try:

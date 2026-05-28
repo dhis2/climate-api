@@ -78,9 +78,7 @@ _OPENEO_STANDARD_PROCESSES: list[dict[str, Any]] = [
             {"name": "reducer", "description": "Reducer process (e.g. mean, sum, min, max)", "schema": {}},
         ],
         "returns": {"description": "A data cube with dates as the dimension labels.", "schema": {"type": "object"}},
-        "links": [
-            {"rel": "about", "href": "https://processes.openeo.org/#aggregate_temporal_period"}
-        ],
+        "links": [{"rel": "about", "href": "https://processes.openeo.org/#aggregate_temporal_period"}],
     },
     {
         "id": "aggregate_spatial",
