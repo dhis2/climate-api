@@ -40,34 +40,24 @@ def test_get_sync_process_detail_returns_public_metadata(client: TestClient) -> 
 
 
 def test_get_processes_omits_internal_only_processes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # GET /processes is now the openEO endpoint; the expose flag is enforced on
+    # GET /processes/{id} and POST /processes/{id}/execution (native routes).
     monkeypatch.setattr(
-        "climate_api.processing.routes.process_registry.list_processes",
-        lambda: [
-            {
-                "id": "public_process",
-                "title": "Public process",
-                "description": "Visible",
-                "execution": {"function": "mypackage.public.execute"},
-                "expose": True,
-                "jobControlOptions": ["sync-execute"],
-            },
-            {
-                "id": "internal_process",
-                "title": "Internal process",
-                "description": "Hidden",
-                "execution": {"function": "mypackage.internal.execute"},
-                "expose": False,
-                "jobControlOptions": ["sync-execute"],
-            },
-        ],
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda process_id: {
+            "id": process_id,
+            "title": "Internal process",
+            "execution": {"function": "mypackage.internal.execute"},
+            "expose": False,
+            "jobControlOptions": ["sync-execute"],
+        },
     )
 
-    response = client.get("/processes")
+    detail_response = client.get("/processes/internal_process")
+    assert detail_response.status_code == 404
 
-    assert response.status_code == 200
-    payload = response.json()
-    ids = {item["id"] for item in payload["processes"]}
-    assert ids == {"public_process"}
+    exec_response = client.post("/processes/internal_process/execution", json={})
+    assert exec_response.status_code == 404
 
 
 def test_get_unknown_process_detail_returns_404(client: TestClient) -> None:
@@ -93,11 +83,14 @@ def test_get_internal_process_detail_returns_404(client: TestClient, monkeypatch
     assert response.status_code == 404
 
 
-def test_expose_false_yaml_fixture_is_hidden_from_catalog_and_routes(
+def test_expose_false_yaml_fixture_is_hidden_from_execution_routes(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    # GET /processes is the openEO endpoint and is unaffected by the native
+    # expose flag.  The flag is still enforced on GET /processes/{id} and
+    # POST /processes/{id}/execution.
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
     (processes_subdir / "internal.yaml").write_text(
@@ -111,10 +104,6 @@ def test_expose_false_yaml_fixture_is_hidden_from_catalog_and_routes(
         encoding="utf-8",
     )
     monkeypatch.setattr("climate_api.data_registry.services.processes.CONFIGS_DIR", processes_subdir)
-
-    catalog_response = client.get("/processes")
-    assert catalog_response.status_code == 200
-    assert catalog_response.json()["processes"] == []
 
     detail_response = client.get("/processes/internal_process")
     assert detail_response.status_code == 404

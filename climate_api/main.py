@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
             response.headers["Access-Control-Allow-Headers"] = request.headers.get(
                 "access-control-request-headers", "*"
             )
+            response.headers["Vary"] = "Origin"
             return response
 
         response = await call_next(request)

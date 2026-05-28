@@ -207,8 +207,8 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     assert payload["extent"]["temporal"]["interval"] == [["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]]
     assert payload["cube:dimensions"]["x"]["step"] == 0.05
     assert payload["cube:dimensions"]["y"]["step"] == -0.05
-    assert payload["cube:dimensions"]["time"]["extent"] == ["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]
-    assert payload["cube:dimensions"]["time"]["step"] == "P1D"
+    assert payload["cube:dimensions"]["t"]["extent"] == ["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]
+    assert payload["cube:dimensions"]["t"]["step"] == "P1D"
     assert payload["cube:variables"]["precip"]["unit"] == "mm/day"
     assert payload["cube:variables"]["precip"]["attrs"] == {
         "long_name": "Precipitation",
@@ -298,7 +298,7 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["cube:dimensions"]["valid_time"]["step"] == "PT1H"
+    assert payload["cube:dimensions"]["t"]["step"] == "PT1H"
 
 
 def test_collection_uses_level0_href_for_pyramid_zarr_store(
