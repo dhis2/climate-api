@@ -72,7 +72,7 @@ def test_async_process_execution_creates_job_and_exposes_status(
     assert response.status_code == 202
     payload = cast(dict[str, Any], response.json())
     job_id = payload["jobID"]
-    assert response.headers["Location"] == f"/internal/jobs/{job_id}"
+    assert response.headers["Location"] == f"/jobs/{job_id}"
     assert payload["processID"] == "quick-process"
 
     finished = _wait_for_terminal_job(client, job_id)
