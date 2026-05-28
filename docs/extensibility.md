@@ -181,7 +181,7 @@ def execute(*, source_dataset_id: str, factor: float, **_ignored: Any) -> dict[s
 
 Invalid or missing arguments raise `TypeError`, which the route dispatcher catches and returns as HTTP 400.
 
-For the built-in `resample` process and usage examples, see [Processes](processes.md).
+For temporal aggregation via openEO process graphs, see [Processes](processes.md) and the [openEO guide](openeo.md).
 
 ---
 

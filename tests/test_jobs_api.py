@@ -11,8 +11,6 @@ from fastapi.testclient import TestClient
 from climate_api.jobs import store as job_store
 from climate_api.jobs.models import JobCancelledError, JobStatus
 from climate_api.jobs.service import reset_job_service
-from climate_api.processing import services as processing_services
-from tests.helpers import dataset_record
 
 
 @pytest.fixture(autouse=True)
@@ -37,44 +35,53 @@ def _wait_for_terminal_job(client: TestClient, job_id: str, *, timeout: float = 
     raise AssertionError(f"Timed out waiting for job {job_id} to complete")
 
 
+def _fake_process(process_id: str = "quick-process") -> dict[str, object]:
+    return {
+        "id": process_id,
+        "title": "Quick process",
+        "description": "Fast fake process for job lifecycle tests",
+        "execution": {"function": "tests.fake.quick_process"},
+        "expose": True,
+        "jobControlOptions": ["sync-execute", "async-execute"],
+    }
+
+
 def test_async_process_execution_creates_job_and_exposes_status(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        processing_services,
-        "run_resample_process",
-        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda pid: _fake_process(pid) if pid == "quick-process" else None,
+    )
+    monkeypatch.setattr(
+        "climate_api.jobs.service.process_registry.get_process",
+        lambda pid: _fake_process(pid) if pid == "quick-process" else None,
+    )
+    monkeypatch.setattr(
+        "climate_api.data_registry.services.processes._get_dynamic_function",
+        lambda path: lambda **kw: {"status": "completed", "result": "ok"},
     )
 
     response = client.post(
-        "/processes/resample/execution",
+        "/processes/quick-process/execution",
         headers={"Prefer": "respond-async"},
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-            "end": "2026-01-12",
-            "publish": True,
-        },
+        json={"param": "value"},
     )
 
     assert response.status_code == 202
     payload = cast(dict[str, Any], response.json())
     job_id = payload["jobID"]
-    assert response.headers["Location"] == f"/jobs/{job_id}"
-    assert payload["processID"] == "resample"
+    assert response.headers["Location"] == f"/internal/jobs/{job_id}"
+    assert payload["processID"] == "quick-process"
 
     finished = _wait_for_terminal_job(client, job_id)
     assert finished["status"] == JobStatus.SUCCESSFUL
-    result = cast(dict[str, Any], finished["result"])
-    assert result["artifact_id"] == "artifact-123"
+    assert cast(dict[str, Any], finished["result"])["status"] == "completed"
 
     jobs_response = client.get("/jobs")
     assert jobs_response.status_code == 200
-    jobs_payload = cast(dict[str, Any], jobs_response.json())
-    assert any(item["jobID"] == job_id for item in jobs_payload["jobs"])
+    assert any(item["jobID"] == job_id for item in cast(dict[str, Any], jobs_response.json())["jobs"])
 
 
 def test_delete_job_requests_cooperative_cancellation(
@@ -137,20 +144,22 @@ def test_delete_terminal_job_leaves_record_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        processing_services,
-        "run_resample_process",
-        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
+        "climate_api.processing.routes.process_registry.get_process",
+        lambda pid: _fake_process(pid) if pid == "quick-process" else None,
+    )
+    monkeypatch.setattr(
+        "climate_api.jobs.service.process_registry.get_process",
+        lambda pid: _fake_process(pid) if pid == "quick-process" else None,
+    )
+    monkeypatch.setattr(
+        "climate_api.data_registry.services.processes._get_dynamic_function",
+        lambda path: lambda **kw: {"status": "completed"},
     )
 
     response = client.post(
-        "/processes/resample/execution",
+        "/processes/quick-process/execution",
         headers={"Prefer": "respond-async"},
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "W-MON",
-            "method": "sum",
-            "start": "2026-01-05",
-        },
+        json={},
     )
     assert response.status_code == 202
     job_id = cast(dict[str, Any], response.json())["jobID"]
@@ -163,22 +172,3 @@ def test_delete_terminal_job_leaves_record_unchanged(
     payload = cast(dict[str, Any], cancel_response.json())
     assert payload["status"] == JobStatus.SUCCESSFUL
     assert payload["cancelRequested"] is False
-
-
-def test_async_submission_rejects_invalid_resample_input(client: TestClient) -> None:
-    response = client.post(
-        "/processes/resample/execution",
-        headers={"Prefer": "respond-async"},
-        json={
-            "source_dataset_id": "chirps3_precipitation_daily",
-            "frequency": "invalid",
-            "method": "sum",
-            "start": "2026-01-05",
-        },
-    )
-
-    assert response.status_code == 400
-    jobs_response = client.get("/jobs")
-    assert jobs_response.status_code == 200
-    jobs_payload = cast(dict[str, Any], jobs_response.json())
-    assert jobs_payload["jobs"] == []

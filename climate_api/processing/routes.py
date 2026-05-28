@@ -1,4 +1,4 @@
-"""Routes for derived processing operations."""
+"""Routes for native processing operations (ingestion, sync, and custom plugins)."""
 
 from typing import Any
 
@@ -6,7 +6,6 @@ from fastapi import APIRouter, Body, Header, HTTPException, Response
 
 from climate_api.data_registry.services import processes as process_registry
 from climate_api.jobs.service import get_job_service
-from climate_api.processing import services as processing_services
 from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessLink, ProcessListResponse, ProcessSummary
 
 router = APIRouter()
@@ -99,12 +98,6 @@ def _validate_required_process_inputs(process: dict[str, Any], request: dict[str
         raise HTTPException(status_code=400, detail=f"Missing required process inputs: {joined}")
 
 
-def _validate_process_request(process: dict[str, Any], request: dict[str, Any]) -> None:
-    _validate_required_process_inputs(process, request)
-    if process.get("id") == "resample":
-        processing_services.validate_resample_request(**request)
-
-
 def _supports_async_execution(process: dict[str, Any]) -> bool:
     job_control_options = process.get("jobControlOptions")
     return isinstance(job_control_options, list) and "async-execute" in job_control_options
@@ -136,7 +129,7 @@ def run_process_execution(
 ) -> Any:
     """Dispatch to a registered process execution function by process id."""
     process = _get_public_process_or_404(process_id)
-    _validate_process_request(process, request)
+    _validate_required_process_inputs(process, request)
     if _prefer_respond_async(prefer):
         if not _supports_async_execution(process):
             raise HTTPException(
