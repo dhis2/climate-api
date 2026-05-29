@@ -179,6 +179,7 @@ def run_sync(
     publish: bool,
     create_artifact_fn: Callable[..., ArtifactRecord],
     get_dataset_fn: Callable[[str], Any],
+    on_progress: Callable[..., Any] | None = None,
 ) -> SyncResponse:
     """Plan and execute one sync operation for a managed dataset.
 
@@ -257,6 +258,7 @@ def run_sync(
         country_code=country_code,
         overwrite=False,
         publish=publish,
+        on_progress=on_progress,
     )
     logger.info(
         "Sync completed for dataset '%s': artifact_id=%s action=%s",

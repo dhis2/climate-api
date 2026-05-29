@@ -168,6 +168,10 @@
       button[type="submit"]:hover {
         background: #263547;
       }
+      button[type="submit"]:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
 
       .note {
         font-size: 0.875rem;
@@ -250,11 +254,45 @@
         background: #f1f5f9;
         border-color: #94a3b8;
       }
+      .sync-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
 
       .divider {
         border: none;
         border-top: 1px solid #f1f5f9;
         margin: 1rem 0;
+      }
+
+      .progress-area {
+        margin-top: 0.75rem;
+      }
+      .progress-bar-track {
+        height: 6px;
+        background: #e2e8f0;
+        border-radius: 99px;
+        overflow: hidden;
+        margin-bottom: 0.35rem;
+      }
+      .progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: #0066cc;
+        border-radius: 99px;
+        transition: width 0.3s ease;
+      }
+      .progress-bar-fill.indeterminate {
+        width: 40%;
+        animation: indeterminate 1.4s ease-in-out infinite;
+      }
+      @keyframes indeterminate {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+      }
+      .progress-label {
+        font-size: 0.78rem;
+        color: #64748b;
       }
 
       footer {
@@ -294,7 +332,8 @@
         {% elif not templates %}
         <p class="note">No dataset templates found.</p>
         {% else %}
-        <form method="post" action="{{ base }}/manage/ingest">
+        <form id="ingest-form" method="post" action="{{ base }}/manage/ingest"
+              onsubmit="runJob(event, this, 'btn-ingest', 'ingest-progress')">
           <div class="form-grid">
             <div class="field span-2">
               <label for="dataset_id">Dataset template</label>
@@ -355,8 +394,14 @@
 
           <hr class="divider" />
           <div class="form-actions">
-            <button type="submit">Ingest</button>
-            <span class="note">Ingestion runs synchronously and may take several minutes.</span>
+            <button type="submit" id="btn-ingest">Ingest</button>
+            <span class="note">Ingestion may take several minutes.</span>
+          </div>
+          <div id="ingest-progress" class="progress-area" style="display:none">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill indeterminate"></div>
+            </div>
+            <span class="progress-label">Starting…</span>
           </div>
         </form>
         {% endif %}
@@ -392,10 +437,17 @@
                 {% endif %}
               </td>
               <td>
-                <form method="post" action="{{ base }}/manage/sync" class="sync-form">
+                <form method="post" action="{{ base }}/manage/sync" class="sync-form"
+                      onsubmit="runJob(event, this, 'btn-sync-{{ ds.dataset_id }}', 'sync-progress-{{ ds.dataset_id }}')">
                   <input type="hidden" name="dataset_id" value="{{ ds.dataset_id }}" />
                   <input type="hidden" name="publish" value="on" />
-                  <button type="submit" class="sync-btn">Sync</button>
+                  <button type="submit" id="btn-sync-{{ ds.dataset_id }}" class="sync-btn">Sync</button>
+                  <div id="sync-progress-{{ ds.dataset_id }}" class="progress-area" style="display:none">
+                    <div class="progress-bar-track">
+                      <div class="progress-bar-fill indeterminate"></div>
+                    </div>
+                    <span class="progress-label">Starting…</span>
+                  </div>
                 </form>
               </td>
             </tr>
@@ -413,5 +465,63 @@
     <footer>
       <a href="https://github.com/dhis2/climate-api">dhis2/climate-api</a>
     </footer>
+
+    <script>
+      async function runJob(event, form, btnId, progressId) {
+        event.preventDefault();
+        const btn = document.getElementById(btnId);
+        const area = document.getElementById(progressId);
+        const fill = area.querySelector('.progress-bar-fill');
+        const label = area.querySelector('.progress-label');
+
+        btn.disabled = true;
+        area.style.display = 'block';
+        fill.className = 'progress-bar-fill indeterminate';
+        label.textContent = 'Starting…';
+
+        try {
+          const resp = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+          });
+
+          if (!resp.ok || !resp.body) {
+            window.location.href = form.action.replace('/manage/ingest', '/manage').replace('/manage/sync', '/manage') + '?error=' + encodeURIComponent('Request failed');
+            return;
+          }
+
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              let evt;
+              try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+              if (evt.redirect) {
+                window.location.href = evt.redirect;
+                return;
+              }
+              if (typeof evt.done === 'number' && typeof evt.total === 'number' && evt.total > 0) {
+                fill.className = 'progress-bar-fill';
+                fill.style.width = Math.round((evt.done / evt.total) * 100) + '%';
+              }
+              if (evt.message) {
+                label.textContent = evt.message;
+              }
+            }
+          }
+        } catch (err) {
+          label.textContent = 'Error: ' + err.message;
+          btn.disabled = false;
+        }
+      }
+    </script>
   </body>
 </html>
