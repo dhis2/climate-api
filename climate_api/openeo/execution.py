@@ -212,8 +212,10 @@ def _load_collection_impl(
         try:
             t_dim = get_time_dim(ds)
             ds = ds.sel({t_dim: slice(start, end)})
-        except ValueError:
-            pass  # dataset has no recognisable time dimension
+        except (ValueError, KeyError):
+            # ValueError: no recognisable time dimension
+            # KeyError: coordinate exists but is not an indexable dimension
+            pass
 
     if bbox is not None:
         x_dim = next((d for d in ("x", "longitude") if d in ds.dims), None)

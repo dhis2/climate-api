@@ -173,9 +173,9 @@ def list_processes(request: Request) -> dict[str, Any]:
 @processes_router.get("/{process_id}")
 def get_process_spec(process_id: str) -> dict[str, Any]:
     """Return one openEO process description by id."""
-    for p in processes_service.list_openeo_processes():
-        if p.get("id") == process_id:
-            return p
+    p = processes_service.get_openeo_process(process_id)
+    if p is not None:
+        return p
     raise HTTPException(status_code=404, detail=f"Process '{process_id}' not found")
 
 
@@ -323,19 +323,23 @@ def execute_synchronous(
                 from pathlib import Path
 
                 output = _write_raster(result, Path(tmp), fmt)
-                if output:
-                    data = Path(output).read_bytes()
-                    mime_map = {
-                        ".nc": "application/netcdf",
-                        ".tif": "image/tiff; subtype=geotiff",
-                        ".png": "image/png",
-                        ".csv": "text/csv",
-                        ".geojson": "application/geo+json",
-                        ".parquet": "application/vnd.apache.parquet",
-                    }
-                    suffix = Path(output).suffix
-                    media_type = mime_map.get(suffix, "application/octet-stream")
-                    return Response(content=data, media_type=media_type)
+                if output is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Format '{fmt}' produced no output",
+                    )
+                data = Path(output).read_bytes()
+                mime_map = {
+                    ".nc": "application/netcdf",
+                    ".tif": "image/tiff; subtype=geotiff",
+                    ".png": "image/png",
+                    ".csv": "text/csv",
+                    ".geojson": "application/geo+json",
+                    ".parquet": "application/vnd.apache.parquet",
+                }
+                suffix = Path(output).suffix
+                media_type = mime_map.get(suffix, "application/octet-stream")
+                return Response(content=data, media_type=media_type)
         # Default / ZARR: return metadata JSON
         info: dict[str, Any] = {
             "type": "datacube",

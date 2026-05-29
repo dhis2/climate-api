@@ -286,22 +286,33 @@ class OpenEOJobService:
         record = self.get_job_or_404(job_id)
         if record.status not in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
             raise HTTPException(status_code=400, detail="Job is not running or queued")
+
+        # Read the future and attempt cancel while holding the lock so we don't race
+        # with the executor thread transitioning QUEUED→RUNNING between our status
+        # read and the future.cancel() call.
         with self._lock:
             future = self._futures.get(job_id)
-        if record.status == OpenEOJobStatus.QUEUED and (future is None or future.cancel()):
-            # Job hasn't started yet and was successfully cancelled before it could run.
-            store_update_job(
-                job_id,
-                lambda r: r.model_copy(update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}),
-            )
+            cancelled_before_start = future is not None and future.cancel()
+
+        if cancelled_before_start:
+            # future.cancel() returned True — the job was still queued in the thread
+            # pool and will never start.  Transition the store atomically: only if the
+            # status is still QUEUED (guards against the edge case where the worker
+            # already set it to RUNNING before we got the lock).
+            def _mark_canceled_if_queued(r: OpenEOJobRecord) -> OpenEOJobRecord:
+                if r.status == OpenEOJobStatus.QUEUED:
+                    return r.model_copy(update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()})
+                # Race lost — worker already started; fall back to cooperative cancellation.
+                return r.model_copy(update={"cancel_requested": True, "updated": utc_now()})
+
+            store_update_job(job_id, _mark_canceled_if_queued)
         else:
-            # Job is running (or cancel() returned False) — set flag for cooperative cancellation.
+            # Job is running (or no future registered yet) — set flag for cooperative
+            # cancellation; the worker checks this before marking FINISHED.
             store_update_job(
                 job_id,
                 lambda r: r.model_copy(update={"cancel_requested": True, "updated": utc_now()}),
             )
-            if future is not None:
-                future.cancel()
 
     def get_results(self, job_id: str) -> OpenEOJobResults:
         """Return result asset links for a finished job."""
@@ -434,7 +445,11 @@ class OpenEOJobService:
         except ImportError:
             pass
 
-        return None
+        # Unrecognised result type — raise so the job is marked ERROR rather than
+        # silently finishing with an empty assets dict and no indication of failure.
+        raise TypeError(
+            f"Unsupported result type '{type(result).__name__}': expected xr.Dataset, xr.DataArray, or GeoDataFrame"
+        )
 
 
 def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
@@ -491,8 +506,11 @@ _RASTER_FORMATS: dict[str, tuple[str, str]] = {
     "ZARR": (".zarr", "application/vnd+zarr"),
     "NETCDF": (".nc", "application/netcdf"),
     "NC": (".nc", "application/netcdf"),
+    "NETCDF4": (".nc", "application/netcdf"),
     "GTIFF": (".tif", "image/tiff; subtype=geotiff"),
     "GEOTIFF": (".tif", "image/tiff; subtype=geotiff"),
+    "TIFF": (".tif", "image/tiff; subtype=geotiff"),  # common alias
+    "TIF": (".tif", "image/tiff; subtype=geotiff"),
     "PNG": (".png", "image/png"),
     "CSV": (".csv", "text/csv"),
 }
@@ -556,10 +574,10 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
         df.drop(columns=drop, errors="ignore").to_csv(path, index=False)
         return path
 
-    # Fallback to Zarr
-    path = str(results_dir / "result.zarr")
-    ds.to_zarr(path, mode="w")
-    return path
+    # Unknown format — raise so the caller can surface a clear 400/500 rather than
+    # silently writing a .zarr directory that read_bytes() would crash on.
+    known = ", ".join(sorted(_RASTER_FORMATS))
+    raise ValueError(f"Unsupported raster format '{fmt}'. Known formats: {known}")
 
 
 def _write_vector(gdf: Any, results_dir: Any, fmt: str) -> str | None:
@@ -616,10 +634,10 @@ def _write_png(ds: Any, results_dir: Any) -> str | None:
     try:
         from climate_api.data_registry.services import datasets as reg
 
-        for ds in reg.list_datasets():
-            display = ds.get("display", {})
-            ds_var = ds.get("variable", "")
-            if ds_var == var or ds.get("id", "").endswith(var):
+        for _ds_meta in reg.list_datasets():
+            display = _ds_meta.get("display", {})
+            ds_var = _ds_meta.get("variable", "")
+            if ds_var == var or _ds_meta.get("id", "").endswith(var):
                 colormap_name = display.get("colormap", colormap_name)
                 rng = display.get("range")
                 if isinstance(rng, list) and len(rng) == 2:

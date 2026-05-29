@@ -82,7 +82,7 @@ def _load_standard_processes() -> list[dict[str, Any]]:
 
     try:
         registry = _build_process_registry()
-        predefined: dict[str, Any] = registry.store.get("predefined", {})
+        predefined: dict[str, Any] = registry[("predefined", None)] or {}
     except Exception:
         logger.warning("Could not load process registry for listing", exc_info=True)
         return []
@@ -113,6 +113,46 @@ def _load_standard_processes() -> list[dict[str, Any]]:
                 }
             )
     return result
+
+
+def get_openeo_process(process_id: str) -> dict[str, Any] | None:
+    """Return one openEO process description by id, or None if not found.
+
+    Avoids rebuilding the full list just to look up a single entry.
+    """
+    # Backend processes first
+    for p in _BACKEND_PROCESSES:
+        if p["id"] == process_id:
+            return p
+
+    # Standard openeo-processes-dask spec
+    try:
+        from climate_api.openeo.execution import _build_process_registry
+
+        registry = _build_process_registry()
+        predefined: dict[str, Any] = registry[("predefined", None)] or {}
+        proc = predefined.get(process_id)
+        if proc is not None:
+            if proc.spec and isinstance(proc.spec, dict) and proc.spec.get("id"):
+                return dict(proc.spec)
+            doc = inspect.getdoc(proc.implementation) or ""
+            return {
+                "id": process_id,
+                "summary": doc.splitlines()[0] if doc else process_id,
+                "description": doc,
+                "parameters": [],
+                "returns": {"description": "Result.", "schema": {}},
+                "links": [{"rel": "about", "href": f"https://processes.openeo.org/#{process_id}"}],
+            }
+    except Exception:
+        pass
+
+    # Native plugin
+    for process in process_registry.list_processes():
+        if process.get("id") == process_id:
+            return _native_to_openeo(process)
+
+    return None
 
 
 def list_openeo_processes() -> list[dict[str, Any]]:

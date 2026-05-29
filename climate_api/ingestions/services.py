@@ -284,11 +284,6 @@ def _create_streaming_artifact(
 
     plugin = _load_streaming_plugin(plugin_path, params=params)
     store_path = get_icechunk_path(str(dataset["id"]))
-    if overwrite and store_path.exists():
-        if store_path.is_dir():
-            shutil.rmtree(store_path)
-        else:
-            store_path.unlink()
 
     lock = _acquire_store_lock(store_path)
     if not lock.acquire(blocking=False):
@@ -297,6 +292,8 @@ def _create_streaming_artifact(
             detail=f"An ingest or sync is already running for dataset '{dataset['id']}'. Wait for it to finish.",
         )
     try:
+        # Delete inside the lock so concurrent overwrites don't destroy each other's
+        # in-progress store (TOCTOU: pre-lock deletion + re-deletion under lock).
         if overwrite and store_path.exists():
             if store_path.is_dir():
                 shutil.rmtree(store_path)
