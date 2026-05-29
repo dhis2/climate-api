@@ -90,7 +90,11 @@ def _load_builtin_processes() -> list[dict[str, Any]]:
     """Load built-in process definitions from package data via importlib.resources."""
     pkg = importlib.resources.files("climate_api") / "data" / "processes"
     processes: list[dict[str, Any]] = []
-    for resource in pkg.iterdir():
+    try:
+        children = list(pkg.iterdir())
+    except (FileNotFoundError, NotADirectoryError):
+        return processes
+    for resource in children:
         if not resource.name.endswith((".yaml", ".yml")):
             continue
         try:
