@@ -126,7 +126,7 @@ curl -s http://127.0.0.1:8000/jobs/{job_id}
 curl -s http://127.0.0.1:8000/jobs/{job_id}/results
 ```
 
-Completed batch jobs write their output to disk and expose it as an asset link at `GET /jobs/{id}/results/{filename}`. Raster results are written as Zarr; vector/tabular results (e.g. after `aggregate_spatial`) are written as GeoJSON.
+Completed batch jobs write their output to disk and expose it as an asset link at `GET /jobs/{id}/results/{filename}`. The output format is controlled by the `format` argument of `save_result` — see [Export formats](#export-formats) below.
 
 ---
 
@@ -148,7 +148,38 @@ Key processes for climate work:
 | `aggregate_spatial` | Zonal statistics over GeoJSON geometries |
 | `resample_cube_spatial` | Reproject and resample to a target grid |
 | `merge_cubes` | Combine two aligned cubes |
-| `save_result` | Pass-through for synchronous execution; writes to disk for batch jobs |
+| `save_result` | Finalise the result — controls the output format |
+
+---
+
+## Export formats
+
+The `format` argument of `save_result` controls what the server writes. `GET /file_formats` advertises all supported formats to clients.
+
+| Format key | Title | Output type | Notes |
+|---|---|---|---|
+| `ZARR` | Zarr | Raster | Default. Zarr v3 directory store; served chunk-by-chunk |
+| `NETCDF` | NetCDF | Raster | Raw float values — compatible with CDO, NCO, xarray, R |
+| `GTIFF` | GeoTIFF | Raster | Raw float values with embedded CRS — compatible with QGIS, GDAL |
+| `PNG` | PNG | Raster | Styled image using the collection's colormap and rescale range; transparent background |
+| `CSV` | CSV | Raster / Vector | Tabular — ideal for time series and zonal statistics output |
+| `GEOJSON` | GeoJSON | Vector | Default for `aggregate_spatial` results; one feature per geometry |
+| `PARQUET` | GeoParquet | Vector | Columnar binary — efficient for large vector datasets |
+
+```bash
+# Monthly precipitation totals as NetCDF
+curl -X POST http://127.0.0.1:8000/result \
+  -H "Content-Type: application/json" \
+  -d '{
+    "process": {
+      "process_graph": {
+        "load": { "process_id": "load_collection", "arguments": { "id": "chirps3_precipitation_daily", "temporal_extent": ["2026-01-01", "2026-03-31"] } },
+        "agg":  { "process_id": "aggregate_temporal_period", "arguments": { "data": {"from_node": "load"}, "period": "month", "reducer": { "process_graph": { "sum": { "process_id": "sum", "arguments": { "data": {"from_parameter": "data"} }, "result": true } } } } },
+        "save": { "process_id": "save_result", "arguments": { "data": {"from_node": "agg"}, "format": "NetCDF" }, "result": true }
+      }
+    }
+  }' --output monthly_precip.nc
+```
 
 ---
 
