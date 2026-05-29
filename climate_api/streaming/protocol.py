@@ -51,6 +51,13 @@ class GridSpec:
     x_dim: str = "x"
     y_dim: str = "y"
     attrs: dict[str, Any] = field(default_factory=dict)
+    extra_dims: dict[str, int] = field(default_factory=dict)
+    """Optional non-spatial, non-time dimensions, e.g. ``{"age_group": 20}``.
+
+    The orchestrator does not use this field; it exists for plugin authors who
+    need to document multidimensional stores and for future orchestrator
+    extensions.
+    """
 
 
 @runtime_checkable
