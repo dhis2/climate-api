@@ -57,6 +57,20 @@ from climate_api.streaming.protocol import IngestionPlugin
 
 logger = logging.getLogger(__name__)
 
+# Per-store threading locks prevent two concurrent ingest/sync runs from writing
+# to the same Icechunk store simultaneously (which causes MVCC commit conflicts).
+_store_locks: dict[str, threading.Lock] = {}
+_store_locks_mutex = threading.Lock()
+
+
+def _acquire_store_lock(store_path: Path) -> threading.Lock:
+    """Return the exclusive lock for store_path, creating it if needed."""
+    key = str(store_path.resolve())
+    with _store_locks_mutex:
+        if key not in _store_locks:
+            _store_locks[key] = threading.Lock()
+        return _store_locks[key]
+
 
 class _IcechunkReadableStore(Protocol):
     def list_dir(self, prefix: str) -> AsyncIterator[str]: ...
@@ -270,73 +284,86 @@ def _create_streaming_artifact(
 
     plugin = _load_streaming_plugin(plugin_path, params=params)
     store_path = downloader.get_icechunk_path(dataset)
-    if overwrite and store_path.exists():
-        if store_path.is_dir():
-            shutil.rmtree(store_path)
-        else:
-            store_path.unlink()
 
-    result = run_streaming_ingest_sync(
-        plugin=plugin,
-        params=params,
-        dataset=dataset,
-        bbox=bbox,
-        start=start,
-        end=end,
-        store_path=store_path,
-        period_type=str(dataset["period_type"]),
-        on_progress=on_progress,
-        is_cancel_requested=is_cancel_requested,
-        save_cursor=save_cursor,
-    )
-    if result.periods_written == 0 and not store_path.exists():
-        raise HTTPException(status_code=409, detail="Source has no data for the requested temporal scope")
-
-    coverage_data = get_data_coverage_for_paths(dataset, icechunk_path=str(store_path.resolve()))
-    if not coverage_data.get("has_data", True):
-        raise HTTPException(status_code=409, detail="Materialized artifact contains no data for the requested scope")
-
-    _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
-    coverage = ArtifactCoverage(
-        temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
-        spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
-        spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
-    )
-    if not _temporal_coverage_matches_streaming_request_scope(coverage.temporal, request_scope):
+    lock = _acquire_store_lock(store_path)
+    if not lock.acquire(blocking=False):
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Materialized artifact coverage does not match the requested scope: "
-                f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
-                f"request={request_scope.start}..{request_scope.end}"
-            ),
+            detail=f"An ingest or sync is already running for dataset '{dataset['id']}'. Wait for it to finish.",
         )
+    try:
+        if overwrite and store_path.exists():
+            if store_path.is_dir():
+                shutil.rmtree(store_path)
+            else:
+                store_path.unlink()
 
-    request_scope = request_scope.model_copy(update={"end": coverage.temporal.end})
+        result = run_streaming_ingest_sync(
+            plugin=plugin,
+            params=params,
+            dataset=dataset,
+            bbox=bbox,
+            start=start,
+            end=end,
+            store_path=store_path,
+            period_type=str(dataset["period_type"]),
+            on_progress=on_progress,
+            is_cancel_requested=is_cancel_requested,
+            save_cursor=save_cursor,
+        )
+        if result.periods_written == 0 and not store_path.exists():
+            raise HTTPException(status_code=409, detail="Source has no data for the requested temporal scope")
 
-    record = ArtifactRecord(
-        artifact_id=str(uuid4()),
-        dataset_id=str(dataset["id"]),
-        dataset_name=str(dataset["name"]),
-        variable=str(dataset["variable"]),
-        period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
-        format=ArtifactFormat.ICECHUNK,
-        path=str(store_path.resolve()),
-        asset_paths=[str(store_path.resolve())],
-        variables=[str(dataset["variable"])],
-        request_scope=request_scope,
-        coverage=coverage,
-        created_at=datetime.now(UTC),
-        publication=ArtifactPublication(),
-    )
-    stored_record = _upsert_artifact_record(
-        record,
-        publish=publish,
-        overwrite=overwrite,
-    )
-    if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
-        return publish_artifact_record(stored_record.artifact_id)
-    return stored_record
+        coverage_data = get_data_coverage_for_paths(dataset, icechunk_path=str(store_path.resolve()))
+        if not coverage_data.get("has_data", True):
+            raise HTTPException(
+                status_code=409,
+                detail="Materialized artifact contains no data for the requested scope",
+            )
+
+        _spatial_wgs84_data = coverage_data["coverage"].get("spatial_wgs84")
+        coverage = ArtifactCoverage(
+            temporal=CoverageTemporal(**coverage_data["coverage"]["temporal"]),
+            spatial=CoverageSpatial(**coverage_data["coverage"]["spatial"]),
+            spatial_wgs84=CoverageSpatial(**_spatial_wgs84_data) if _spatial_wgs84_data else None,
+        )
+        if not _temporal_coverage_matches_streaming_request_scope(coverage.temporal, request_scope):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Materialized artifact coverage does not match the requested scope: "
+                    f"coverage={coverage.temporal.start}..{coverage.temporal.end}, "
+                    f"request={request_scope.start}..{request_scope.end}"
+                ),
+            )
+
+        request_scope = request_scope.model_copy(update={"end": coverage.temporal.end})
+
+        record = ArtifactRecord(
+            artifact_id=str(uuid4()),
+            dataset_id=str(dataset["id"]),
+            dataset_name=str(dataset["name"]),
+            variable=str(dataset["variable"]),
+            period_type=str(dataset.get("period_type")) if dataset.get("period_type") is not None else None,
+            format=ArtifactFormat.ICECHUNK,
+            path=str(store_path.resolve()),
+            asset_paths=[str(store_path.resolve())],
+            variables=[str(dataset["variable"])],
+            request_scope=request_scope,
+            coverage=coverage,
+            created_at=datetime.now(UTC),
+            publication=ArtifactPublication(),
+        )
+        stored_record = _upsert_artifact_record(
+            record,
+            publish=publish,
+            overwrite=overwrite,
+        )
+        if publish and stored_record.publication.status != PublicationStatus.PUBLISHED:
+            return publish_artifact_record(stored_record.artifact_id)
+        return stored_record
+    finally:
+        lock.release()
 
 
 def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> IngestionPlugin:
