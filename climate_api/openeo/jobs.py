@@ -515,9 +515,7 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
 
             df = ds.to_dataframe().reset_index()
             # geometry column may contain Shapely objects or WKT strings
-            geoms = df["geometry"].apply(
-                lambda g: g if hasattr(g, "geom_type") else shapely_wkt.loads(str(g))
-            )
+            geoms = df["geometry"].apply(lambda g: g if hasattr(g, "geom_type") else shapely_wkt.loads(str(g)))
             gdf = gpd.GeoDataFrame(df.drop(columns=["geometry"]), geometry=geoms, crs="EPSG:4326")
             return _write_vector(gdf, results_dir, fmt if fmt in _VECTOR_FORMATS else "GEOJSON")
         except Exception:
@@ -549,7 +547,6 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
 
     if ext == ".png":
         return _write_png(ds, results_dir)
-
 
     if ext == ".csv":
         path = str(results_dir / "result.csv")
