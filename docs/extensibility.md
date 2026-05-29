@@ -148,21 +148,17 @@ plugins/
   title: My custom process
   description: Describe what this process does.
   version: "0.1.0"
-  expose: true
-  jobControlOptions:
-    - sync-execute
   execution:
     function: mypackage.processes.my_process.execute
 ```
 
 | Field | Required | Description |
 | ----- | -------- | ----------- |
-| `id` | Yes | Unique process identifier. Used in `POST /processes/{id}/execution` |
-| `title` | Yes | Human-readable title exposed through the public process catalogue |
+| `id` | Yes | Unique process identifier. Callable from openEO process graphs and `POST /processes/{id}/execution` |
+| `title` | Yes | Human-readable title shown in `GET /processes` |
 | `description` | No | Longer description shown in API responses |
-| `version` | No | Process version string exposed through the public process description |
-| `expose` | No | Whether the process appears in the public `/processes` listing. Default: `true` |
-| `jobControlOptions` | No | Supported execution modes exposed publicly. Default: `["sync-execute"]` |
+| `version` | No | Process version string |
+| `jobControlOptions` | No | Supported execution modes. Default: `["sync-execute"]` |
 | `execution.function` | Yes | Dotted path to the Python function that runs the process |
 
 A custom process with the same `id` as a built-in overrides it.
