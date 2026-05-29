@@ -176,9 +176,9 @@ def test_persist_result_dataset_writes_zarr(job_service: OpenEOJobService) -> No
     assert output_path.endswith(".zarr")
 
 
-def test_persist_result_unsupported_type_returns_none(job_service: OpenEOJobService) -> None:
-    output_path = job_service._persist_result("job-3", {"value": 42})
-    assert output_path is None
+def test_persist_result_unsupported_type_raises(job_service: OpenEOJobService) -> None:
+    with pytest.raises(TypeError, match="Unsupported result type"):
+        job_service._persist_result("job-3", {"value": 42})
 
 
 def test_persist_result_geodataframe_writes_geojson(job_service: OpenEOJobService) -> None:
