@@ -60,14 +60,17 @@ def _build_process_registry() -> Any:
 
 
 def _register_native_plugins(registry: Any) -> None:
-    """Import and register exposed native processing plugins into the registry."""
+    """Register all native processing plugins into the openEO process registry.
+
+    All plugins with an execution.function are registered regardless of the
+    expose flag — expose only controls visibility in GET /processes/{id}
+    (OGC-style endpoint), not callability from openEO process graphs.
+    """
     from openeo_pg_parser_networkx.process_registry import Process
 
     from climate_api.data_registry.services import processes as process_registry_svc
 
     for p in process_registry_svc.list_processes():
-        if not p.get("expose"):
-            continue
         execution = p.get("execution") or {}
         fn_path = execution.get("function") if isinstance(execution, dict) else None
         if not fn_path:
