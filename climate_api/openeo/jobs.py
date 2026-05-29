@@ -550,7 +550,10 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
 
     if ext == ".csv":
         path = str(results_dir / "result.csv")
-        ds.to_dataframe().to_csv(path)
+        df = ds.to_dataframe().reset_index()
+        # Drop internal Zarr artefacts (spatial_ref, index) that add noise for consumers
+        drop = [c for c in df.columns if c in ("spatial_ref", "index") or c.startswith("level_")]
+        df.drop(columns=drop, errors="ignore").to_csv(path, index=False)
         return path
 
     # Fallback to Zarr
