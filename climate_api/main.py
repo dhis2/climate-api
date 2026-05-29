@@ -28,6 +28,17 @@ def _zarr_browser_access_origins() -> set[str]:
     return {origin.strip() for origin in raw.split(",") if origin.strip()}
 
 
+def _pna_trusted_origins() -> set[str]:
+    """Return origins allowed to make Private Network Access requests.
+
+    Defaults to the openEO editor and the Zarr inspector.  Override with the
+    CLIMATE_API_PNA_ORIGINS environment variable (comma-separated).
+    """
+    default = "https://editor.openeo.org," + os.getenv("CLIMATE_API_ZARR_BROWSER_ORIGINS", "https://inspect.geozarr.org")
+    raw = os.getenv("CLIMATE_API_PNA_ORIGINS", default)
+    return {o.strip() for o in raw.split(",") if o.strip()}
+
+
 def _append_vary_value(response: Response, value: str) -> None:
     """Append one token to the Vary header without clobbering existing values."""
     existing = response.headers.get("Vary")
@@ -92,8 +103,8 @@ def create_app() -> FastAPI:
             and origin is not None
         )
 
-        # Short-circuit PNA preflight for all paths — CORS wildcard already covers auth.
-        if is_pna_preflight:
+        # Short-circuit PNA preflight for trusted origins (openEO editor, Zarr inspectors).
+        if is_pna_preflight and origin in _pna_trusted_origins():
             response = Response(status_code=200)
             response.headers["Access-Control-Allow-Origin"] = str(origin)
             response.headers["Access-Control-Allow-Private-Network"] = "true"

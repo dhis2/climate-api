@@ -95,18 +95,23 @@ def _load_standard_processes() -> list[dict[str, Any]]:
     for process_id, proc in sorted(predefined.items()):
         if process_id in _backend_ids:
             continue
-        impl = proc.implementation
-        doc = inspect.getdoc(impl) or ""
-        result.append(
-            {
-                "id": process_id,
-                "summary": doc.splitlines()[0] if doc else process_id,
-                "description": doc,
-                "parameters": [],
-                "returns": {"description": "Result.", "schema": {}},
-                "links": [{"rel": "about", "href": f"https://processes.openeo.org/#{process_id}"}],
-            }
-        )
+        # Prefer the stored spec (loaded from openeo-processes-dask JSON files when
+        # available) as it contains parameter names, types, and required flags.
+        if proc.spec and isinstance(proc.spec, dict) and proc.spec.get("id"):
+            result.append(proc.spec)
+        else:
+            impl = proc.implementation
+            doc = inspect.getdoc(impl) or ""
+            result.append(
+                {
+                    "id": process_id,
+                    "summary": doc.splitlines()[0] if doc else process_id,
+                    "description": doc,
+                    "parameters": [],
+                    "returns": {"description": "Result.", "schema": {}},
+                    "links": [{"rel": "about", "href": f"https://processes.openeo.org/#{process_id}"}],
+                }
+            )
     return result
 
 

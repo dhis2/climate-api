@@ -245,6 +245,8 @@ class OpenEOJobService:
         if body.description is not None:
             updates["description"] = body.description
         if body.process is not None:
+            if not isinstance(body.process.get("process_graph"), dict):
+                raise HTTPException(status_code=422, detail="process.process_graph must be an object")
             updates["process"] = body.process
         if body.plan is not None:
             updates["plan"] = body.plan
@@ -260,6 +262,10 @@ class OpenEOJobService:
         if record.status in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
             raise HTTPException(status_code=400, detail="Cannot delete a running job; cancel it first")
         store_delete_job(job_id)
+        import shutil
+        job_dir = _JOBS_DIR / job_id
+        if job_dir.exists():
+            shutil.rmtree(job_dir, ignore_errors=True)
 
     def start_job(self, job_id: str) -> None:
         """Queue a job for processing (POST /jobs/{id}/results)."""
@@ -279,14 +285,22 @@ class OpenEOJobService:
         record = self.get_job_or_404(job_id)
         if record.status not in {OpenEOJobStatus.QUEUED, OpenEOJobStatus.RUNNING}:
             raise HTTPException(status_code=400, detail="Job is not running or queued")
-        store_update_job(
-            job_id,
-            lambda r: r.model_copy(update={"cancel_requested": True, "updated": utc_now()}),
-        )
         with self._lock:
             future = self._futures.get(job_id)
-        if future is not None:
-            future.cancel()
+        if record.status == OpenEOJobStatus.QUEUED and (future is None or future.cancel()):
+            # Job hasn't started yet and was successfully cancelled before it could run.
+            store_update_job(
+                job_id,
+                lambda r: r.model_copy(update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}),
+            )
+        else:
+            # Job is running (or cancel() returned False) — set flag for cooperative cancellation.
+            store_update_job(
+                job_id,
+                lambda r: r.model_copy(update={"cancel_requested": True, "updated": utc_now()}),
+            )
+            if future is not None:
+                future.cancel()
 
     def get_results(self, job_id: str) -> OpenEOJobResults:
         """Return result asset links for a finished job."""
@@ -348,6 +362,14 @@ class OpenEOJobService:
 
         try:
             result = run_process_graph(record.process)
+            # Re-read record — cancellation may have been requested while running.
+            current = store_get_job(job_id)
+            if current is not None and current.cancel_requested:
+                store_update_job(
+                    job_id,
+                    lambda r: r.model_copy(update={"status": OpenEOJobStatus.CANCELED, "updated": utc_now()}),
+                )
+                return
             output_path = self._persist_result(job_id, result)
             store_update_job(
                 job_id,

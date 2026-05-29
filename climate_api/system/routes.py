@@ -27,7 +27,10 @@ router = APIRouter()
 @router.get("/", response_class=Response, responses=ROOT_RESPONSES)
 def read_index(request: Request) -> Response:
     """Return openEO capabilities (JSON) or the landing page (HTML)."""
-    base = str(request.base_url).rstrip("/")
+    import os
+
+    # Use CLIMATE_API_BASE_URL when set so links are correct behind a reverse proxy.
+    base = os.getenv("CLIMATE_API_BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
     if wants_json(request):
         from climate_api.openeo.capabilities import build_capabilities
 
