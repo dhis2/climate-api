@@ -10,8 +10,6 @@ from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessL
 router = APIRouter()
 
 
-
-
 def _process_links(process_id: str) -> list[ProcessLink]:
     return [
         ProcessLink(href=f"/processes/{process_id}", rel="self", title="Process detail"),

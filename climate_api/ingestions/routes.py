@@ -25,6 +25,7 @@ def _prefer_respond_async(prefer: str | None) -> bool:
     directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
     return "respond-async" in directives
 
+
 ingestions_router = APIRouter()
 datasets_router = APIRouter()
 zarr_router = APIRouter()

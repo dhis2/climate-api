@@ -217,7 +217,6 @@ def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.
     assert process["jobControlOptions"] == ["sync-execute"]
 
 
-
 def test_process_registry_rejects_empty_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
