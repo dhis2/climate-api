@@ -1,13 +1,16 @@
 """Root API endpoints."""
 
 import asyncio
+import json
 import sys
 import urllib.parse
+from collections.abc import AsyncIterator
 from importlib.metadata import version as _pkg_version
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, StreamingResponse
 
 from climate_api import config as api_config
 
@@ -22,6 +25,14 @@ from .templates import (
 )
 
 router = APIRouter()
+
+
+async def _sse_events(queue: asyncio.Queue[dict[str, Any] | None]) -> AsyncIterator[str]:
+    while True:
+        item = await queue.get()
+        if item is None:
+            break
+        yield f"data: {json.dumps(item)}\n\n"
 
 
 @router.get("/", response_class=Response, responses=ROOT_RESPONSES)
@@ -66,8 +77,8 @@ def manage(
 
 
 @router.post("/manage/ingest", include_in_schema=False)
-async def manage_ingest(request: Request) -> RedirectResponse:
-    """Handle ingest form submission and redirect to the management page."""
+async def manage_ingest(request: Request) -> Response:
+    """Handle ingest form submission and stream progress via SSE."""
     from fastapi import HTTPException
 
     from climate_api.data_registry.services.datasets import get_dataset
@@ -91,22 +102,6 @@ async def manage_ingest(request: Request) -> RedirectResponse:
         extent = get_extent_or_404()
         resolved_bbox = list(extent["bbox"])
         country_code = extent.get("country_code")
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: create_artifact(
-                dataset=template,
-                start=start,
-                end=end,
-                bbox=resolved_bbox,
-                country_code=country_code,
-                overwrite=overwrite,
-                publish=publish,
-            ),
-        )
-        name = urllib.parse.quote(template.get("name", dataset_id))
-        return RedirectResponse(f"{base}/manage?message=Ingested+{name}", status_code=303)
     except HTTPException as exc:
         msg = urllib.parse.quote(str(exc.detail))
         return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
@@ -114,10 +109,56 @@ async def manage_ingest(request: Request) -> RedirectResponse:
         msg = urllib.parse.quote(str(exc))
         return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
 
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def on_progress(done: int | None, total: int | None, message: str | None) -> None:
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            {"done": done, "total": total, "message": message},
+        )
+
+    async def run() -> None:
+        try:
+            await asyncio.to_thread(
+                lambda: create_artifact(
+                    dataset=template,
+                    start=start,
+                    end=end,
+                    bbox=resolved_bbox,
+                    country_code=country_code,
+                    overwrite=overwrite,
+                    publish=publish,
+                    on_progress=on_progress,
+                )
+            )
+            name = urllib.parse.quote(str(template.get("name", dataset_id)))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"redirect": f"{base}/manage?message=Ingested+{name}"},
+            )
+        except HTTPException as exc:
+            msg = urllib.parse.quote(str(exc.detail))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"error": str(exc.detail), "redirect": f"{base}/manage?error={msg}"},
+            )
+        except Exception as exc:
+            msg = urllib.parse.quote(str(exc))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"error": str(exc), "redirect": f"{base}/manage?error={msg}"},
+            )
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    asyncio.create_task(run())
+    return StreamingResponse(_sse_events(queue), media_type="text/event-stream")
+
 
 @router.post("/manage/sync", include_in_schema=False)
-async def manage_sync(request: Request) -> RedirectResponse:
-    """Handle sync form submission and redirect to the management page."""
+async def manage_sync(request: Request) -> Response:
+    """Handle sync form submission and stream progress via SSE."""
     from fastapi import HTTPException
 
     from climate_api.ingestions.services import sync_dataset
@@ -127,16 +168,48 @@ async def manage_sync(request: Request) -> RedirectResponse:
         form = await request.form()
         dataset_id = str(form.get("dataset_id", ""))
         publish = "publish" in form
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: sync_dataset(dataset_id=dataset_id, end=None, publish=publish))
-        return RedirectResponse(f"{base}/manage?message=Sync+completed", status_code=303)
     except HTTPException as exc:
         msg = urllib.parse.quote(str(exc.detail))
         return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
     except Exception as exc:
         msg = urllib.parse.quote(str(exc))
         return RedirectResponse(f"{base}/manage?error={msg}", status_code=303)
+
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def on_progress(done: int | None, total: int | None, message: str | None) -> None:
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            {"done": done, "total": total, "message": message},
+        )
+
+    async def run() -> None:
+        try:
+            await asyncio.to_thread(
+                lambda: sync_dataset(dataset_id=dataset_id, end=None, publish=publish, on_progress=on_progress)
+            )
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"redirect": f"{base}/manage?message=Sync+completed"},
+            )
+        except HTTPException as exc:
+            msg = urllib.parse.quote(str(exc.detail))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"error": str(exc.detail), "redirect": f"{base}/manage?error={msg}"},
+            )
+        except Exception as exc:
+            msg = urllib.parse.quote(str(exc))
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"error": str(exc), "redirect": f"{base}/manage?error={msg}"},
+            )
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    asyncio.create_task(run())
+    return StreamingResponse(_sse_events(queue), media_type="text/event-stream")
 
 
 @router.get("/health")
