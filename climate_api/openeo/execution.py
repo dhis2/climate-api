@@ -51,7 +51,7 @@ def _build_process_registry() -> Any:
     registry["load_collection"] = Process(spec={}, implementation=_load_collection_impl)
     registry["save_result"] = Process(spec={}, implementation=_save_result_impl)
 
-    # Native YAML-configured processing plugins (exposed ones only).
+    # Native YAML-configured processing plugins.
     # Plugins with the same id as a standard process shadow the built-in.
     _register_native_plugins(registry)
 

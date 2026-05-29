@@ -129,10 +129,8 @@ def list_openeo_processes() -> list[dict[str, Any]]:
             result.append(p)
             standard_ids.add(pid)
 
-    # Append exposed native plugin processes
+    # Append native plugin processes not already in the standard list
     for process in process_registry.list_processes():
-        if not process.get("expose"):
-            continue
         pid = process.get("id")
         if pid in standard_ids or pid in backend_ids:
             continue

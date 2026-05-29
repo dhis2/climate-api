@@ -5,16 +5,14 @@ import pytest
 from climate_api.data_registry.services import processes as process_registry
 
 
-def test_builtin_processes_not_exposed_without_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    # ingestion/sync YAMLs have expose: false — they back async execution but
-    # are not listed in GET /processes.
+def test_no_builtin_processes_without_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
 
-    exposed_ids = {p["id"] for p in process_registry.list_processes() if p.get("expose")}
-    assert "ingestion" not in exposed_ids
-    assert "sync" not in exposed_ids
-    assert "resample" not in exposed_ids
+    ids = {p["id"] for p in process_registry.list_processes()}
+    assert "ingestion" not in ids
+    assert "sync" not in ids
+    assert "resample" not in ids
 
 
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -32,7 +30,6 @@ def test_get_process_function_returns_callable_for_registered_process(monkeypatc
             "id": process_id,
             "title": "Callable process",
             "execution": {"function": "mypackage.execute.run"},
-            "expose": True,
         },
     )
     monkeypatch.setattr(process_registry, "_get_dynamic_function", lambda path: {"path": path})
@@ -75,7 +72,7 @@ def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.Monkey
 
     ids = {p["id"] for p in process_registry.list_processes()}
     assert "custom_process" in ids
-    assert "ingestion" not in {p["id"] for p in process_registry.list_processes() if p.get("expose")}
+    assert "ingestion" not in ids
 
 
 def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -219,24 +216,6 @@ def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.
     process = process_registry.list_processes()[0]
     assert process["jobControlOptions"] == ["sync-execute"]
 
-
-def test_process_registry_defaults_null_expose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    processes_subdir = tmp_path / "processes"
-    processes_subdir.mkdir()
-    (processes_subdir / "null_expose.yaml").write_text(
-        """
-- id: null_expose
-  title: Null expose
-  expose:
-  execution:
-    function: mypackage.execute.run
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
-
-    process = process_registry.list_processes()[0]
-    assert process["expose"] is True
 
 
 def test_process_registry_rejects_empty_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -72,7 +72,7 @@ def _public_process_detail(process: dict[str, Any]) -> ProcessDetail:
 
 def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
     process = process_registry.get_process(process_id)
-    if process is None or not process["expose"]:
+    if process is None:
         raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
     return process
 
@@ -94,7 +94,7 @@ def _validate_required_process_inputs(process: dict[str, Any], request: dict[str
 @router.get("", response_model=ProcessListResponse)
 def get_processes_catalog() -> ProcessListResponse:
     """Return the registered native process catalog."""
-    visible = [process for process in process_registry.list_processes() if process["expose"]]
+    visible = process_registry.list_processes()
     return ProcessListResponse(
         processes=[_public_process_summary(process) for process in visible],
         links=_catalog_links(),

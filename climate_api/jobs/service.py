@@ -161,9 +161,9 @@ class JobService:
         request: dict[str, Any],
         max_attempts: int = 1,
     ) -> JobRecord:
-        """Submit an exposed YAML-registered process as a background job."""
+        """Submit a YAML-registered process as a background job."""
         process = process_registry.get_process(process_id)
-        if process is None or not process["expose"]:
+        if process is None:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
         return self._create_and_enqueue(process_id=process_id, request=request, max_attempts=max_attempts)
 
@@ -423,7 +423,7 @@ class JobService:
             func = process_registry._get_dynamic_function(fn_path)
         else:
             process = process_registry.get_process(record.process_id)
-            if process is None or not process["expose"]:
+            if process is None:
                 raise ValueError(f"Unknown process '{record.process_id}'")
             func = process_registry.get_process_function(record.process_id)
         context = JobExecutionContext(self, record.job_id)
