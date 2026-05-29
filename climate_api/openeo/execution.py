@@ -253,8 +253,16 @@ def _load_collection_impl(
     )
 
 
+class SaveResultEnvelope:
+    """Wraps the process graph result with the requested output format."""
+
+    def __init__(self, data: Any, format: str) -> None:
+        self.data = data
+        self.format = format.upper()
+
+
 def _save_result_impl(data: Any, format: str = "Zarr", options: dict[str, Any] | None = None) -> Any:
-    return data
+    return SaveResultEnvelope(data, format)
 
 
 # ---------------------------------------------------------------------------

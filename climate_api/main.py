@@ -34,7 +34,9 @@ def _pna_trusted_origins() -> set[str]:
     Defaults to the openEO editor and the Zarr inspector.  Override with the
     CLIMATE_API_PNA_ORIGINS environment variable (comma-separated).
     """
-    default = "https://editor.openeo.org," + os.getenv("CLIMATE_API_ZARR_BROWSER_ORIGINS", "https://inspect.geozarr.org")
+    default = "https://editor.openeo.org," + os.getenv(
+        "CLIMATE_API_ZARR_BROWSER_ORIGINS", "https://inspect.geozarr.org"
+    )
     raw = os.getenv("CLIMATE_API_PNA_ORIGINS", default)
     return {o.strip() for o in raw.split(",") if o.strip()}
 

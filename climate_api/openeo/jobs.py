@@ -263,6 +263,7 @@ class OpenEOJobService:
             raise HTTPException(status_code=400, detail="Cannot delete a running job; cancel it first")
         store_delete_job(job_id)
         import shutil
+
         job_dir = _JOBS_DIR / job_id
         if job_dir.exists():
             shutil.rmtree(job_dir, ignore_errors=True)
@@ -398,33 +399,38 @@ class OpenEOJobService:
     def _persist_result(self, job_id: str, result: Any) -> str | None:
         import xarray as xr
 
+        from climate_api.openeo.execution import SaveResultEnvelope
+
         results_dir = _JOBS_DIR / job_id / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Raster: DataArray → Dataset → Zarr
+        # Unwrap format envelope from save_result
+        fmt = "ZARR"
+        if isinstance(result, SaveResultEnvelope):
+            fmt = result.format
+            result = result.data
+
+        # Resolve DataArray → Dataset for raster formats
         if isinstance(result, xr.DataArray):
             result = result.to_dataset(name=result.name or "result")
-        if isinstance(result, xr.Dataset):
-            output_path = str(results_dir / "result.zarr")
-            result.to_zarr(output_path, mode="w")
-            return output_path
 
-        # Tabular: vector cube (GeoDataFrame or dask_geopandas) → GeoJSON
+        if isinstance(result, xr.Dataset):
+            return _write_raster(result, results_dir, fmt)
+
+        # Tabular: resolve dask_geopandas → GeoDataFrame
+        try:
+            import dask_geopandas
+
+            if isinstance(result, dask_geopandas.GeoDataFrame):
+                result = result.compute()
+        except ImportError:
+            pass
+
         try:
             import geopandas as gpd
 
-            try:
-                import dask_geopandas
-
-                if isinstance(result, dask_geopandas.GeoDataFrame):
-                    result = result.compute()
-            except ImportError:
-                pass
-
             if isinstance(result, gpd.GeoDataFrame):
-                output_path = str(results_dir / "result.geojson")
-                result.to_file(output_path, driver="GeoJSON")
-                return output_path
+                return _write_vector(result, results_dir, fmt)
         except ImportError:
             pass
 
@@ -456,7 +462,124 @@ def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
                 "roles": ["data"],
             }
         }
+    ext_map = {
+        ".nc": ("application/netcdf", "NetCDF result"),
+        ".tif": ("image/tiff; subtype=geotiff", "GeoTIFF result"),
+        ".png": ("image/png", "PNG result"),
+        ".csv": ("text/csv", "CSV result"),
+        ".parquet": ("application/vnd.apache.parquet", "GeoParquet result"),
+    }
+    for ext, (mime, title) in ext_map.items():
+        if output_path.endswith(ext):
+            fname = output_path.rsplit("/", 1)[-1]
+            return {
+                "result": {
+                    "href": f"/jobs/{record.id}/results/{fname}",
+                    "type": mime,
+                    "title": title,
+                    "roles": ["data"],
+                }
+            }
     return {}
+
+
+# ---------------------------------------------------------------------------
+# Format writers
+# ---------------------------------------------------------------------------
+
+_RASTER_FORMATS: dict[str, tuple[str, str]] = {
+    "ZARR": (".zarr", "application/vnd+zarr"),
+    "NETCDF": (".nc", "application/netcdf"),
+    "NC": (".nc", "application/netcdf"),
+    "GTIFF": (".tif", "image/tiff; subtype=geotiff"),
+    "GEOTIFF": (".tif", "image/tiff; subtype=geotiff"),
+    "PNG": (".png", "image/png"),
+    "CSV": (".csv", "text/csv"),
+}
+
+_VECTOR_FORMATS: dict[str, tuple[str, str]] = {
+    "GEOJSON": (".geojson", "application/geo+json"),
+    "CSV": (".csv", "text/csv"),
+    "PARQUET": (".parquet", "application/vnd.apache.parquet"),
+}
+
+
+def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
+    """Write an xr.Dataset to disk in the requested format. Returns the output path."""
+    ext, _ = _RASTER_FORMATS.get(fmt, (".zarr", "application/vnd+zarr"))
+
+    if ext == ".zarr":
+        path = str(results_dir / "result.zarr")
+        ds.to_zarr(path, mode="w")
+        return path
+
+    if ext == ".nc":
+        path = str(results_dir / "result.nc")
+        ds.to_netcdf(path)
+        return path
+
+    if ext == ".tif":
+        import rioxarray  # noqa: F401 — activates .rio accessor
+
+        path = str(results_dir / "result.tif")
+        # GeoTIFF requires a 2-D or 3-D array; use the first variable
+        var = list(ds.data_vars)[0]
+        da = ds[var]
+        if "spatial_ref" in da.coords:
+            da = da.drop_vars("spatial_ref")
+        da.rio.to_raster(path)
+        return path
+
+    if ext == ".png":
+        import matplotlib.pyplot as plt
+
+        path = str(results_dir / "result.png")
+        var = list(ds.data_vars)[0]
+        arr = ds[var]
+        # Squeeze time/band dims to 2-D
+        while arr.ndim > 2:
+            arr = arr.isel({arr.dims[0]: 0})
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.imshow(arr.values, origin="upper", cmap="viridis")
+        ax.axis("off")
+        fig.savefig(path, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        return path
+
+    if ext == ".csv":
+        path = str(results_dir / "result.csv")
+        ds.to_dataframe().to_csv(path)
+        return path
+
+    # Fallback to Zarr
+    path = str(results_dir / "result.zarr")
+    ds.to_zarr(path, mode="w")
+    return path
+
+
+def _write_vector(gdf: Any, results_dir: Any, fmt: str) -> str | None:
+    """Write a GeoDataFrame to disk in the requested format. Returns the output path."""
+    ext, _ = _VECTOR_FORMATS.get(fmt, (".geojson", "application/geo+json"))
+
+    if ext == ".geojson":
+        path = str(results_dir / "result.geojson")
+        gdf.to_file(path, driver="GeoJSON")
+        return path
+
+    if ext == ".parquet":
+        path = str(results_dir / "result.parquet")
+        gdf.to_parquet(path)
+        return path
+
+    if ext == ".csv":
+        path = str(results_dir / "result.csv")
+        gdf.drop(columns="geometry", errors="ignore").to_csv(path, index=False)
+        return path
+
+    # Fallback to GeoJSON
+    path = str(results_dir / "result.geojson")
+    gdf.to_file(path, driver="GeoJSON")
+    return path
 
 
 _service: OpenEOJobService | None = None

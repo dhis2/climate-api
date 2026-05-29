@@ -68,16 +68,60 @@ def credentials_oidc() -> dict[str, Any]:
 @capabilities_router.get("/file_formats")
 def file_formats() -> dict[str, Any]:
     """Return supported input and output file formats."""
-    zarr_format = {
-        "title": "Zarr",
-        "description": "Zarr v3 chunked array store",
-        "gis_data_types": ["raster"],
-        "parameters": {},
-        "links": [],
+    output_formats = {
+        "ZARR": {
+            "title": "Zarr",
+            "description": "Zarr v3 chunked array store (default raster format)",
+            "gis_data_types": ["raster"],
+            "parameters": {},
+            "links": [{"rel": "about", "href": "https://zarr.dev"}],
+        },
+        "NETCDF": {
+            "title": "NetCDF",
+            "description": "Network Common Data Form — standard format for climate science",
+            "gis_data_types": ["raster"],
+            "parameters": {},
+            "links": [{"rel": "about", "href": "https://www.unidata.ucar.edu/software/netcdf/"}],
+        },
+        "GTIFF": {
+            "title": "GeoTIFF",
+            "description": "Georeferenced TIFF raster (single time step)",
+            "gis_data_types": ["raster"],
+            "parameters": {},
+            "links": [{"rel": "about", "href": "https://www.ogc.org/standards/geotiff"}],
+        },
+        "PNG": {
+            "title": "PNG",
+            "description": "Portable Network Graphics image (single 2-D slice, colourised)",
+            "gis_data_types": ["raster"],
+            "parameters": {},
+            "links": [],
+        },
+        "GEOJSON": {
+            "title": "GeoJSON",
+            "description": "GeoJSON vector features (default for aggregate_spatial results)",
+            "gis_data_types": ["vector"],
+            "parameters": {},
+            "links": [{"rel": "about", "href": "https://geojson.org"}],
+        },
+        "CSV": {
+            "title": "CSV",
+            "description": "Comma-separated values — tabular or flattened raster data",
+            "gis_data_types": ["raster", "vector", "table"],
+            "parameters": {},
+            "links": [],
+        },
+        "PARQUET": {
+            "title": "GeoParquet",
+            "description": "Apache Parquet with geometry column (vector results)",
+            "gis_data_types": ["vector"],
+            "parameters": {},
+            "links": [{"rel": "about", "href": "https://geoparquet.org"}],
+        },
     }
     return {
         "input": {},
-        "output": {"Zarr": zarr_format},
+        "output": output_formats,
     }
 
 
@@ -257,25 +301,79 @@ def execute_synchronous(
         raise HTTPException(status_code=422, detail="Body must contain a 'process' object")
     result = run_process_graph(process, request)
 
+    import tempfile
+
     import xarray as xr
 
+    from climate_api.openeo.execution import SaveResultEnvelope
+    from climate_api.openeo.jobs import _write_raster, _write_vector
+
+    # Unwrap save_result envelope to get requested format
+    fmt = "ZARR"
+    if isinstance(result, SaveResultEnvelope):
+        fmt = result.format
+        result = result.data
+
     if isinstance(result, xr.DataArray):
-        info: dict[str, Any] = {
-            "type": "datacube",
-            "name": result.name,
-            "dims": dict(zip(result.dims, result.shape)),
-            "dtype": str(result.dtype),
-            "coords": {k: _coord_summary(v) for k, v in result.coords.items()},
-        }
-        return JSONResponse(info)
+        result = result.to_dataset(name=result.name or "result")
+
     if isinstance(result, xr.Dataset):
-        info = {
+        if fmt in {"NETCDF", "NC", "GTIFF", "GEOTIFF", "PNG", "CSV"}:
+            with tempfile.TemporaryDirectory() as tmp:
+                from pathlib import Path
+
+                output = _write_raster(result, Path(tmp), fmt)
+                if output:
+                    data = Path(output).read_bytes()
+                    mime_map = {
+                        ".nc": "application/netcdf",
+                        ".tif": "image/tiff; subtype=geotiff",
+                        ".png": "image/png",
+                        ".csv": "text/csv",
+                    }
+                    suffix = Path(output).suffix
+                    media_type = mime_map.get(suffix, "application/octet-stream")
+                    return Response(content=data, media_type=media_type)
+        # Default / ZARR: return metadata JSON
+        info: dict[str, Any] = {
             "type": "datacube",
             "dims": dict(result.dims),
             "variables": list(result.data_vars),
             "coords": {k: _coord_summary(v) for k, v in result.coords.items()},
         }
         return JSONResponse(info)
+
+    # Try vector
+    try:
+        import dask_geopandas
+
+        if isinstance(result, dask_geopandas.GeoDataFrame):
+            result = result.compute()
+    except ImportError:
+        pass
+
+    try:
+        import geopandas as gpd
+
+        if isinstance(result, gpd.GeoDataFrame):
+            if fmt in {"PARQUET", "CSV"}:
+                with tempfile.TemporaryDirectory() as tmp:
+                    from pathlib import Path
+
+                    output = _write_vector(result, Path(tmp), fmt)
+                    if output:
+                        data = Path(output).read_bytes()
+                        mime = "application/vnd.apache.parquet" if fmt == "PARQUET" else "text/csv"
+                        return Response(content=data, media_type=mime)
+            info = {
+                "type": "vector",
+                "features": len(result),
+                "columns": list(result.columns),
+            }
+            return JSONResponse(info)
+    except ImportError:
+        pass
+
     return result
 
 
