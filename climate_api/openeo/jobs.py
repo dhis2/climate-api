@@ -506,6 +506,23 @@ _VECTOR_FORMATS: dict[str, tuple[str, str]] = {
 
 def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
     """Write an xr.Dataset to disk in the requested format. Returns the output path."""
+    # aggregate_spatial returns a Dataset with a 'geometry' dimension — convert
+    # to GeoDataFrame so GEOJSON/PARQUET/CSV produce tabular vector output.
+    if "geometry" in getattr(ds, "dims", {}):
+        try:
+            import geopandas as gpd
+            from shapely import wkt as shapely_wkt
+
+            df = ds.to_dataframe().reset_index()
+            # geometry column may contain Shapely objects or WKT strings
+            geoms = df["geometry"].apply(
+                lambda g: g if hasattr(g, "geom_type") else shapely_wkt.loads(str(g))
+            )
+            gdf = gpd.GeoDataFrame(df.drop(columns=["geometry"]), geometry=geoms, crs="EPSG:4326")
+            return _write_vector(gdf, results_dir, fmt if fmt in _VECTOR_FORMATS else "GEOJSON")
+        except Exception:
+            logger.debug("geometry→GeoDataFrame conversion failed", exc_info=True)
+
     ext, _ = _RASTER_FORMATS.get(fmt, (".zarr", "application/vnd+zarr"))
 
     if ext == ".zarr":

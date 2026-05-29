@@ -318,7 +318,7 @@ def execute_synchronous(
         result = result.to_dataset(name=result.name or "result")
 
     if isinstance(result, xr.Dataset):
-        if fmt in {"NETCDF", "NC", "GTIFF", "GEOTIFF", "PNG", "CSV"}:
+        if fmt != "ZARR":
             with tempfile.TemporaryDirectory() as tmp:
                 from pathlib import Path
 
@@ -330,6 +330,8 @@ def execute_synchronous(
                         ".tif": "image/tiff; subtype=geotiff",
                         ".png": "image/png",
                         ".csv": "text/csv",
+                        ".geojson": "application/geo+json",
+                        ".parquet": "application/vnd.apache.parquet",
                     }
                     suffix = Path(output).suffix
                     media_type = mime_map.get(suffix, "application/octet-stream")
