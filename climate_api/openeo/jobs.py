@@ -531,20 +531,8 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
         return path
 
     if ext == ".png":
-        import matplotlib.pyplot as plt
+        return _write_png(ds, results_dir)
 
-        path = str(results_dir / "result.png")
-        var = list(ds.data_vars)[0]
-        arr = ds[var]
-        # Squeeze time/band dims to 2-D
-        while arr.ndim > 2:
-            arr = arr.isel({arr.dims[0]: 0})
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.imshow(arr.values, origin="upper", cmap="viridis")
-        ax.axis("off")
-        fig.savefig(path, bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        return path
 
     if ext == ".csv":
         path = str(results_dir / "result.csv")
@@ -579,6 +567,70 @@ def _write_vector(gdf: Any, results_dir: Any, fmt: str) -> str | None:
     # Fallback to GeoJSON
     path = str(results_dir / "result.geojson")
     gdf.to_file(path, driver="GeoJSON")
+    return path
+
+
+def _write_png(ds: Any, results_dir: Any) -> str | None:
+    """Render an xr.Dataset as a styled PNG using the collection's render settings.
+
+    Applies the same colormap, rescale range, and NaN transparency as the /map
+    viewer.  Squeezes to a 2-D slice (first time step if temporal).
+    """
+    import matplotlib
+    import numpy as np
+
+    matplotlib.use("agg")  # non-interactive backend — safe on worker threads
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
+
+    var = list(ds.data_vars)[0]
+    arr = ds[var]
+
+    # Squeeze to 2-D (first step of each leading dim)
+    while arr.ndim > 2:
+        arr = arr.isel({arr.dims[0]: 0})
+
+    data = arr.values.astype(float)
+    data[data == 0] = np.nan  # treat exact-zero as nodata like the map viewer
+
+    # Look up render settings from the published collection via the dataset registry
+    colormap_name = "viridis"
+    vmin, vmax = float(np.nanmin(data)), float(np.nanmax(data))
+    try:
+        from climate_api.data_registry.services import datasets as reg
+
+        for ds in reg.list_datasets():
+            display = ds.get("display", {})
+            ds_var = ds.get("variable", "")
+            if ds_var == var or ds.get("id", "").endswith(var):
+                colormap_name = display.get("colormap", colormap_name)
+                rng = display.get("range")
+                if isinstance(rng, list) and len(rng) == 2:
+                    vmin, vmax = float(rng[0]), float(rng[1])
+                break
+    except Exception:
+        pass
+
+    cmap = plt.get_cmap(colormap_name.title()).copy()
+    cmap.set_bad(alpha=0)  # NaN → transparent
+
+    norm = Normalize(vmin=vmin, vmax=vmax, clip=False)
+
+    # Render at the natural aspect ratio of the data
+    height, width = data.shape
+    dpi = 150
+    fig_w = max(4, width / dpi)
+    fig_h = max(3, height / dpi)
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+    fig.patch.set_alpha(0)
+    ax.imshow(data, origin="upper", cmap=cmap, norm=norm, interpolation="nearest")
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+
+    path = str(results_dir / "result.png")
+    fig.savefig(path, bbox_inches="tight", dpi=dpi, transparent=True, pad_inches=0)
+    plt.close(fig)
     return path
 
 
