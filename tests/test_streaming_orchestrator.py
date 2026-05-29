@@ -324,6 +324,34 @@ def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path
     assert rerun.periods_written == 0
 
 
+def test_orchestrator_declares_coarse_time_chunks_for_streaming_store(tmp_path: Path) -> None:
+    store_path = tmp_path / "streaming-store.icechunk"
+    dataset = {"extents": {"temporal": {"resolution": "P1D"}}}
+
+    result = run_streaming_ingest_sync(
+        plugin=_FakePlugin(),
+        params={},
+        dataset=dataset,
+        bbox=[0.0, 0.0, 1.0, 1.0],
+        start="2026-01-01",
+        end="2026-01-03",
+        store_path=store_path,
+        period_type="daily",
+    )
+
+    assert result.periods_written == 3
+
+    storage = icechunk.local_filesystem_storage(str(store_path))
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session("main")
+
+    import zarr
+
+    root = zarr.open_group(session.store, mode="r")
+    assert root["time"].metadata.chunk_grid.chunk_shape == (30,)
+    assert root["precip"].metadata.chunk_grid.chunk_shape == (30, 1, 1)
+
+
 def test_orchestrator_resume_supports_custom_time_dimension(tmp_path: Path) -> None:
     store_path = tmp_path / "streaming-store-custom-time.icechunk"
 

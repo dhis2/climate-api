@@ -24,6 +24,7 @@ from typing import Any
 
 import xarray as xr
 
+from climate_api.shared.time import resolve_iso_period_step, time_chunk_for_iso_step
 from climate_api.streaming.protocol import GridSpec, IngestionPlugin
 from climate_api.streaming.store import (
     is_store_empty,
@@ -62,6 +63,60 @@ def _strip_cf_encoding(ds: xr.Dataset, period_type: str, *, time_dim: str) -> No
     if time_dim in ds.coords:
         units = "hours since 1970-01-01" if period_type == "hourly" else "days since 1970-01-01"
         ds[time_dim].encoding.update({"units": units, "dtype": "int32"})
+
+
+def _preferred_time_chunk(period_type: str, dataset: dict[str, Any] | None) -> int:
+    """Return a stable time chunk size for streaming-written stores.
+
+    Streaming append writes one period at a time. Without an explicit chunk
+    declaration, the time coordinate tends to end up split into one tiny chunk
+    per period, which causes browser clients to fan out many metadata reads
+    just to enumerate the timeline.
+    """
+    if dataset is not None:
+        iso_step = resolve_iso_period_step(dataset)
+        if iso_step is not None:
+            try:
+                return time_chunk_for_iso_step(iso_step)
+            except ValueError:
+                pass
+
+    fallback_by_period = {
+        "hourly": 24 * 7,
+        "daily": 30,
+        "weekly": 52,
+        "monthly": 12,
+        "yearly": 10,
+    }
+    return fallback_by_period.get(period_type, 30)
+
+
+def _apply_streaming_chunk_layout(
+    ds: xr.Dataset,
+    *,
+    spec: GridSpec,
+    period_type: str,
+    dataset: dict[str, Any] | None,
+) -> None:
+    """Declare stable chunk metadata for append-friendly streaming stores."""
+    time_chunk = _preferred_time_chunk(period_type, dataset)
+    y_chunk = min(int(spec.shape[0]), 512)
+    x_chunk = min(int(spec.shape[1]), 512)
+
+    for var_name, data_array in ds.data_vars.items():
+        dims = tuple(str(dim) for dim in data_array.dims)
+        chunk_map: dict[str, int] = {}
+        if spec.time_dim in dims:
+            chunk_map[spec.time_dim] = time_chunk
+        if spec.y_dim in dims:
+            chunk_map[spec.y_dim] = y_chunk
+        if spec.x_dim in dims:
+            chunk_map[spec.x_dim] = x_chunk
+        if chunk_map:
+            ds[var_name].encoding["chunks"] = tuple(chunk_map[dim] for dim in dims)
+
+    if spec.time_dim in ds.coords:
+        ds[spec.time_dim].encoding["chunks"] = (time_chunk,)
 
 
 async def run_streaming_ingest(
@@ -141,6 +196,7 @@ async def run_streaming_ingest(
             if dataset is not None:
                 ds = run_dataset_transforms(ds, dataset)
             _strip_cf_encoding(ds, period_type, time_dim=spec.time_dim)
+            _apply_streaming_chunk_layout(ds, spec=spec, period_type=period_type, dataset=dataset)
             try:
                 spatial_shape = (int(ds.sizes[spec.y_dim]), int(ds.sizes[spec.x_dim]))
             except KeyError as exc:
