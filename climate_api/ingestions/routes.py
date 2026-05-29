@@ -43,10 +43,12 @@ def create_ingestion(
     return immediately with 202 + ``Location: /internal/jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
+        from climate_api.ingestions.processes import execute_ingestion
         from climate_api.jobs.service import get_job_service
 
-        job = get_job_service().submit_internal_process_job(
-            process_id="ingestion",
+        job = get_job_service().submit_callable_job(
+            func=execute_ingestion,
+            label="ingestion",
             request=request.model_dump(),
         )
         response.status_code = 202
@@ -137,10 +139,12 @@ def sync_dataset(
     return immediately with 202 + ``Location: /internal/jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
+        from climate_api.ingestions.processes import execute_sync
         from climate_api.jobs.service import get_job_service
 
-        job = get_job_service().submit_internal_process_job(
-            process_id="sync",
+        job = get_job_service().submit_callable_job(
+            func=execute_sync,
+            label="sync",
             request={"dataset_id": dataset_id, **request.model_dump()},
         )
         response.status_code = 202

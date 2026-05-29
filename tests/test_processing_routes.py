@@ -72,30 +72,6 @@ def test_expose_false_yaml_fixture_is_hidden_from_execution_routes(
     assert execution_response.status_code == 404
 
 
-def test_post_process_execution_rejects_async_when_process_is_sync_only(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "climate_api.processing.routes.process_registry.get_process",
-        lambda process_id: {
-            "id": process_id,
-            "title": "Sync only process",
-            "execution": {"function": "mypackage.sync_only.execute"},
-            "expose": True,
-            "jobControlOptions": ["sync-execute"],
-        },
-    )
-
-    response = client.post(
-        "/processes/sync-only/execution",
-        headers={"Prefer": "respond-async"},
-        json={},
-    )
-
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Process 'sync-only' does not support async execution"
-
 
 def test_post_internal_process_execution_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(

@@ -1,22 +1,15 @@
-"""Routes for native processing operations (ingestion, sync, and custom plugins)."""
+"""Routes for native processing operations (custom plugins via sync execution)."""
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Header, HTTPException, Response
+from fastapi import APIRouter, Body, HTTPException, Response
 
 from climate_api.data_registry.services import processes as process_registry
-from climate_api.jobs.service import get_job_service
 from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessLink, ProcessListResponse, ProcessSummary
 
 router = APIRouter()
 
 
-def _prefer_respond_async(prefer: str | None) -> bool:
-    """Return True when Prefer contains a respond-async directive."""
-    if prefer is None:
-        return False
-    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
-    return "respond-async" in directives
 
 
 def _process_links(process_id: str) -> list[ProcessLink]:
@@ -98,11 +91,6 @@ def _validate_required_process_inputs(process: dict[str, Any], request: dict[str
         raise HTTPException(status_code=400, detail=f"Missing required process inputs: {joined}")
 
 
-def _supports_async_execution(process: dict[str, Any]) -> bool:
-    job_control_options = process.get("jobControlOptions")
-    return isinstance(job_control_options, list) and "async-execute" in job_control_options
-
-
 @router.get("", response_model=ProcessListResponse)
 def get_processes_catalog() -> ProcessListResponse:
     """Return the registered native process catalog."""
@@ -125,21 +113,14 @@ def run_process_execution(
     process_id: str,
     response: Response,
     request: dict[str, Any] = Body(...),
-    prefer: str | None = Header(default=None),
 ) -> Any:
-    """Dispatch to a registered process execution function by process id."""
+    """Dispatch to a registered process execution function synchronously.
+
+    For async execution of custom plugins, use the openEO POST /jobs endpoint
+    with a process graph that calls the plugin by its registered process id.
+    """
     process = _get_public_process_or_404(process_id)
     _validate_required_process_inputs(process, request)
-    if _prefer_respond_async(prefer):
-        if not _supports_async_execution(process):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Process '{process_id}' does not support async execution",
-            )
-        job = get_job_service().submit_process_job(process_id=process_id, request=request)
-        response.status_code = 202
-        response.headers["Location"] = f"/internal/jobs/{job.job_id}"
-        return job
 
     try:
         func = process_registry.get_process_function(process_id)
