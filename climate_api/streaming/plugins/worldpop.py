@@ -84,7 +84,14 @@ class WorldPopYearlyPlugin:
                 break
         if self.variant.source_variable != self.variant.output_variable:
             rename_map[self.variant.source_variable] = self.variant.output_variable
-        return dataset.rename(rename_map) if rename_map else dataset
+        if rename_map:
+            dataset = dataset.rename(rename_map)
+        # Mask the WorldPop sentinel nodata value (-99999) to NaN so the Zarr
+        # store uses its native NaN fill_value for unpopulated / ocean cells.
+        var = self.variant.output_variable
+        if var in dataset:
+            dataset[var] = dataset[var].where(dataset[var] > -9999)
+        return dataset
 
 
 def _resolve_variant(*, product: str, variable: str) -> _WorldPopVariant:
