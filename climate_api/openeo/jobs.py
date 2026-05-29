@@ -534,7 +534,7 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
         return path
 
     if ext == ".tif":
-        import rioxarray  # noqa: F401 — activates .rio accessor
+        import rioxarray  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
         path = str(results_dir / "result.tif")
         # GeoTIFF requires a 2-D or 3-D array; use the first variable
