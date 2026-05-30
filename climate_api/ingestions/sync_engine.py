@@ -429,7 +429,7 @@ def _resolve_local_artifact_path(raw_path: str | None) -> tuple[Path | None, str
     resolved = candidate.resolve(strict=False)
     for root in _artifact_storage_roots():
         try:
-            resolved.relative_to(root.resolve())
+            resolved.relative_to(root)
         except ValueError:
             continue
         return resolved, None

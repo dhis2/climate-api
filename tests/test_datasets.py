@@ -434,7 +434,7 @@ def test_create_artifact_uses_streaming_plugin_for_direct_ingest(
         return plugin
 
     monkeypatch.setattr(services, "_load_streaming_plugin", fake_load_streaming_plugin)
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
 
     def fake_run_streaming_ingest_sync(**kwargs: object) -> object:
         captured["run"] = kwargs
@@ -519,7 +519,7 @@ def test_create_artifact_uses_streaming_plugin_for_store_based_sync(
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: plugin)
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
 
     def fake_run_streaming_ingest_sync(**kwargs: object) -> object:
         captured["run"] = kwargs
@@ -589,7 +589,7 @@ def test_create_artifact_forwards_country_code_to_streaming_plugin(
         return plugin
 
     monkeypatch.setattr(services, "_load_streaming_plugin", fake_load_streaming_plugin)
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
     monkeypatch.setattr(
         services,
         "run_streaming_ingest_sync",
@@ -671,7 +671,7 @@ def test_create_artifact_allows_streaming_coverage_clamped_to_source_availabilit
     store_path.mkdir()
 
     monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
     monkeypatch.setattr(
         services,
         "run_streaming_ingest_sync",
@@ -733,7 +733,7 @@ def test_create_artifact_rejects_streaming_coverage_with_late_start(
     store_path.mkdir()
 
     monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
     monkeypatch.setattr(
         services,
         "run_streaming_ingest_sync",
@@ -780,7 +780,7 @@ def test_create_artifact_returns_409_when_streaming_plugin_has_no_periods(
     store_path = tmp_path / "chirps3_precipitation_daily.icechunk"
 
     monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
     monkeypatch.setattr(
         services,
         "run_streaming_ingest_sync",
@@ -818,7 +818,7 @@ def test_create_artifact_overwrite_resets_existing_icechunk_store(
     (store_path / "stale").write_text("old", encoding="utf-8")
 
     monkeypatch.setattr(services, "_load_streaming_plugin", lambda *args, **kwargs: object())
-    monkeypatch.setattr("climate_api.ingestions.services.get_icechunk_path", lambda _: store_path)
+    monkeypatch.setattr("climate_api.ingestions.store_paths.get_icechunk_path", lambda _: store_path)
     monkeypatch.setattr(services, "_find_existing_artifact", lambda **_: None)
     monkeypatch.setattr(services, "_upsert_artifact_record", lambda record, **_: record)
 
