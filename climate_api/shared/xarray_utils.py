@@ -6,11 +6,13 @@ from typing import Any
 
 
 def get_time_dim(ds: Any) -> str:
-    """Return the name of the time dimension in a dataset or dataframe."""
-    for name in ("t", "valid_time", "time"):
-        if hasattr(ds, name):
-            return name
-    raise ValueError(f"Unable to find time dimension: {getattr(ds, 'coords', repr(ds))}")
+    """Return the name of the time dimension in a dataset or dataframe.
+
+    All stores use ``t`` since the time dimension was standardised in #169.
+    """
+    if hasattr(ds, "t"):
+        return "t"
+    raise ValueError(f"Unable to find time dimension 't': {getattr(ds, 'coords', repr(ds))}")
 
 
 def get_x_y_dims(ds: Any) -> tuple[str, str]:

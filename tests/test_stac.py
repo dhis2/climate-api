@@ -647,11 +647,11 @@ def test_build_collection_with_xstac_reads_normalised_zarr_coordinates(tmp_path:
     """STAC collection metadata is derived correctly from a normalised longitude/latitude/time store."""
     zarr_path = tmp_path / "chirps3_precipitation_daily.zarr"
     ds = xr.Dataset(
-        {"precip": (["time", "latitude", "longitude"], np.ones((5, 3, 3), dtype="float32"))},
+        {"precip": (["t", "y", "x"], np.ones((5, 3, 3), dtype="float32"))},
         coords={
-            "time": pd.date_range("2026-01-01", periods=5, freq="D"),
-            "latitude": [4.0, 3.0, 2.0],
-            "longitude": [1.0, 2.0, 3.0],
+            "t": pd.date_range("2026-01-01", periods=5, freq="D"),
+            "y": [4.0, 3.0, 2.0],
+            "x": [1.0, 2.0, 3.0],
         },
     )
     ds.to_zarr(str(zarr_path), mode="w", consolidated=True)
@@ -671,9 +671,9 @@ def test_build_collection_with_xstac_reads_normalised_zarr_coordinates(tmp_path:
 
     assert payload["type"] == "Collection"
     cube_dims = payload["cube:dimensions"]
-    assert "longitude" in cube_dims, f"expected 'longitude' in cube:dimensions, got {list(cube_dims)}"
-    assert "latitude" in cube_dims, f"expected 'latitude' in cube:dimensions, got {list(cube_dims)}"
-    assert "time" in cube_dims, f"expected 'time' in cube:dimensions, got {list(cube_dims)}"
-    assert cube_dims["longitude"]["axis"] == "x"
-    assert cube_dims["latitude"]["axis"] == "y"
-    assert cube_dims["time"]["type"] == "temporal"
+    assert "x" in cube_dims, f"expected 'x' in cube:dimensions, got {list(cube_dims)}"
+    assert "y" in cube_dims, f"expected 'y' in cube:dimensions, got {list(cube_dims)}"
+    assert "t" in cube_dims, f"expected 't' in cube:dimensions, got {list(cube_dims)}"
+    assert cube_dims["x"]["axis"] == "x"
+    assert cube_dims["y"]["axis"] == "y"
+    assert cube_dims["t"]["type"] == "temporal"
