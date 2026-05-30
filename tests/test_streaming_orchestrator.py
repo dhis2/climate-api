@@ -58,8 +58,8 @@ class _CustomTimeDimPlugin(_FakePlugin):
         _ = bbox, params
         value = float(period_id[-2:])
         return xr.Dataset(
-            {"precip": (("t", "y", "x"), np.array([[[value]]], dtype=np.float32))},
-            coords={"t": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
+            {"precip": (("valid_time", "y", "x"), np.array([[[value]]], dtype=np.float32))},
+            coords={"valid_time": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
         )
 
 
