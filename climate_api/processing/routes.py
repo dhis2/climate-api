@@ -1,4 +1,4 @@
-"""Routes for derived processing operations."""
+"""Routes for native processing operations (ingestion, sync, and custom plugins)."""
 
 from typing import Any
 
@@ -6,7 +6,6 @@ from fastapi import APIRouter, Body, Header, HTTPException, Response
 
 from climate_api.data_registry.services import processes as process_registry
 from climate_api.jobs.service import get_job_service
-from climate_api.processing import services as processing_services
 from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessLink, ProcessListResponse, ProcessSummary
 
 router = APIRouter()
@@ -80,7 +79,7 @@ def _public_process_detail(process: dict[str, Any]) -> ProcessDetail:
 
 def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
     process = process_registry.get_process(process_id)
-    if process is None or not process["expose"]:
+    if process is None:
         raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
     return process
 
@@ -99,12 +98,6 @@ def _validate_required_process_inputs(process: dict[str, Any], request: dict[str
         raise HTTPException(status_code=400, detail=f"Missing required process inputs: {joined}")
 
 
-def _validate_process_request(process: dict[str, Any], request: dict[str, Any]) -> None:
-    _validate_required_process_inputs(process, request)
-    if process.get("id") == "resample":
-        processing_services.validate_resample_request(**request)
-
-
 def _supports_async_execution(process: dict[str, Any]) -> bool:
     job_control_options = process.get("jobControlOptions")
     return isinstance(job_control_options, list) and "async-execute" in job_control_options
@@ -113,7 +106,7 @@ def _supports_async_execution(process: dict[str, Any]) -> bool:
 @router.get("", response_model=ProcessListResponse)
 def get_processes_catalog() -> ProcessListResponse:
     """Return the registered native process catalog."""
-    visible = [process for process in process_registry.list_processes() if process["expose"]]
+    visible = process_registry.list_processes()
     return ProcessListResponse(
         processes=[_public_process_summary(process) for process in visible],
         links=_catalog_links(),
@@ -136,7 +129,7 @@ def run_process_execution(
 ) -> Any:
     """Dispatch to a registered process execution function by process id."""
     process = _get_public_process_or_404(process_id)
-    _validate_process_request(process, request)
+    _validate_required_process_inputs(process, request)
     if _prefer_respond_async(prefer):
         if not _supports_async_execution(process):
             raise HTTPException(

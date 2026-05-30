@@ -25,7 +25,6 @@ from zarr.core.buffer import default_buffer_prototype
 
 from climate_api import config as api_config
 from climate_api.data_accessor.services.accessor import get_data_coverage_for_paths
-from climate_api.data_manager.services import downloader
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.extents.services import get_extent
 from climate_api.ingestions.schemas import (
@@ -49,6 +48,7 @@ from climate_api.ingestions.schemas import (
     SyncDetail,
     SyncResponse,
 )
+from climate_api.ingestions.store_paths import get_icechunk_path
 from climate_api.ingestions.sync_engine import SyncConfigurationError, plan_sync, run_sync
 from climate_api.publications.services import managed_dataset_id_for, publish_artifact
 from climate_api.shared.time import datetime_to_period_string, normalize_period_string, utc_now, utc_today
@@ -283,7 +283,12 @@ def _create_streaming_artifact(
         params["country_code"] = country_code
 
     plugin = _load_streaming_plugin(plugin_path, params=params)
-    store_path = downloader.get_icechunk_path(dataset)
+    store_path = get_icechunk_path(str(dataset["id"]))
+    if overwrite and store_path.exists():
+        if store_path.is_dir():
+            shutil.rmtree(store_path)
+        else:
+            store_path.unlink()
 
     lock = _acquire_store_lock(store_path)
     if not lock.acquire(blocking=False):

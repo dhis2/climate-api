@@ -29,9 +29,6 @@ def _normalize_process_definition(process: dict[str, Any]) -> dict[str, Any]:
         execution = dict(execution)
     normalized["execution"] = execution
 
-    if "expose" not in normalized or normalized["expose"] is None:
-        normalized["expose"] = True
-
     if "jobControlOptions" not in normalized or normalized["jobControlOptions"] is None:
         normalized["jobControlOptions"] = ["sync-execute"]
 
@@ -157,10 +154,6 @@ def _validate_process(process: object, *, source: str) -> None:
         execution_function = None
     if not isinstance(execution_function, str) or not execution_function:
         raise ValueError(f"Process '{process_id}' in {source} must define execution.function")
-
-    expose = process.get("expose")
-    if expose is not None and not isinstance(expose, bool):
-        raise ValueError(f"Process '{process_id}' in {source} has invalid expose value")
 
     job_control_options = process.get("jobControlOptions")
     if job_control_options is not None and (

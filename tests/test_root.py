@@ -5,20 +5,20 @@ from climate_api.ingestions import services as ingestion_services
 from climate_api.system.schemas import HealthStatus, RootResponse
 
 
-def test_root_returns_html_by_default(client: TestClient) -> None:
-    response = client.get("/")
+def test_root_returns_html_when_requested(client: TestClient) -> None:
+    response = client.get("/", headers={"Accept": "text/html"})
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Open Climate Service" in response.text
 
 
 def test_root_html_shows_extent(client: TestClient) -> None:
-    response = client.get("/")
+    response = client.get("/", headers={"Accept": "text/html"})
     assert "Sierra Leone" in response.text
 
 
 def test_root_html_links_to_key_endpoints(client: TestClient) -> None:
-    response = client.get("/")
+    response = client.get("/", headers={"Accept": "text/html"})
     assert "/docs" in response.text
     assert "/stac/catalog.json" in response.text
 
