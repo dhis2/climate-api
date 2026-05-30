@@ -8,6 +8,22 @@ import xarray as xr
 from climate_api.streaming.plugins.era5_land import ERA5LandHourlySingleBandPlugin, ERA5LandPrecipitationPlugin
 
 
+def test_era5_land_plugin_accepts_extra_kwargs() -> None:
+    plugin = ERA5LandHourlySingleBandPlugin(variable="t2m", unknown_future_field="ignored")
+    assert plugin.variable == "t2m"
+
+
+def test_era5_land_plugin_still_rejects_empty_variable_with_extra_kwargs() -> None:
+    with pytest.raises(ValueError, match="non-empty variable"):
+        ERA5LandHourlySingleBandPlugin(variable="", unknown_future_field="ignored")
+
+
+def test_era5_land_precipitation_plugin_accepts_extra_kwargs() -> None:
+    plugin = ERA5LandPrecipitationPlugin(unknown_future_field="ignored")
+    assert plugin.variable == "tp"
+
+
+
 def test_era5_land_periods_enumerate_hours() -> None:
     plugin = ERA5LandHourlySingleBandPlugin(variable="t2m")
 

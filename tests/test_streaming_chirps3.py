@@ -6,6 +6,18 @@ import pytest
 from climate_api.streaming.plugins.chirps3 import CHIRPS3DailyPlugin
 
 
+def test_chirps3_plugin_accepts_extra_kwargs() -> None:
+    plugin = CHIRPS3DailyPlugin(stage="final", flavor="rnl", unknown_future_field="ignored")
+    assert plugin.stage == "final"
+    assert plugin.flavor == "rnl"
+
+
+def test_chirps3_plugin_still_validates_stage_with_extra_kwargs() -> None:
+    with pytest.raises(ValueError, match="stage must be"):
+        CHIRPS3DailyPlugin(stage="bad", unknown_future_field="ignored")
+
+
+
 def test_chirps3_plugin_probe_estimates_grid_from_bbox() -> None:
     plugin = CHIRPS3DailyPlugin()
 

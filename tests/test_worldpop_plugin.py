@@ -6,6 +6,12 @@ import xarray as xr
 from climate_api.streaming.plugins.worldpop import WorldPopYearlyPlugin, _resolve_variant
 
 
+def test_worldpop_plugin_accepts_extra_kwargs() -> None:
+    plugin = WorldPopYearlyPlugin(version="global2", unknown_future_field="ignored")
+    assert plugin.version == "global2"
+
+
+
 def test_worldpop_plugin_periods_enumerates_years() -> None:
     plugin = WorldPopYearlyPlugin()
 
