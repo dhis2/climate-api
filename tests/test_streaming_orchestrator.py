@@ -107,9 +107,7 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(
-            path, period_type, time_dim=time_dim
-        ),
+        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(path, period_type, time_dim=time_dim),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -203,9 +201,7 @@ def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(
-            path, period_type, time_dim=time_dim
-        ),
+        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(path, period_type, time_dim=time_dim),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
