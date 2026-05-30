@@ -201,7 +201,7 @@ class IngestionResponse(BaseModel):
 
     ingestion_id: str = Field(description="Identifier of the ingestion event.")
     status: str = Field(description="Execution status of the ingestion request.")
-    dataset: DatasetRecord = Field(description="Managed dataset summary produced or resolved by the ingestion.")
+    dataset: DatasetRecord | None = Field(default=None, description="Managed dataset summary. None for async requests.")
 
 
 class IngestionListResponse(BaseModel):
@@ -323,7 +323,10 @@ class SyncResponse(BaseModel):
     )
     status: str = Field(description="Execution status, for example completed or up_to_date.")
     message: str | None = Field(default=None, description="Human-readable explanation of the sync outcome.")
-    dataset: DatasetDetailRecord = Field(description="Current dataset detail after the sync operation.")
-    sync_detail: SyncDetail = Field(
-        description="Planner output describing how Climate API interpreted the sync request."
+    dataset: DatasetDetailRecord | None = Field(
+        default=None, description="Current dataset detail. None for async requests."
+    )
+    sync_detail: SyncDetail | None = Field(
+        default=None,
+        description="Planner output describing how Climate API interpreted the sync request.",
     )
