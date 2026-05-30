@@ -102,7 +102,6 @@ def render_maps(base: str) -> str:
     return get_template("map-viewer.html").render(base=base, name=api_config.get_name())
 
 
-
 def _load_extent() -> dict[str, Any] | None:
     try:
         return get_extent()
