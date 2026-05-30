@@ -84,7 +84,7 @@ class WorldPopYearlyPlugin:
         # store uses its native NaN fill_value for unpopulated / ocean cells.
         var = self.variant.output_variable
         if var in dataset:
-            dataset[var] = dataset[var].where(dataset[var] > -9999)
+            dataset[var] = dataset[var].where(dataset[var] != -99999)
         return dataset
 
 
