@@ -93,4 +93,4 @@ WorldPop Global2 provides gridded population estimates and projections at 100 m 
 
 ## Derived datasets
 
-Temporal aggregation and other derived computations are done via openEO process graphs. See [openEO guide](openeo.md) and [Processes](processes.md) for details.
+In addition to the four built-in sources, the API can produce **derived datasets** by resampling any ingested dataset to a coarser temporal resolution. Derived datasets are created on demand via the `resample` process. See [Processes](processes.md) for details.

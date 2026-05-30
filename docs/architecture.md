@@ -162,6 +162,16 @@ The hierarchy is:
   |                                  +-- climate_api.streaming      (new path)
   |                                  +-- legacy download path       (old path)
   |
+  +-- /processes/resample
+         |
+         +-- /execution
+                |
+                +-- creates or runs a job
+                       |
+                       +-- calls the resample execution function
+                              |
+                              +-- climate_api.processing.services
+                              +-- climate_api.ingestions.services
 ```
 
 The important distinction is:
@@ -174,7 +184,7 @@ The important distinction is:
 
 A process is the catalog-level concept. It defines:
 
-- the public operation id, for example `ingestion` or `sync`
+- the public operation id, for example `ingestion` or `resample`
 - the input and output contract
 - whether sync and/or async execution is supported
 - the Python function that implements the operation
@@ -182,7 +192,7 @@ A process is the catalog-level concept. It defines:
 Examples:
 
 - `ingestion` materializes a managed dataset from a dataset template
-- `sync` keeps an existing managed dataset up to date
+- `resample` derives a new managed dataset from an existing one
 
 ### Execution
 
@@ -227,13 +237,15 @@ For ingestion:
 - the implementation may use the new `streaming` engine or the old download
   path depending on the dataset contract
 
-The jobs framework is horizontal — it does not need to know whether a process is
-ingestion, sync, or a custom plugin. It only needs to run the registered
-execution function and persist lifecycle state.
+For resampling:
 
-Temporal aggregation and other analytical computations are handled by the openEO
-process graph layer (`POST /result`, `POST /jobs`) rather than native processes.
-See [openeo.md](openeo.md).
+- the domain goal is to derive a new managed dataset from an existing one
+- the implementation uses the processing/resample services, then persists the
+  result through the same artifact layer
+
+The jobs framework is therefore horizontal. It does not need to know whether a
+process is ingestion, resampling, or something else later. It only needs to run
+the registered execution function and persist lifecycle state.
 
 ### Current API stance
 
