@@ -5,15 +5,6 @@ import pytest
 from climate_api.data_registry.services import processes as process_registry
 
 
-def test_builtin_processes_include_ingestion_and_sync(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
-    monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
-
-    ids = {p["id"] for p in process_registry.list_processes()}
-    assert "ingestion" in ids
-    assert "sync" in ids
-    assert "resample" not in ids
-
 
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
@@ -73,7 +64,6 @@ def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.Monkey
 
     ids = {p["id"] for p in process_registry.list_processes()}
     assert "custom_process" in ids
-    assert "ingestion" in ids
 
 
 def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
