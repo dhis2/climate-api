@@ -35,7 +35,7 @@ def test_era5_land_probe_uses_region_shape(monkeypatch: pytest.MonkeyPatch) -> N
     spec = asyncio.run(plugin.probe([1.0, 2.0, 3.0, 4.0]))
 
     assert spec.shape == (3, 4)
-    assert spec.time_dim == "valid_time"
+    assert spec.time_dim == "t"
     assert spec.x_dim == "x"
     assert spec.y_dim == "y"
 
@@ -58,7 +58,7 @@ def test_era5_land_fetch_period_normalizes_coordinates(monkeypatch: pytest.Monke
 
     dataset = asyncio.run(plugin.fetch_period("2026-01-01T01", [1.0, 2.0, 3.0, 4.0]))
 
-    assert "valid_time" in dataset.dims
+    assert "t" in dataset.dims
     assert "x" in dataset.dims
     assert "y" in dataset.dims
     assert "longitude" not in dataset.dims

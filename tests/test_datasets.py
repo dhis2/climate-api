@@ -158,8 +158,8 @@ def test_get_dataset_zarr_store_info_reads_icechunk_listing(tmp_path: Path, monk
     repo = icechunk.Repository.create(storage)
     session = repo.writable_session("main")
     ds = xr.Dataset(
-        {"precip": (("time", "y", "x"), [[[1.0, 2.0], [3.0, 4.0]]])},
-        coords={"time": ["2026-01-01"], "x": [1.0, 2.0], "y": [3.0, 4.0]},
+        {"precip": (("t", "y", "x"), [[[1.0, 2.0], [3.0, 4.0]]])},
+        coords={"t": ["2026-01-01"], "x": [1.0, 2.0], "y": [3.0, 4.0]},
         attrs={"proj:code": "EPSG:4326", "spatial:bbox": [1.0, 3.0, 2.0, 4.0]},
     )
     ds.to_zarr(session.store, mode="w", zarr_format=3)
@@ -177,7 +177,7 @@ def test_get_dataset_zarr_store_info_reads_icechunk_listing(tmp_path: Path, monk
     assert listing["format"] == ArtifactFormat.ICECHUNK
     assert listing["path"] == "."
     names = {entry["name"] for entry in listing["entries"]}  # type: ignore[index]
-    assert {"zarr.json", "precip", "time", "x", "y"} <= names
+    assert {"zarr.json", "precip", "t", "x", "y"} <= names
 
 
 def test_get_dataset_zarr_store_file_reads_icechunk_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -186,8 +186,8 @@ def test_get_dataset_zarr_store_file_reads_icechunk_metadata(tmp_path: Path, mon
     repo = icechunk.Repository.create(storage)
     session = repo.writable_session("main")
     ds = xr.Dataset(
-        {"precip": (("time", "y", "x"), [[[1.0]]])},
-        coords={"time": ["2026-01-01"], "x": [1.0], "y": [2.0]},
+        {"precip": (("t", "y", "x"), [[[1.0]]])},
+        coords={"t": ["2026-01-01"], "x": [1.0], "y": [2.0]},
         attrs={"proj:code": "EPSG:4326"},
     )
     ds.to_zarr(session.store, mode="w", zarr_format=3)
@@ -214,8 +214,8 @@ def test_get_dataset_zarr_store_file_rejects_invalid_icechunk_relative_path(
     repo = icechunk.Repository.create(storage)
     session = repo.writable_session("main")
     ds = xr.Dataset(
-        {"precip": (("time", "y", "x"), [[[1.0]]])},
-        coords={"time": ["2026-01-01"], "x": [1.0], "y": [2.0]},
+        {"precip": (("t", "y", "x"), [[[1.0]]])},
+        coords={"t": ["2026-01-01"], "x": [1.0], "y": [2.0]},
     )
     ds.to_zarr(session.store, mode="w", zarr_format=3)
     session.commit("seed metadata")

@@ -30,8 +30,8 @@ class _FakePlugin:
         _ = bbox, params
         value = float(period_id[-2:])
         return xr.Dataset(
-            {"precip": (("time", "y", "x"), np.array([[[value]]], dtype=np.float32))},
-            coords={"time": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
+            {"precip": (("t", "y", "x"), np.array([[[value]]], dtype=np.float32))},
+            coords={"t": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
         )
 
 
@@ -40,8 +40,8 @@ class _ShapeMismatchPlugin(_FakePlugin):
         _ = bbox, params
         if period_id == "2026-01-02":
             return xr.Dataset(
-                {"precip": (("time", "y", "x"), np.array([[[1.0], [2.0]]], dtype=np.float32))},
-                coords={"time": [np.datetime64(period_id, "D")], "y": [0.0, 1.0], "x": [1.0]},
+                {"precip": (("t", "y", "x"), np.array([[[1.0], [2.0]]], dtype=np.float32))},
+                coords={"t": [np.datetime64(period_id, "D")], "y": [0.0, 1.0], "x": [1.0]},
             )
         return await super().fetch_period(period_id, bbox, **params)
 
@@ -49,6 +49,9 @@ class _ShapeMismatchPlugin(_FakePlugin):
 class _CustomTimeDimPlugin(_FakePlugin):
     async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         _ = bbox, params
+        # Use a non-default time dimension to exercise the custom-dim code path;
+        # production plugins standardise on "t" but this test must verify the
+        # orchestrator honours an overridden spec.time_dim.
         return GridSpec(shape=(1, 1), crs=4326, dtype=np.dtype("float32"), time_dim="valid_time")
 
     async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
@@ -81,7 +84,7 @@ class _FakeRepo:
         return session
 
 
-def _read_committed_periods_from_zarr(store_path: Path, period_type: str, *, time_dim: str = "time") -> set[str]:
+def _read_committed_periods_from_zarr(store_path: Path, period_type: str, *, time_dim: str = "t") -> set[str]:
     _ = period_type
     if not store_path.exists():
         return set()
@@ -104,9 +107,7 @@ def test_orchestrator_uses_store_state_as_resume_truth(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type, time_dim="time": _read_committed_periods_from_zarr(
-            path, period_type, time_dim=time_dim
-        ),
+        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(path, period_type, time_dim=time_dim),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -168,7 +169,7 @@ def test_orchestrator_refuses_destructive_first_write_when_existing_store_is_not
 
     monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
     monkeypatch.setattr(
-        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="time": set()
+        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="t": set()
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
 
@@ -200,9 +201,7 @@ def test_orchestrator_normalizes_invalid_plugin_batching_and_concurrency(
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type, time_dim="time": _read_committed_periods_from_zarr(
-            path, period_type, time_dim=time_dim
-        ),
+        lambda path, period_type, time_dim="t": _read_committed_periods_from_zarr(path, period_type, time_dim=time_dim),
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -229,8 +228,8 @@ def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
     repo = _FakeRepo(str(store_path))
 
     existing = xr.Dataset(
-        {"precip": (("time", "y", "x"), np.array([[[2.0]]], dtype=np.float32))},
-        coords={"time": [np.datetime64("2026-01-02", "D")], "y": [0.0], "x": [1.0]},
+        {"precip": (("t", "y", "x"), np.array([[[2.0]]], dtype=np.float32))},
+        coords={"t": [np.datetime64("2026-01-02", "D")], "y": [0.0], "x": [1.0]},
     )
     existing.to_zarr(store_path, mode="w", zarr_format=3)
 
@@ -238,7 +237,7 @@ def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
     monkeypatch.setattr(
         streaming_orchestrator,
         "read_committed_period_ids",
-        lambda path, period_type, time_dim="time": {"2026-01-02"},
+        lambda path, period_type, time_dim="t": {"2026-01-02"},
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: False)
 
@@ -255,7 +254,7 @@ def test_orchestrator_does_not_skip_uncommitted_gaps_before_cursor(
     assert result.periods_written == 2
     ds = xr.open_zarr(store_path, consolidated=None)
     try:
-        assert {str(item)[:10] for item in ds["time"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
+        assert {str(item)[:10] for item in ds["t"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
     finally:
         ds.close()
 
@@ -269,7 +268,7 @@ def test_orchestrator_rejects_spatial_shape_changes_across_appends(
 
     monkeypatch.setattr(streaming_orchestrator, "open_or_create_repo", lambda path: repo)
     monkeypatch.setattr(
-        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="time": set()
+        streaming_orchestrator, "read_committed_period_ids", lambda path, period_type, time_dim="t": set()
     )
     monkeypatch.setattr(streaming_orchestrator, "is_store_empty", lambda path: not path.exists())
 
@@ -307,7 +306,7 @@ def test_orchestrator_writes_and_reads_through_real_icechunk_repo(tmp_path: Path
     ds = xr.open_zarr(session.store)
     try:
         assert ds["precip"].values[:, 0, 0].tolist() == [1.0, 2.0, 3.0]
-        assert {str(item)[:10] for item in ds["time"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
+        assert {str(item)[:10] for item in ds["t"].values} == {"2026-01-01", "2026-01-02", "2026-01-03"}
     finally:
         ds.close()
 

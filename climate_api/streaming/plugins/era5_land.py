@@ -39,7 +39,7 @@ class ERA5LandHourlySingleBandPlugin:
             crs=4326,
             dtype=np.dtype(data.dtype),
             nodata=None,
-            time_dim="valid_time",
+            time_dim="t",
             x_dim="x",
             y_dim="y",
         )
@@ -64,7 +64,7 @@ class ERA5LandHourlySingleBandPlugin:
         timestamp = parse_period_string_to_datetime(period_id).replace(tzinfo=None)
         selected = region.sel(valid_time=slice(timestamp, timestamp))
         ds = selected[[self.variable]].load()
-        rename_map = {"longitude": "x", "latitude": "y"}
+        rename_map = {"longitude": "x", "latitude": "y", "valid_time": "t"}
         return ds.rename(rename_map) if rename_map else ds
 
     def _region_for_bbox(self, bbox: list[float]) -> xr.Dataset:
