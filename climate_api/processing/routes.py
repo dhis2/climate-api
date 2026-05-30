@@ -2,9 +2,103 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Response
+from fastapi import APIRouter, Body, Header, HTTPException, Response
 
 from climate_api.data_registry.services import processes as process_registry
+from climate_api.jobs.service import get_job_service
+from climate_api.processing import services as processing_services
+from climate_api.processing.schemas import ProcessDetail, ProcessField, ProcessLink, ProcessListResponse, ProcessSummary
+
+router = APIRouter()
+
+
+def _prefer_respond_async(prefer: str | None) -> bool:
+    """Return True when Prefer contains a respond-async directive."""
+    if prefer is None:
+        return False
+    directives = [item.strip().split(";", 1)[0].strip().lower() for item in prefer.split(",")]
+    return "respond-async" in directives
+
+
+def _process_links(process_id: str) -> list[ProcessLink]:
+    return [
+        ProcessLink(href=f"/processes/{process_id}", rel="self", title="Process detail"),
+        ProcessLink(href=f"/processes/{process_id}/execution", rel="execute", title="Execute process"),
+    ]
+
+
+def _catalog_links() -> list[ProcessLink]:
+    return [ProcessLink(href="/processes", rel="self", title="Processes")]
+
+
+def _field_map(raw: object) -> dict[str, ProcessField]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, ProcessField] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, dict):
+            raw_enum = value.get("enum")
+            result[key] = ProcessField(
+                type=value.get("type") if isinstance(value.get("type"), str) else None,
+                required=value.get("required") if isinstance(value.get("required"), bool) else None,
+                description=value.get("description") if isinstance(value.get("description"), str) else None,
+                enum=[item for item in raw_enum if isinstance(item, str)] if isinstance(raw_enum, list) else None,
+                default=value.get("default"),
+            )
+        else:
+            result[key] = ProcessField()
+    return result
+
+
+def _public_process_summary(process: dict[str, Any]) -> ProcessSummary:
+    process_id = process["id"]
+    keywords = process.get("keywords")
+    job_control_options = process.get("jobControlOptions")
+    return ProcessSummary(
+        id=process_id,
+        title=process["title"],
+        description=process.get("description") if isinstance(process.get("description"), str) else None,
+        version=process.get("version") if isinstance(process.get("version"), str) else None,
+        keywords=[k for k in keywords if isinstance(k, str)] if isinstance(keywords, list) else [],
+        job_control_options=[value for value in job_control_options if isinstance(value, str)]
+        if isinstance(job_control_options, list)
+        else [],
+        links=_process_links(process_id),
+    )
+
+
+def _public_process_detail(process: dict[str, Any]) -> ProcessDetail:
+    summary = _public_process_summary(process)
+    return ProcessDetail(
+        **summary.model_dump(),
+        inputs=_field_map(process.get("inputs")),
+        outputs=_field_map(process.get("outputs")),
+    )
+
+
+def _get_public_process_or_404(process_id: str) -> dict[str, Any]:
+    process = process_registry.get_process(process_id)
+    if process is None:
+        raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+    return process
+
+
+def _validate_required_process_inputs(process: dict[str, Any], request: dict[str, Any]) -> None:
+    raw_inputs = process.get("inputs")
+    if not isinstance(raw_inputs, dict):
+        return
+    missing = [
+        key
+        for key, value in raw_inputs.items()
+        if isinstance(key, str) and isinstance(value, dict) and value.get("required") is True and key not in request
+    ]
+    if missing:
+        joined = ", ".join(sorted(missing))
+        raise HTTPException(status_code=400, detail=f"Missing required process inputs: {joined}")
+
+
 def _validate_process_request(process: dict[str, Any], request: dict[str, Any]) -> None:
     _validate_required_process_inputs(process, request)
     if process.get("id") == "resample":
@@ -38,12 +132,9 @@ def run_process_execution(
     process_id: str,
     response: Response,
     request: dict[str, Any] = Body(...),
+    prefer: str | None = Header(default=None),
 ) -> Any:
-    """Dispatch to a registered process execution function synchronously.
-
-    For async execution of custom plugins, use the openEO POST /jobs endpoint
-    with a process graph that calls the plugin by its registered process id.
-    """
+    """Dispatch to a registered process execution function by process id."""
     process = _get_public_process_or_404(process_id)
     _validate_process_request(process, request)
     if _prefer_respond_async(prefer):

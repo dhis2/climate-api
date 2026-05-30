@@ -5,7 +5,8 @@ import pytest
 from climate_api.data_registry.services import processes as process_registry
 
 
-def test_builtin_processes_include_resample(monkeypatch: pytest.MonkeyPatch) -> None:    monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
+def test_builtin_processes_include_resample(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
 
     ids = {p["id"] for p in process_registry.list_processes()}
@@ -22,6 +23,7 @@ def test_builtin_resample_has_execution_function(monkeypatch: pytest.MonkeyPatch
     assert resample["execution"]["function"] == "climate_api.processing.services.execute_resample"
     assert resample["jobControlOptions"] == ["sync-execute", "async-execute"]
 
+
 def test_get_process_returns_none_for_unknown_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(process_registry, "CONFIGS_DIR", None)
     monkeypatch.delenv("CLIMATE_API_CONFIG", raising=False)
@@ -37,6 +39,7 @@ def test_get_process_function_returns_callable_for_registered_process(monkeypatc
             "id": process_id,
             "title": "Callable process",
             "execution": {"function": "mypackage.execute.run"},
+            "expose": True,
         },
     )
     monkeypatch.setattr(process_registry, "_get_dynamic_function", lambda path: {"path": path})
@@ -80,6 +83,7 @@ def test_plugins_dir_processes_subdir_adds_to_builtin(monkeypatch: pytest.Monkey
     ids = {p["id"] for p in process_registry.list_processes()}
     assert "custom_process" in ids
     assert "resample" in ids
+
 
 def test_plugins_dir_process_overrides_builtin_by_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "plugins" / "processes"
