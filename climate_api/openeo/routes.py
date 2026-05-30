@@ -272,6 +272,35 @@ def download_zarr_chunk(job_id: str, zarr_path: str) -> FileResponse:
     return FileResponse(str(chunk_path))
 
 
+_RESULT_MEDIA_TYPES: dict[str, str] = {
+    ".nc": "application/netcdf",
+    ".tif": "image/tiff; subtype=geotiff",
+    ".png": "image/png",
+    ".csv": "text/csv",
+    ".parquet": "application/vnd.apache.parquet",
+}
+
+
+@jobs_router.get("/{job_id}/results/{filename}")
+def download_result_file(job_id: str, filename: str) -> FileResponse:
+    """Serve a result file (NetCDF, GeoTIFF, PNG, CSV, GeoParquet) for a finished batch job."""
+    from climate_api.openeo.jobs import _JOBS_DIR
+
+    results_dir = _JOBS_DIR / job_id / "results"
+    try:
+        path = (results_dir / filename).resolve()
+        path.relative_to(results_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Result file not found")
+
+    suffix = path.suffix.lower()
+    media_type = _RESULT_MEDIA_TYPES.get(suffix, "application/octet-stream")
+    return FileResponse(str(path), media_type=media_type, filename=filename)
+
+
 # ---------------------------------------------------------------------------
 # Synchronous result  POST /result
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import sys
 import urllib.parse
 from collections.abc import AsyncIterator
@@ -60,7 +61,7 @@ def maps(request: Request) -> HTMLResponse:
 @router.get("/openeo", response_class=HTMLResponse, include_in_schema=False)
 def openeo_editor(request: Request) -> RedirectResponse:
     """Redirect to the openEO Web Editor pre-connected to this backend."""
-    base = str(request.base_url).rstrip("/")
+    base = os.getenv("CLIMATE_API_BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
     params = urllib.parse.urlencode({"server": base, "server-title": api_config.get_name()})
     return RedirectResponse(f"https://editor.openeo.org/?{params}", status_code=302)
 

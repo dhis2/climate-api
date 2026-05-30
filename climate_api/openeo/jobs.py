@@ -646,7 +646,7 @@ def _write_png(ds: Any, results_dir: Any) -> str | None:
     except Exception:
         pass
 
-    cmap = plt.get_cmap(colormap_name.title()).copy()
+    cmap = plt.get_cmap(colormap_name).copy()
     cmap.set_bad(alpha=0)  # NaN → transparent
 
     norm = Normalize(vmin=vmin, vmax=vmax, clip=False)
