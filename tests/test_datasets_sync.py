@@ -109,12 +109,9 @@ def test_sync_dataset_returns_up_to_date_when_no_new_period_is_due(monkeypatch: 
     assert result.sync_id is None
     assert result.status == "up_to_date"
     assert result.message == "Managed dataset is already current with upstream source state."
-    assert result.dataset is not None
     assert result.dataset.dataset_id == dataset_id
-    assert result.sync_detail is not None
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.NO_OP
-    assert result.sync_detail is not None
     assert result.sync_detail.reason == "no_new_period"
     assert (
         result.sync_detail.message
@@ -149,22 +146,16 @@ def test_sync_dataset_creates_new_version_from_next_period(monkeypatch: pytest.M
     assert result.sync_id == "a2"
     assert result.status == "completed"
     assert result.message == "Managed dataset was rematerialized against the latest planned upstream state."
-    assert result.sync_detail is not None
     assert result.sync_detail.sync_kind == SyncKind.TEMPORAL
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert result.sync_detail is not None
     assert result.sync_detail.reason == "new_periods_available"
     assert "Data exists through 2026-01-31" in result.sync_detail.message
-    assert result.sync_detail is not None
     assert "Sync will rematerialize the dataset through 2026-02-10" in result.sync_detail.message
     assert result.sync_detail.current_start == "2026-01-01"
-    assert result.sync_detail is not None
     assert result.sync_detail.current_end == "2026-01-31"
     assert result.sync_detail.target_end == "2026-02-10"
-    assert result.sync_detail is not None
     assert result.sync_detail.target_end_source == "request"
     assert result.sync_detail.delta_start == "2026-02-01"
-    assert result.sync_detail is not None
     assert result.sync_detail.delta_end == "2026-02-10"
 
 
@@ -218,7 +209,6 @@ def test_sync_dataset_append_policy_falls_back_to_rematerialize_without_icechunk
 
     assert "download_start" in captured
     assert captured["download_start"] is None
-    assert result.sync_detail is not None
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert any("requires an existing Icechunk artifact" in message for message in messages)
 
@@ -260,13 +250,10 @@ def test_sync_dataset_append_policy_uses_store_based_append_for_plugin_backed_da
     assert "download_start" in captured
     assert captured["download_start"] == "2026-02-01"
     assert captured["download_end"] == "2026-02-10"
-    assert result.sync_detail is not None
     assert result.sync_detail.action == SyncAction.APPEND
     assert result.sync_detail.reason == "new_periods_available_for_append"
-    assert result.sync_detail is not None
     assert "Data exists through 2026-01-31" in result.sync_detail.message
     assert "Sync will append missing periods 2026-02-01 through 2026-02-10" in result.sync_detail.message
-    assert result.sync_detail is not None
     assert "extend coverage through 2026-02-10" in result.sync_detail.message
     assert result.message is not None
     assert "appending missing periods" in result.message
@@ -723,7 +710,6 @@ def test_sync_dataset_append_policy_falls_back_for_plugin_backed_non_icechunk_ar
     assert "download_start" in captured
     assert captured["download_start"] is None
     assert captured["download_end"] is None
-    assert result.sync_detail is not None
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
     assert result.sync_detail.reason == "new_periods_available"
     assert any("requires an existing Icechunk artifact" in message for message in infos)
@@ -749,10 +735,8 @@ def test_sync_dataset_release_policy_returns_up_to_date_when_release_matches(mon
 
     assert result.sync_id is None
     assert result.status == "up_to_date"
-    assert result.sync_detail is not None
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.NO_OP
-    assert result.sync_detail is not None
     assert result.sync_detail.reason == "no_new_release"
 
 
@@ -801,13 +785,10 @@ def test_sync_dataset_release_policy_clamps_future_year_by_template_availability
     assert captured["start"] == "2026-01-01"
     assert captured["end"] == "2025"
     assert result.status == "completed"
-    assert result.sync_detail is not None
     assert result.sync_detail.sync_kind == SyncKind.RELEASE
     assert result.sync_detail.action == SyncAction.REMATERIALIZE
-    assert result.sync_detail is not None
     assert result.sync_detail.target_end == "2025"
     assert result.sync_detail.target_end_source == "request_clamped_by_availability"
-    assert result.sync_detail is not None
     assert result.sync_detail.delta_start is None
     assert result.sync_detail.delta_end is None
 
@@ -879,10 +860,8 @@ def test_sync_dataset_static_policy_returns_not_syncable_without_period_arithmet
 
     assert result.sync_id is None
     assert result.status == "not_syncable"
-    assert result.sync_detail is not None
     assert result.sync_detail.sync_kind == SyncKind.STATIC
     assert result.sync_detail.action == SyncAction.NOT_SYNCABLE
-    assert result.sync_detail is not None
     assert result.sync_detail.reason == "static_dataset"
 
 
