@@ -140,10 +140,11 @@ class JobService:
         request: dict[str, Any],
         max_attempts: int = 1,
     ) -> JobRecord:
-        """Submit a YAML-registered process as a background job."""
+        """Create and asynchronously submit one process execution job."""
         process = process_registry.get_process(process_id)
         if process is None or not process["expose"]:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+
         job_id = str(uuid4())
         record = JobRecord(
             job_id=job_id,

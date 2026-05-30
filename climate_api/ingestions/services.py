@@ -292,8 +292,6 @@ def _create_streaming_artifact(
             detail=f"An ingest or sync is already running for dataset '{dataset['id']}'. Wait for it to finish.",
         )
     try:
-        # Delete inside the lock so concurrent overwrites don't destroy each other's
-        # in-progress store (TOCTOU: pre-lock deletion + re-deletion under lock).
         if overwrite and store_path.exists():
             if store_path.is_dir():
                 shutil.rmtree(store_path)
