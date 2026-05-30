@@ -272,7 +272,7 @@ def test_plan_sync_for_plugin_backed_icechunk_uses_committed_store_state(
     latest.format = ArtifactFormat.ICECHUNK
     latest.coverage.temporal.end = "2026-01-15"
 
-    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp").resolve(),))
     monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: {"2026-01-31"})
 
     result = sync_engine.plan_sync(
@@ -303,7 +303,7 @@ def test_plan_sync_for_plugin_backed_icechunk_normalizes_committed_period_before
     latest.format = ArtifactFormat.ICECHUNK
     latest.coverage.temporal.end = "2026-04-21T13"
 
-    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp").resolve(),))
     monkeypatch.setattr(
         sync_engine,
         "read_committed_period_ids",
@@ -506,7 +506,7 @@ def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_st
     latest.format = ArtifactFormat.ICECHUNK
 
     warnings: list[str] = []
-    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp").resolve(),))
 
     def fake_warning(message: str, *args: object) -> None:
         warnings.append(message % args if args else message)
@@ -545,7 +545,7 @@ def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_co
     )
     latest.format = ArtifactFormat.ICECHUNK
 
-    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp").resolve(),))
     monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: set())
 
     result = sync_engine.plan_sync(
@@ -648,7 +648,7 @@ def test_plan_sync_for_plugin_backed_icechunk_falls_back_to_artifact_end_when_co
     def fake_warning(message: str, *args: object) -> None:
         warnings.append(message % args if args else message)
 
-    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp"),))
+    monkeypatch.setattr(sync_engine, "_artifact_storage_roots", lambda: (Path("/tmp").resolve(),))
     monkeypatch.setattr(sync_engine, "read_committed_period_ids", lambda *args, **kwargs: {"not-a-period"})
     monkeypatch.setattr(sync_engine.logger, "warning", fake_warning)
 
