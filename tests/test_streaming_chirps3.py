@@ -17,7 +17,6 @@ def test_chirps3_plugin_still_validates_stage_with_extra_kwargs() -> None:
         CHIRPS3DailyPlugin(stage="bad", unknown_future_field="ignored")
 
 
-
 def test_chirps3_plugin_probe_estimates_grid_from_bbox() -> None:
     plugin = CHIRPS3DailyPlugin()
 

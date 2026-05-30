@@ -11,7 +11,6 @@ def test_worldpop_plugin_accepts_extra_kwargs() -> None:
     assert plugin.version == "global2"
 
 
-
 def test_worldpop_plugin_periods_enumerates_years() -> None:
     plugin = WorldPopYearlyPlugin()
 

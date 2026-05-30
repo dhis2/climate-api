@@ -23,7 +23,6 @@ def test_era5_land_precipitation_plugin_accepts_extra_kwargs() -> None:
     assert plugin.variable == "tp"
 
 
-
 def test_era5_land_periods_enumerate_hours() -> None:
     plugin = ERA5LandHourlySingleBandPlugin(variable="t2m")
 
