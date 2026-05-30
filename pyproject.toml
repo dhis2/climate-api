@@ -27,7 +27,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-openeo-processes-dask = { path = "vendor/openeo-processes-dask", editable = true }
+openeo-processes-dask = { git = "https://github.com/dhis2/openeo-processes-dask", branch = "python313-arm64-compat" }
 
 [project]
 name = "climate-api"
