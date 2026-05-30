@@ -255,6 +255,7 @@ def test_list_ingestions_returns_most_recent_first(monkeypatch: pytest.MonkeyPat
 
     assert result.kind == "IngestionList"
     assert [item.ingestion_id for item in result.items] == ["a2", "a1"]
+    assert result.items[0].dataset is not None
     assert result.items[0].dataset.dataset_id == "chirps3_precipitation_daily"
 
 
