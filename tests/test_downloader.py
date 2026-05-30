@@ -316,9 +316,9 @@ def test_download_dataset_returns_409_for_empty_legacy_function_string() -> None
 
 def _make_dataset() -> xr.Dataset:
     return xr.Dataset(
-        {"pop_total": (["time", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
+        {"pop_total": (["t", "lat", "lon"], np.ones((2, 3, 3), dtype="float32"))},
         coords={
-            "time": pd.date_range("2020-01-01", periods=2, freq="YS"),
+            "t": pd.date_range("2020-01-01", periods=2, freq="YS"),
             "lat": [10.0, 9.0, 8.0],
             "lon": [30.0, 31.0, 32.0],
         },
@@ -329,9 +329,9 @@ def _write_nc_files(tmp_path: Path) -> list[Path]:
     paths = []
     for year in (2020, 2021):
         ds = xr.Dataset(
-            {"pop_total": (["time", "lat", "lon"], np.ones((1, 3, 3), dtype="float32"))},
+            {"pop_total": (["t", "lat", "lon"], np.ones((1, 3, 3), dtype="float32"))},
             coords={
-                "time": [pd.Timestamp(f"{year}-01-01")],
+                "t": [pd.Timestamp(f"{year}-01-01")],
                 "lat": [10.0, 9.0, 8.0],
                 "lon": [30.0, 31.0, 32.0],
             },
@@ -344,9 +344,9 @@ def _write_nc_files(tmp_path: Path) -> list[Path]:
 
 def _write_daily_nc_file(tmp_path: Path) -> list[Path]:
     ds = xr.Dataset(
-        {"precip": (["time", "lat", "lon"], np.ones((29, 3, 3), dtype="float32"))},
+        {"precip": (["t", "lat", "lon"], np.ones((29, 3, 3), dtype="float32"))},
         coords={
-            "time": pd.date_range("2024-02-01", "2024-02-29", freq="D"),
+            "t": pd.date_range("2024-02-01", "2024-02-29", freq="D"),
             "lat": [10.0, 9.0, 8.0],
             "lon": [30.0, 31.0, 32.0],
         },
@@ -385,7 +385,7 @@ def test_open_zarr_dataset_flat(tmp_path: Path) -> None:
     result = open_zarr_dataset(str(zarr_path))
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -399,7 +399,7 @@ def test_open_zarr_dataset_pyramid_falls_back_to_level_0(tmp_path: Path) -> None
     result = open_zarr_dataset(str(zarr_path))
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -408,7 +408,7 @@ def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: 
     """Root-level time coord (copied for zarr-layer) does not confuse the fallback.
 
     The fallback triggers on empty data_vars, not empty dims, so a root group
-    that only has a 'time' coordinate array still falls back to /0.
+    that only has a 't' coordinate array still falls back to /0.
     """
     ds = _make_dataset()
     zarr_path = tmp_path / "pyramid.zarr"
@@ -417,7 +417,7 @@ def test_open_zarr_dataset_pyramid_with_root_time_still_opens_level_0(tmp_path: 
     # Simulate what build_dataset_zarr does: copy time to root
     import shutil
 
-    shutil.copytree(str(zarr_path / "0" / "time"), str(zarr_path / "time"))
+    shutil.copytree(str(zarr_path / "0" / "t"), str(zarr_path / "t"))
 
     result = open_zarr_dataset(str(zarr_path))
     try:
@@ -438,7 +438,7 @@ def test_open_icechunk_dataset_falls_back_to_level_0_when_root_has_no_data_vars(
     result = open_icechunk_dataset(store_path)
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -451,13 +451,13 @@ def test_open_icechunk_dataset_with_root_time_still_opens_level_0(tmp_path: Path
     session = repo.writable_session("main")
     ds = _make_dataset()
     ds.to_zarr(session.store, group="0", mode="w", zarr_format=3)
-    ds[["time"]].to_zarr(session.store, mode="a", zarr_format=3)
+    ds[["t"]].to_zarr(session.store, mode="a", zarr_format=3)
     session.commit("seed pyramid root time and level 0")
 
     result = open_icechunk_dataset(store_path)
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -482,7 +482,7 @@ def test_build_dataset_zarr_flat_creates_zarr(tmp_path: Path, monkeypatch: pytes
     result = open_zarr_dataset(str(zarr_path))
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -518,7 +518,7 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
 
     result = open_zarr_dataset(str(tmp_path / "era5land_temperature_hourly.zarr"))
     try:
-        assert "time" in result.coords
+        assert "t" in result.coords
         assert "x" in result.coords
         assert "y" in result.coords
         assert "valid_time" not in result.coords
@@ -531,9 +531,9 @@ def test_build_dataset_zarr_normalises_coordinate_names(tmp_path: Path, monkeypa
 def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Source coordinates already named x/y are preserved as x/y."""
     ds_xy = xr.Dataset(
-        {"precip": (["time", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
+        {"precip": (["t", "y", "x"], np.ones((2, 3, 3), dtype="float32"))},
         coords={
-            "time": pd.date_range("2024-01-01", periods=2, freq="D"),
+            "t": pd.date_range("2024-01-01", periods=2, freq="D"),
             "y": [10.0, 9.0, 8.0],
             "x": [30.0, 31.0, 32.0],
         },
@@ -554,7 +554,7 @@ def test_build_dataset_zarr_normalises_xy_coordinate_names(tmp_path: Path, monke
 
     result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
     try:
-        assert "time" in result.coords
+        assert "t" in result.coords
         assert "x" in result.coords
         assert "y" in result.coords
     finally:
@@ -580,9 +580,9 @@ def test_build_dataset_zarr_clips_to_requested_daily_range(
 
     result = open_zarr_dataset(str(tmp_path / "chirps3_precipitation_daily.zarr"))
     try:
-        assert result.sizes["time"] == 10
-        assert pd.Timestamp(result.time.min().item()).strftime("%Y-%m-%d") == "2024-02-01"
-        assert pd.Timestamp(result.time.max().item()).strftime("%Y-%m-%d") == "2024-02-10"
+        assert result.sizes["t"] == 10
+        assert pd.Timestamp(result.t.min().item()).strftime("%Y-%m-%d") == "2024-02-01"
+        assert pd.Timestamp(result.t.max().item()).strftime("%Y-%m-%d") == "2024-02-10"
     finally:
         result.close()
 
@@ -616,7 +616,7 @@ def test_build_dataset_zarr_pyramid_copies_time_to_root(tmp_path: Path, monkeypa
 
     zarr_path = tmp_path / "my_dataset.zarr"
     assert (zarr_path / "0").exists(), "pyramid level 0 should exist"
-    assert (zarr_path / "time").exists(), "time coordinate must be copied to zarr root"
+    assert (zarr_path / "t").exists(), "t coordinate must be copied to zarr root"
 
 
 def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -636,7 +636,7 @@ def test_build_dataset_zarr_pyramid_is_openable_via_level_0(tmp_path: Path, monk
     result = open_zarr_dataset(str(tmp_path / "my_dataset.zarr"))
     try:
         assert "pop_total" in result.data_vars
-        assert result.sizes["time"] == 2
+        assert result.sizes["t"] == 2
     finally:
         result.close()
 
@@ -666,7 +666,7 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     ds_in = received[0]
     assert "x" in ds_in.coords
     assert "y" in ds_in.coords
-    assert "time" in ds_in.coords
+    assert "t" in ds_in.coords
     assert "lon" not in ds_in.coords
     assert "lat" not in ds_in.coords
 
@@ -675,7 +675,7 @@ def test_build_dataset_zarr_pyramid_normalises_coordinate_names(
     try:
         assert "x" in result.coords
         assert "y" in result.coords
-        assert "time" in result.coords
+        assert "t" in result.coords
     finally:
         result.close()
 

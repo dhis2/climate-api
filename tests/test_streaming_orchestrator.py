@@ -49,14 +49,17 @@ class _ShapeMismatchPlugin(_FakePlugin):
 class _CustomTimeDimPlugin(_FakePlugin):
     async def probe(self, bbox: list[float], **params: Any) -> GridSpec:
         _ = bbox, params
-        return GridSpec(shape=(1, 1), crs=4326, dtype=np.dtype("float32"), time_dim="t")
+        # Use a non-default time dimension to exercise the custom-dim code path;
+        # production plugins standardise on "t" but this test must verify the
+        # orchestrator honours an overridden spec.time_dim.
+        return GridSpec(shape=(1, 1), crs=4326, dtype=np.dtype("float32"), time_dim="valid_time")
 
     async def fetch_period(self, period_id: str, bbox: list[float], **params: Any) -> xr.Dataset:
         _ = bbox, params
         value = float(period_id[-2:])
         return xr.Dataset(
-            {"precip": (("t", "y", "x"), np.array([[[value]]], dtype=np.float32))},
-            coords={"t": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
+            {"precip": (("valid_time", "y", "x"), np.array([[[value]]], dtype=np.float32))},
+            coords={"valid_time": [np.datetime64(period_id, "D")], "y": [0.0], "x": [1.0]},
         )
 
 
