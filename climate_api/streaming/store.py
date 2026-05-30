@@ -34,7 +34,7 @@ def open_or_create_repo(store_path: Path) -> Any:
     return icechunk.Repository.create(storage)
 
 
-def read_committed_period_ids(store_path: Path, period_type: str, *, time_dim: str = "time") -> set[str]:
+def read_committed_period_ids(store_path: Path, period_type: str, *, time_dim: str = "t") -> set[str]:
     """Return period ids already committed in the store, or an empty set.
 
     Resume correctness is store-first: if the repository already contains a

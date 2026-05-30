@@ -73,3 +73,27 @@ def test_worldpop_plugin_fetch_period_can_rename_output_variable(
 
     assert list(dataset.data_vars) == ["population_total"]
     assert "x" in dataset.dims and "y" in dataset.dims
+
+
+def test_worldpop_plugin_masks_nodata_sentinel_to_nan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Values equal to the WorldPop -99999 sentinel must become NaN, not be stored."""
+    import numpy as np
+
+    plugin = WorldPopYearlyPlugin()
+
+    def fake_fetch_year(year: int, country_code: str) -> xr.Dataset:
+        return xr.Dataset(
+            {"pop_total": (("time", "lon", "lat"), [[[5.0, -99999.0, 12.0]]])},
+            coords={"time": ["2020-01-01"], "lon": [1.0], "lat": [1.0, 2.0, 3.0]},
+        )
+
+    monkeypatch.setattr(plugin, "_fetch_year", fake_fetch_year)
+
+    dataset = asyncio.run(plugin.fetch_period("2020", [0.0, 0.0, 4.0, 4.0], country_code="SLE"))
+
+    values = dataset["pop_total"].values.flatten()
+    assert np.isnan(values[1]), "sentinel -99999 must be masked to NaN"
+    assert values[0] == pytest.approx(5.0), "valid values must be preserved"
+    assert values[2] == pytest.approx(12.0), "valid values must be preserved"
