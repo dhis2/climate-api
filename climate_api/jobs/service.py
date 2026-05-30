@@ -163,7 +163,7 @@ class JobService:
     ) -> JobRecord:
         """Submit a YAML-registered process as a background job."""
         process = process_registry.get_process(process_id)
-        if process is None:
+        if process is None or not process["expose"]:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
         return self._create_and_enqueue(process_id=process_id, request=request, max_attempts=max_attempts)
 

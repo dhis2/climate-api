@@ -86,19 +86,12 @@ def wants_json(request: Request) -> bool:
     JSON is preferred when application/json is present with a q-value greater
     than or equal to text/html. HTML wins only when text/html has a strictly
     higher q-value, matching RFC 7231 content negotiation semantics.
-
-    A bare wildcard Accept: */* (sent by curl, requests, and other API clients
-    that have no preference) is treated as JSON-compatible when text/html is not
-    explicitly present.
     """
     if request.query_params.get("f") == "json":
         return True
     accept = request.headers.get("accept", "")
     if not accept:
         return False
-    # Wildcard */* without explicit text/html → API client, serve JSON
-    if "*/*" in accept and _media_type_q(accept, "text/html") < 0:
-        return True
     json_q = _media_type_q(accept, "application/json")
     html_q = _media_type_q(accept, "text/html")
     return json_q >= 0 and (html_q < 0 or json_q >= html_q)

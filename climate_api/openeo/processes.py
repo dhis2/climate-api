@@ -147,9 +147,9 @@ def get_openeo_process(process_id: str) -> dict[str, Any] | None:
     except Exception:
         pass
 
-    # Native plugin
+    # Native plugin (only exposed processes are visible in the openEO catalog)
     for process in process_registry.list_processes():
-        if process.get("id") == process_id:
+        if process.get("id") == process_id and process.get("expose", True):
             return _native_to_openeo(process)
 
     return None
@@ -178,6 +178,8 @@ def list_openeo_processes() -> list[dict[str, Any]]:
     for process in process_registry.list_processes():
         pid = process.get("id")
         if pid in standard_ids or pid in backend_ids:
+            continue
+        if not process.get("expose", True):
             continue
         result.append(_native_to_openeo(process))
 
