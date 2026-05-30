@@ -22,7 +22,7 @@ class ERA5LandHourlySingleBandPlugin:
     max_concurrency = 2
     commit_batch_size = 24
 
-    def __init__(self, variable: str, **_: Any) -> None:
+    def __init__(self, variable: str) -> None:
         if not variable:
             raise ValueError("ERA5LandHourlySingleBandPlugin requires a non-empty variable")
         self.variable = variable
@@ -101,7 +101,7 @@ class ERA5LandPrecipitationPlugin(ERA5LandHourlySingleBandPlugin):
     forcing another dataset-template contract change.
     """
 
-    def __init__(self, **_: Any) -> None:
+    def __init__(self) -> None:
         super().__init__(variable="tp")
 
 
