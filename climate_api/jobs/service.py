@@ -142,7 +142,7 @@ class JobService:
     ) -> JobRecord:
         """Create and asynchronously submit one process execution job."""
         process = process_registry.get_process(process_id)
-        if process is None or not process["expose"]:
+        if process is None:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
 
         job_id = str(uuid4())

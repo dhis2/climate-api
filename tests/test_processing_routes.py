@@ -1,93 +1,11 @@
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
-
-
-
-def test_get_processes_omits_internal_only_processes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "climate_api.processing.routes.process_registry.list_processes",
-        lambda: [
-            {
-                "id": "public_process",
-                "title": "Public process",
-                "description": "Visible",
-                "execution": {"function": "mypackage.public.execute"},
-                "expose": True,
-                "jobControlOptions": ["sync-execute"],
-            },
-            {
-                "id": "internal_process",
-                "title": "Internal process",
-                "description": "Hidden",
-                "execution": {"function": "mypackage.internal.execute"},
-                "expose": False,
-                "jobControlOptions": ["sync-execute"],
-            },
-        ],
-    )
-
-    response = client.get("/processes")
-
-    assert response.status_code == 200
-    payload = response.json()
-    ids = {item["id"] for item in payload["processes"]}
-    assert ids == {"public_process"}
 
 
 def test_get_unknown_process_detail_returns_404(client: TestClient) -> None:
     response = client.get("/processes/unknown_process")
 
     assert response.status_code == 404
-
-
-def test_get_internal_process_detail_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "climate_api.processing.routes.process_registry.get_process",
-        lambda process_id: {
-            "id": process_id,
-            "title": "Internal process",
-            "execution": {"function": "mypackage.internal.execute"},
-            "expose": False,
-            "jobControlOptions": ["sync-execute"],
-        },
-    )
-
-    response = client.get("/processes/internal_process")
-
-    assert response.status_code == 404
-
-
-def test_expose_false_yaml_fixture_is_hidden_from_catalog_and_routes(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    processes_subdir = tmp_path / "processes"
-    processes_subdir.mkdir()
-    (processes_subdir / "internal.yaml").write_text(
-        """
-- id: internal_process
-  title: Internal process
-  expose: false
-  execution:
-    function: mypackage.internal.execute
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("climate_api.data_registry.services.processes.CONFIGS_DIR", processes_subdir)
-
-    catalog_response = client.get("/processes")
-    assert catalog_response.status_code == 200
-    assert catalog_response.json()["processes"] == []
-
-    detail_response = client.get("/processes/internal_process")
-    assert detail_response.status_code == 404
-
-    execution_response = client.post("/processes/internal_process/execution", json={})
-    assert execution_response.status_code == 404
-
 
 
 def test_post_process_execution_rejects_async_when_process_is_sync_only(
@@ -100,7 +18,6 @@ def test_post_process_execution_rejects_async_when_process_is_sync_only(
             "id": process_id,
             "title": "Sync only process",
             "execution": {"function": "mypackage.sync_only.execute"},
-            "expose": True,
             "jobControlOptions": ["sync-execute"],
         },
     )
@@ -113,23 +30,6 @@ def test_post_process_execution_rejects_async_when_process_is_sync_only(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Process 'sync-only' does not support async execution"
-
-
-def test_post_internal_process_execution_returns_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "climate_api.processing.routes.process_registry.get_process",
-        lambda process_id: {
-            "id": process_id,
-            "title": "Internal process",
-            "execution": {"function": "mypackage.internal.execute"},
-            "expose": False,
-            "jobControlOptions": ["sync-execute"],
-        },
-    )
-
-    response = client.post("/processes/internal_process/execution", json={})
-
-    assert response.status_code == 404
 
 
 def test_post_unknown_process_id_returns_404(client: TestClient) -> None:
@@ -150,7 +50,6 @@ def test_post_process_execution_returns_500_for_invalid_execution_function(
             "id": process_id,
             "title": "Broken process",
             "execution": {"function": "mypackage.broken.execute"},
-            "expose": True,
             "jobControlOptions": ["sync-execute"],
         },
     )
@@ -176,7 +75,6 @@ def test_post_process_execution_returns_400_for_execution_value_error(
             "id": process_id,
             "title": "Broken process",
             "execution": {"function": "mypackage.broken.execute"},
-            "expose": True,
             "jobControlOptions": ["sync-execute"],
         },
     )
