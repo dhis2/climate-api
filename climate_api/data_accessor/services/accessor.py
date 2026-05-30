@@ -10,9 +10,9 @@ import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from ...ingestions.store_paths import get_cache_files, get_icechunk_path, get_zarr_path
+from ...data_manager.services.downloader import get_cache_files, get_icechunk_path, get_zarr_path
+from ...data_manager.services.utils import get_time_dim, get_x_y_dims
 from ...shared.time import numpy_datetime_to_period_string
-from ...shared.xarray_utils import get_time_dim, get_x_y_dims
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +25,20 @@ def get_data(
 ) -> xr.Dataset:
     """Load an xarray raster dataset for a given time range and bbox."""
     logger.info("Opening dataset")
-    dataset_id: str = dataset["id"]
-    icechunk_path = get_icechunk_path(dataset_id)
+    icechunk_path = get_icechunk_path(dataset)
     if icechunk_path.exists():
         logger.info("Using Icechunk-backed store: %s", icechunk_path)
         ds = open_icechunk_dataset(icechunk_path)
     else:
-        zarr_path = get_zarr_path(dataset_id)
+        zarr_path = get_zarr_path(dataset)
         if zarr_path:
             logger.info(f"Using optimized zarr file: {zarr_path}")
             ds = open_zarr_dataset(str(zarr_path))
         else:
             logger.warning(
-                f"Could not find optimized zarr file for dataset {dataset_id}, using slower netcdf files instead."
+                f"Could not find optimized zarr file for dataset {dataset['id']}, using slower netcdf files instead."
             )
-            files = get_cache_files(dataset_id)
+            files = get_cache_files(dataset)
             ds = xr.open_mfdataset(
                 files,
                 data_vars="minimal",

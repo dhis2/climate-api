@@ -47,21 +47,21 @@ class TestRunTransformsPipeline:
             "variable": "t2m",
             "transforms": ["climate_api.transforms.kelvin_to_celsius"],
         }
-        from climate_api.transforms.pipeline import run_dataset_transforms as _run_transforms
+        from climate_api.data_manager.services.downloader import _run_transforms
 
         result = _run_transforms(ds, dataset)
         np.testing.assert_allclose(result["t2m"].values, [0.0])
 
     def test_empty_transforms_is_noop(self):
         ds = _ds("x", [1.0, 2.0])
-        from climate_api.transforms.pipeline import run_dataset_transforms as _run_transforms
+        from climate_api.data_manager.services.downloader import _run_transforms
 
         result = _run_transforms(ds, {"variable": "x", "transforms": []})
         np.testing.assert_array_equal(result["x"].values, ds["x"].values)
 
     def test_no_transforms_key_is_noop(self):
         ds = _ds("x", [1.0])
-        from climate_api.transforms.pipeline import run_dataset_transforms as _run_transforms
+        from climate_api.data_manager.services.downloader import _run_transforms
 
         result = _run_transforms(ds, {"variable": "x"})
         np.testing.assert_array_equal(result["x"].values, ds["x"].values)
@@ -72,7 +72,7 @@ class TestRunTransformsPipeline:
             "variable": "t2m",
             "transforms": [{"function": "climate_api.transforms.kelvin_to_celsius"}],
         }
-        from climate_api.transforms.pipeline import run_dataset_transforms as _run_transforms
+        from climate_api.data_manager.services.downloader import _run_transforms
 
         result = _run_transforms(ds, dataset)
         np.testing.assert_allclose(result["t2m"].values, [0.0])
