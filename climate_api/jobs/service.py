@@ -145,12 +145,19 @@ class JobService:
 
         ``func`` must be a module-level function so its dotted path can be stored
         in the job record and re-imported on restart.  ``label`` is the human-readable
-        process name shown in GET /internal/jobs/{id} as ``processID``.
+        process name shown in GET /jobs/{id} as ``processID``.
         """
-        fn_path = f"{func.__module__}.{func.__qualname__}"
+        qualname = getattr(func, "__qualname__", "")
+        if "<locals>" in qualname:
+            raise ValueError(f"submit_callable_job requires a module-level function; got {qualname!r}")
+        fn_path = f"{func.__module__}.{qualname}"
+        # Strip any caller-supplied __fn_path__ to prevent function-path injection,
+        # then set the reserved key so it cannot be overridden.
+        safe_request = {k: v for k, v in request.items() if k != "__fn_path__"}
+        safe_request["__fn_path__"] = fn_path
         return self._create_and_enqueue(
             process_id=label,
-            request={"__fn_path__": fn_path, **request},
+            request=safe_request,
             max_attempts=max_attempts,
         )
 
@@ -165,7 +172,9 @@ class JobService:
         process = process_registry.get_process(process_id)
         if process is None or not process["expose"]:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
-        return self._create_and_enqueue(process_id=process_id, request=request, max_attempts=max_attempts)
+        # Strip the reserved key so a caller-supplied __fn_path__ cannot hijack execution.
+        safe_request = {k: v for k, v in request.items() if k != "__fn_path__"}
+        return self._create_and_enqueue(process_id=process_id, request=safe_request, max_attempts=max_attempts)
 
     def _create_and_enqueue(
         self,

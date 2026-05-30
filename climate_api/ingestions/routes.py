@@ -41,7 +41,7 @@ def create_ingestion(
     """Create or update a managed dataset from a dataset template and configured extent.
 
     Pass ``Prefer: respond-async`` to queue the ingestion as a background job and
-    return immediately with 202 + ``Location: /internal/jobs/{id}``.
+    return immediately with 202 + ``Location: /jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
         from climate_api.ingestions.processes import execute_ingestion
@@ -53,7 +53,7 @@ def create_ingestion(
             request=request.model_dump(),
         )
         response.status_code = 202
-        response.headers["Location"] = f"/internal/jobs/{job.job_id}"
+        response.headers["Location"] = f"/jobs/{job.job_id}"
         return IngestionResponse(ingestion_id=job.job_id, status=job.status, dataset=None)
 
     dataset = _get_dataset_or_404(request.dataset_id)
@@ -137,7 +137,7 @@ def sync_dataset(
     """Sync a managed dataset forward from its latest available time step.
 
     Pass ``Prefer: respond-async`` to queue the sync as a background job and
-    return immediately with 202 + ``Location: /internal/jobs/{id}``.
+    return immediately with 202 + ``Location: /jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
         from climate_api.ingestions.processes import execute_sync
@@ -149,10 +149,8 @@ def sync_dataset(
             request={"dataset_id": dataset_id, **request.model_dump()},
         )
         response.status_code = 202
-        response.headers["Location"] = f"/internal/jobs/{job.job_id}"
-        return SyncResponse(
-            sync_id=job.job_id, status=job.status, message="Sync queued", dataset=None, sync_detail=None
-        )
+        response.headers["Location"] = f"/jobs/{job.job_id}"
+        return SyncResponse(sync_id=None, status=job.status, message="Sync queued", dataset=None, sync_detail=None)
 
     return services.sync_dataset(
         dataset_id=dataset_id,
