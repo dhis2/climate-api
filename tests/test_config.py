@@ -2,7 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from open_climate_service.config import DEFAULT_CRS, DEFAULT_NAME, get_config, get_crs, get_data_dir, get_name
+from open_climate_service.config import (
+    DEFAULT_CRS,
+    DEFAULT_ID,
+    DEFAULT_NAME,
+    get_config,
+    get_crs,
+    get_data_dir,
+    get_id,
+    get_name,
+)
 from open_climate_service.data_registry.services import datasets as dataset_registry
 from open_climate_service.extents import services as extent_services
 
@@ -141,6 +150,34 @@ def test_get_crs_raises_for_unknown_epsg_code(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setenv("CLIMATE_SERVICE_CONFIG", str(config_file))
     with pytest.raises(ValueError, match="not a valid CRS"):
         get_crs()
+
+
+def test_get_id_defaults_to_open_climate_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIMATE_SERVICE_CONFIG", raising=False)
+    assert get_id() == DEFAULT_ID
+
+
+def test_get_id_reads_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-service.yaml"
+    config_file.write_text("data_dir: ./data\nid: kenya-climate-service\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_SERVICE_CONFIG", str(config_file))
+    assert get_id() == "kenya-climate-service"
+
+
+def test_get_id_raises_for_non_string(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-service.yaml"
+    config_file.write_text("data_dir: ./data\nid: 42\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_SERVICE_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="id in CLIMATE_SERVICE_CONFIG must be a non-empty string"):
+        get_id()
+
+
+def test_get_id_raises_for_blank_string(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_file = tmp_path / "climate-service.yaml"
+    config_file.write_text("data_dir: ./data\nid: '   '\n", encoding="utf-8")
+    monkeypatch.setenv("CLIMATE_SERVICE_CONFIG", str(config_file))
+    with pytest.raises(ValueError, match="id in CLIMATE_SERVICE_CONFIG must be a non-empty string"):
+        get_id()
 
 
 def test_get_name_defaults_to_open_climate_service(monkeypatch: pytest.MonkeyPatch) -> None:

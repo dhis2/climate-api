@@ -55,7 +55,7 @@ def build_capabilities(base_url: str) -> OpenEOCapabilities:
         api_version=API_VERSION,
         backend_version=backend_version,
         stac_version=STAC_VERSION,
-        id="climate-service",
+        id=api_config.get_id(),
         title=name,
         description=(
             "openEO-compatible backend for the Open Climate Service. "
