@@ -1,6 +1,36 @@
-# openEO process graphs
+# openEO
 
-The Climate API implements the [openEO HTTP API v1.2.0](https://openeo.org/documentation/1.0/api/) standard. Any standard openEO client can connect to it directly and execute process graphs against published collections — no Climate API-specific knowledge required.
+openEO is an **open standard API** for accessing and processing Earth Observation (EO) data. Instead of downloading raw satellite or climate data and writing custom processing scripts, you describe *what you want to compute* as a process graph, and the server runs it for you on its own data.
+
+---
+
+## Why openEO?
+
+Traditional EO data access is fragmented: each data provider has its own API, format, and tools. openEO solves this by defining a vendor-neutral HTTP API so the same client code works against any compliant backend.
+
+## Why openEO for the Open Climate Service?
+
+The Open Climate Service stores climate datasets — precipitation, temperature, population — as managed Zarr/Icechunk stores and exposes them to DHIS2 users and applications. openEO gives us a standardised, well-documented way to query and transform those datasets without building a bespoke query language.
+
+Concretely it means:
+
+- **DHIS2 analytics apps** can request district-level climate aggregates (monthly sum, seasonal mean) without downloading raw daily rasters — the computation runs server-side and returns a small result.
+- **Data scientists** can use the standard openEO Python client or web editor directly against the service without learning a DHIS2-specific API.
+- **New datasets** added to the service are immediately queryable through the same process graph interface, with no additional API work.
+- **Interoperability** — process graphs written for the Open Climate Service work, with minor configuration changes, against any other openEO-compliant backend (Copernicus CDSE, EarthServer, etc.), and vice versa.
+
+---
+
+## Key concepts
+
+| Concept | Description |
+|---|---|
+| **Collection** | A published dataset, equivalent to a STAC collection. Has spatial/temporal extent, variables (bands), and dimension metadata. |
+| **Process** | A single named operation — `load_collection`, `filter_temporal`, `aggregate_temporal_period`, `save_result`, etc. |
+| **Process graph** | A DAG of connected processes describing the full computation. Built lazily in the Python client; no data moves until execution. |
+| **Batch job** | Asynchronous execution of a process graph. Create → start → poll → download results. |
+| **Synchronous result** | `POST /result` — executes immediately and returns output in the HTTP response body. |
+| **UDP** | User-Defined Process — a named, reusable process graph stored server-side; callable like any built-in process. |
 
 ---
 
@@ -14,6 +44,8 @@ print(conn.capabilities().api_version())  # 1.2.0
 ```
 
 No authentication is required for local deployments. `openeo.connect` discovers the API via `GET /.well-known/openeo` and negotiates the version automatically.
+
+The web editor at [editor.openeo.org](https://editor.openeo.org) can also connect directly. Use `GET /openeo` as a shortcut — it redirects to the editor pre-configured with the correct server URL.
 
 ---
 
@@ -251,6 +283,47 @@ Processing plugins are Python functions registered via YAML that extend the proc
 
 ---
 
-## Example script
+## How the Open Climate Service implements openEO
 
-See [`examples/openeo_process_graph.py`](../examples/openeo_process_graph.py) for a complete end-to-end example using the openEO Python client.
+```
+openEO client
+      │
+      ▼
+POST /result  ──────────────────────────────────────► immediate response
+POST /jobs → POST /jobs/{id}/results → GET /jobs/{id}/results
+      │
+      ▼
+openeo-pg-parser-networkx   ← parses the process graph DAG
+      │
+      ▼
+openeo-processes-dask       ← executes each node (120+ standard processes)
+      │
+      ▼
+load_collection             ← reads from Icechunk/Zarr managed dataset store
+      │
+      ▼
+save_result                 ← writes output file; returns asset href
+```
+
+openEO is an additional access layer on top of the existing dataset store — the same data served via the native ingestion and sync endpoints is available through process graphs with no duplication.
+
+---
+
+## Examples
+
+- [`examples/openeo_process_graph.py`](../examples/openeo_process_graph.py) — full end-to-end walkthrough using the openEO Python client
+- [`examples/zonal_statistics.py`](../examples/zonal_statistics.py) — district-level statistics with DHIS2 organisation unit IDs via `aggregate_spatial` and `rename_labels`
+
+---
+
+## Resources
+
+| Resource | Link |
+|---|---|
+| openEO.org — overview and use cases | <https://openeo.org> |
+| API specification (v1.2.0) | <https://openeo.org/documentation/1.0/api/> |
+| Standard process catalogue | <https://processes.openeo.org> |
+| Python client documentation | <https://open-eo.github.io/openeo-python-client/> |
+| Web editor (hosted) | <https://editor.openeo.org> |
+| openEO cookbook (Python examples) | <https://openeo.org/documentation/1.0/cookbook/> |
+| openeo-processes-dask (execution engine) | <https://github.com/Open-EO/openeo-processes-dask> |
