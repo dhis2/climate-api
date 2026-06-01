@@ -480,6 +480,8 @@ def _abs_base(request: Request) -> str:
     if base_url:
         return base_url.rstrip("/")
     return str(request.base_url).rstrip("/")
+
+
 def _reserved_process_ids() -> set[str]:
     """Return process ids that must not be replaced by a UDP."""
     return {proc["id"] for proc in processes_service.list_openeo_processes() if isinstance(proc.get("id"), str)}
