@@ -343,6 +343,8 @@ def run_process_graph(
         return graph.to_callable(registry)()
     except HTTPException:
         raise
+    except (TypeError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid process graph: {exc}") from exc
     except Exception as e:
         logger.exception("Process graph execution failed")
         raise HTTPException(status_code=500, detail=f"Process graph execution failed: {e}") from e

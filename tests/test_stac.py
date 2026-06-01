@@ -249,6 +249,28 @@ def test_stac_collection_compatibility_route_builds_collection(
     assert response.json()["id"] == "chirps3_precipitation_daily"
 
 
+def test_collections_logs_skipped_dataset_failures(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        stac_services,
+        "_eligible_artifacts_by_dataset",
+        lambda: {"broken_dataset": _artifact(artifact_id="a1", dataset_id="broken_dataset")},
+    )
+
+    def _raise(dataset_id: str, request: object) -> dict[str, object]:
+        raise stac_services.HTTPException(status_code=503, detail="store unavailable")
+
+    monkeypatch.setattr(stac_services, "build_collection", _raise)
+
+    with caplog.at_level("WARNING"):
+        response = client.get("/collections")
+
+    assert response.status_code == 200
+    assert response.json()["collections"] == []
+    assert "Skipping collection 'broken_dataset'" in caplog.text
+
+
 def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLIMATE_API_BASE_URL", "https://climate.example.org")
     monkeypatch.setattr(

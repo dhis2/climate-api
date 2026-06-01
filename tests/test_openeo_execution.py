@@ -15,6 +15,7 @@ from climate_api.openeo.execution import (
     _bbox_to_dict,
     _RegistryOverlay,
     _temporal_to_list,
+    run_process_graph,
 )
 from climate_api.openeo.jobs import OpenEOJobService, _result_assets
 from climate_api.openeo.schemas import OpenEOJobRecord, OpenEOJobStatus
@@ -243,3 +244,45 @@ def test_put_udp_rejects_predefined_process_id(client) -> None:
 
     assert response.status_code == 400
     assert "conflicts with a predefined process" in response.json()["detail"]
+
+
+def test_run_process_graph_maps_invalid_graph_errors_to_400(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeGraph:
+        def __init__(self, process_graph: dict[str, Any]) -> None:
+            self.process_graph = process_graph
+
+        def to_callable(self, registry: Any) -> Any:
+            def _runner() -> Any:
+                raise ValueError("unknown process id")
+
+            return _runner
+
+    monkeypatch.setattr("openeo_pg_parser_networkx.OpenEOProcessGraph", FakeGraph)
+
+    with pytest.raises(Exception) as exc_info:
+        run_process_graph({"process_graph": {"result": {"process_id": "missing", "result": True}}})
+
+    exc = exc_info.value
+    assert getattr(exc, "status_code", None) == 400
+    assert "Invalid process graph" in str(getattr(exc, "detail", exc))
+
+
+def test_run_process_graph_keeps_runtime_failures_as_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeGraph:
+        def __init__(self, process_graph: dict[str, Any]) -> None:
+            self.process_graph = process_graph
+
+        def to_callable(self, registry: Any) -> Any:
+            def _runner() -> Any:
+                raise RuntimeError("boom")
+
+            return _runner
+
+    monkeypatch.setattr("openeo_pg_parser_networkx.OpenEOProcessGraph", FakeGraph)
+
+    with pytest.raises(Exception) as exc_info:
+        run_process_graph({"process_graph": {"result": {"process_id": "add", "result": True}}})
+
+    exc = exc_info.value
+    assert getattr(exc, "status_code", None) == 500
+    assert "Process graph execution failed" in str(getattr(exc, "detail", exc))

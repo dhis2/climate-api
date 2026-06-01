@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 from fastapi import HTTPException, Request
 
 from climate_api.stac import services as stac_services
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_cube_dimensions(collection: dict[str, Any]) -> dict[str, Any]:
@@ -62,7 +65,12 @@ def list_collections(request: Request) -> dict[str, Any]:
             col = _rewrite_collection_links(col, request)
             col = _normalize_cube_dimensions(col)
             collections.append(col)
-        except HTTPException:
+        except HTTPException as exc:
+            logger.warning(
+                "Skipping collection '%s' from openEO listing: %s",
+                dataset_id,
+                exc.detail,
+            )
             continue
 
     base_url = _abs_base(request)
