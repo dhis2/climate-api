@@ -248,9 +248,7 @@ def test_stac_collection_compatibility_route_builds_collection(
     assert response.json()["id"] == "chirps3_precipitation_daily"
 
 
-def test_collections_logs_skipped_dataset_failures(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_collections_logs_skipped_dataset_failures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, str, str]] = []
 
     monkeypatch.setattr(
@@ -269,9 +267,7 @@ def test_collections_logs_skipped_dataset_failures(
 
     assert response.status_code == 200
     assert response.json()["collections"] == []
-    assert calls == [
-        ("Skipping collection '%s' from openEO listing: %s", "broken_dataset", "store unavailable")
-    ]
+    assert calls == [("Skipping collection '%s' from openEO listing: %s", "broken_dataset", "store unavailable")]
 
 
 def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
