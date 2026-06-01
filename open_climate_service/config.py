@@ -60,6 +60,22 @@ def _load_config() -> dict[str, Any]:
 
 DEFAULT_CRS = "EPSG:4326"
 DEFAULT_NAME = "Open Climate Service"
+DEFAULT_ID = "open-climate-service"
+
+
+def get_id() -> str:
+    """Return the instance identifier from CLIMATE_SERVICE_CONFIG.
+
+    Set `id: sle` in climate-service.yaml to give this instance a unique id
+    used as the STAC catalog id. Should be lowercase, hyphen-separated, and
+    unique across all deployed instances. Defaults to 'open-climate-service'.
+    """
+    raw = get_config().get("id")
+    if raw is None:
+        return DEFAULT_ID
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"id in CLIMATE_SERVICE_CONFIG must be a non-empty string, got {type(raw).__name__}")
+    return raw.strip()
 
 
 def get_name() -> str:

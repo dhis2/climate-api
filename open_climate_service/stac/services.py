@@ -21,7 +21,6 @@ from open_climate_service.ingestions import services as ingestion_services
 from open_climate_service.ingestions.schemas import ArtifactFormat, ArtifactRecord
 from open_climate_service.shared.time import parse_period_string_to_datetime, resolve_iso_period_step
 
-CATALOG_ID = "climate-service"
 CATALOG_TITLE = "DHIS2 Open Climate Service"
 CATALOG_DESCRIPTION = "Published Open Climate Service GeoZarr datasets"
 STAC_VERSION = "1.1.0"
@@ -34,6 +33,12 @@ SPATIAL_STEP_DECIMALS = 8
 XSTAC_COLLECTION_CACHE_MAXSIZE = 128
 logger = logging.getLogger(__name__)
 _xstac_collection_cache: dict[str, dict[str, Any]] = {}
+
+
+def _get_catalog_id() -> str:
+    from open_climate_service import config as api_config
+
+    return api_config.get_id()
 
 
 def build_catalog(request: Request) -> dict[str, object]:
@@ -56,7 +61,7 @@ def build_catalog(request: Request) -> dict[str, object]:
     return {
         "stac_version": STAC_VERSION,
         "type": "Catalog",
-        "id": CATALOG_ID,
+        "id": _get_catalog_id(),
         "title": CATALOG_TITLE,
         "description": CATALOG_DESCRIPTION,
         "links": links,
