@@ -13,17 +13,17 @@ This guide walks through configuring a new Open Climate Service instance for a s
 ## Step 1: Clone and install
 
 ```bash
-git clone https://github.com/dhis2/climate-api.git
-cd climate-api
+git clone https://github.com/dhis2/open-climate-service.git
+cd open-climate-service
 make sync
 ```
 
 ## Step 2: Configure the spatial extent
 
-The repo includes `climate-api.yaml.example` with Sierra Leone as a starting point. Copy it to `climate-api.yaml` (which is gitignored so your local extent stays out of version control) and replace the entry with your country:
+The repo includes `open-climate-service.yaml.example` with Sierra Leone as a starting point. Copy it to `open-climate-service.yaml` (which is gitignored so your local extent stays out of version control) and replace the entry with your country:
 
 ```bash
-cp climate-api.yaml.example climate-api.yaml
+cp open-climate-service.yaml.example open-climate-service.yaml
 ```
 
 ```yaml
@@ -63,7 +63,7 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-`CLIMATE_API_CONFIG=./climate-api.yaml` is already set in `.env.example`. The remaining defaults are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
+`OPEN_CLIMATE_SERVICE_CONFIG=./open-climate-service.yaml` is already set in `.env.example`. The remaining defaults are sufficient to run the API and ingest CHIRPS3 and WorldPop data. Review the file and adjust as needed — the comments explain each variable.
 
 For ERA5-Land downloads see [ERA5-Land setup](#era5-land-via-destine-earth-data-hub) below.
 
@@ -78,13 +78,13 @@ The API starts on `http://127.0.0.1:8000`. Open `http://127.0.0.1:8000/docs` for
 Alternatively, if the package is installed (e.g. via `pip install .`), you can start it with:
 
 ```bash
-climate-api
+open-climate-service
 ```
 
-When running the `climate-api` command from a directory other than the repo root, the relative path `./climate-api.yaml` in `CLIMATE_API_CONFIG` will not resolve correctly. Use an absolute path in that case:
+When running the `open-climate-service` command from a directory other than the repo root, the relative path `./open-climate-service.yaml` in `OPEN_CLIMATE_SERVICE_CONFIG` will not resolve correctly. Use an absolute path in that case:
 
 ```bash
-CLIMATE_API_CONFIG=/path/to/your/climate-api.yaml climate-api
+OPEN_CLIMATE_SERVICE_CONFIG=/path/to/your/open-climate-service.yaml open-climate-service
 ```
 
 ## Step 5: Verify the configured extent

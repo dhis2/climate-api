@@ -384,9 +384,9 @@ Current sync constraints:
 
 Configured availability policies:
 
-- CHIRPS3 daily uses `climate_api.providers.availability.chirps3_daily_latest_available`; this clamps sync targets to the latest complete released source month
-- ERA5-Land hourly uses `climate_api.providers.availability.lagged_latest_available` with a YAML-declared `lag_hours`
-- WorldPop yearly uses `climate_api.providers.availability.worldpop_release_latest_available`; this can allow configured future projection years
+- CHIRPS3 daily uses `open_climate_service.providers.availability.chirps3_daily_latest_available`; this clamps sync targets to the latest complete released source month
+- ERA5-Land hourly uses `open_climate_service.providers.availability.lagged_latest_available` with a YAML-declared `lag_hours`
+- WorldPop yearly uses `open_climate_service.providers.availability.worldpop_release_latest_available`; this can allow configured future projection years
 
 Example dry-run plan:
 

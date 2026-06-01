@@ -3,7 +3,7 @@
 ## 1) Overview
 DHIS2 Open Climate Service is a no-code geospatial data integration platform that enables users to discover, fetch, process, harmonize, and load earth observation and related datasets into DHIS2 and the CHAP Modelling Platform.
 
-DHIS2 Maps app and DHIS2 Climate app are core downstream consumers of this API, with `climate-api` replacing functionality currently sourced from Google Earth Engine.
+DHIS2 Maps app and DHIS2 Climate app are core downstream consumers of this API, with `open-climate-service` replacing functionality currently sourced from Google Earth Engine.
 
 This PRD defines the MVP scope for the hackathon and a near-term path toward a production-ready platform.
 
@@ -81,8 +81,8 @@ Current EO data workflows are fragmented across tools and scripts, making them h
 - Support use of DHIS2 Data Store for storing Open Climate Service configuration metadata where appropriate.
 
 ### FR7 — Upstream library evolution
-- Treat `dhis2-python-client` and `dhis2eo` as strategic dependencies that can be changed to fulfill `climate-api` requirements.
-- When required functionality is missing, define and implement upstream changes rather than introducing long-term local forks in `climate-api`.
+- Treat `dhis2-python-client` and `dhis2eo` as strategic dependencies that can be changed to fulfill `open-climate-service` requirements.
+- When required functionality is missing, define and implement upstream changes rather than introducing long-term local forks in `open-climate-service`.
 
 ## 7) Non-Functional Requirements
 - Reliability: Handle simultaneous and long-running requests.
@@ -146,7 +146,7 @@ Current EO data workflows are fragmented across tools and scripts, making them h
 - What level of OGC API - Processes compliance is required for MVP vs production?
 
 ## 13) Upstream Contribution Strategy
-- Preferred path: implement missing cross-project capabilities in `dhis2-python-client` and/or `dhis2eo`, then consume released versions in `climate-api`.
+- Preferred path: implement missing cross-project capabilities in `dhis2-python-client` and/or `dhis2eo`, then consume released versions in `open-climate-service`.
 - Avoid permanent private forks; use short-lived patches only when release timing requires temporary workarounds.
 - Track upstream gaps as explicit requirements with owner, milestone, and compatibility impact.
 
@@ -161,4 +161,4 @@ Current EO data workflows are fragmented across tools and scripts, making them h
 - A climate dataset can be previewed and aggregated to org units.
 - A recurring run can be configured and triggered on schedule.
 - Output is available in a DHIS2-compatible import format and at least one ingestion path is demonstrated.
-- Core map/preview and aggregation workflows required by Maps app and Climate app are available via `climate-api` without dependence on Google Earth Engine.
+- Core map/preview and aggregation workflows required by Maps app and Climate app are available via `open-climate-service` without dependence on Google Earth Engine.

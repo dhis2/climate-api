@@ -6,7 +6,7 @@ Adjust BASE_URL if the API is not running on the default local address.
 
 import json
 
-from climate_api.client import Client
+from open_climate_service.client import Client
 
 BASE_URL = "http://127.0.0.1:8000"
 

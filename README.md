@@ -24,7 +24,7 @@ Copy `.env.example` to `.env` and adjust values as needed. Environment variables
 Start the app:
 
 ```
-uv run uvicorn climate_api.main:app --reload
+uv run uvicorn open_climate_service.main:app --reload
 ```
 
 ### Using pip
@@ -35,16 +35,16 @@ If you cannot use uv (e.g. mixed conda/forge environments):
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m uvicorn climate_api.main:app --reload
+python -m uvicorn open_climate_service.main:app --reload
 ```
 
 ### Using conda
 
 ```
-conda create -n dhis2-climate-api python=3.13
-conda activate dhis2-climate-api
+conda create -n dhis2-open-climate-service python=3.13
+conda activate dhis2-open-climate-service
 pip install -e .
-python -m uvicorn climate_api.main:app --reload
+python -m uvicorn open_climate_service.main:app --reload
 ```
 
 ## Development
@@ -111,7 +111,7 @@ else:
 
 The OGC API is served by pygeoapi, mounted at `/ogcapi`. Its configuration is generated dynamically from published artifacts and written to the resolved runtime data directory (for Docker: `/app/data/pygeoapi/pygeoapi-config.yml`).
 
-The base configuration is bundled with the package at `climate_api/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
+The base configuration is bundled with the package at `open_climate_service/data/pygeoapi/base.yml` and does not need to be copied or managed separately.
 
 To validate the configuration manually:
 

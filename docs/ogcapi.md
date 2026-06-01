@@ -20,7 +20,7 @@ All standards share a common core: JSON/HTML responses, OpenAPI-described endpoi
 
 [pygeoapi](https://pygeoapi.io) is a Python server that implements the OGC API standards listed above. It is the OGC Reference Implementation for OGC API - Features.
 
-In this project pygeoapi is mounted as a sub-application at `/ogcapi`. The integration is minimal -- a single re-export in `src/climate_api/routers/ogcapi.py`:
+In this project pygeoapi is mounted as a sub-application at `/ogcapi`. The integration is minimal -- a single re-export in `src/open_climate_service/routers/ogcapi.py`:
 
 ```python
 from pygeoapi.starlette_app import APP as pygeoapi_app
@@ -502,7 +502,7 @@ In the YAML config the `name` field on a provider or processor identifies the pl
 
 ### Plugin directory layout
 
-Custom plugins live under `src/climate_api/routers/ogcapi/plugins/`, organized by type:
+Custom plugins live under `src/open_climate_service/routers/ogcapi/plugins/`, organized by type:
 
 ```
 plugins/
@@ -544,7 +544,7 @@ Reference it in the config by dotted path:
 ```yaml
 providers:
   - type: feature
-    name: climate_api.routers.ogcapi.plugins.providers.my_provider.MyProvider
+    name: open_climate_service.routers.ogcapi.plugins.providers.my_provider.MyProvider
     data: /path/to/data
 ```
 
@@ -581,7 +581,7 @@ resources:
   my-process:
     type: process
     processor:
-      name: climate_api.routers.ogcapi.plugins.processes.my_process.MyProcessor
+      name: open_climate_service.routers.ogcapi.plugins.processes.my_process.MyProcessor
 ```
 
 ## References
