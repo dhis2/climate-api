@@ -281,15 +281,7 @@ def _get_published_artifact(collection_id: str) -> Any:
 
 
 def _eligible_artifacts() -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for dataset_id, artifacts in ingestion_services.group_datasets().items():
-        latest = max(artifacts, key=lambda a: a.created_at)
-        if latest.publication.status != PublicationStatus.PUBLISHED:
-            continue
-        if latest.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
-            continue
-        result[dataset_id] = latest
-    return result
+    return ingestion_services.latest_published_zarr_artifacts_by_dataset()
 
 
 def _open_artifact(artifact: Any) -> xr.Dataset:

@@ -127,15 +127,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
 
 
 def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
-    result: dict[str, ArtifactRecord] = {}
-    for dataset_id, artifacts in ingestion_services.group_datasets().items():
-        latest = max(artifacts, key=lambda artifact: artifact.created_at)
-        if latest.publication.status != PublicationStatus.PUBLISHED:
-            continue
-        if latest.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
-            continue
-        result[dataset_id] = latest
-    return dict(sorted(result.items()))
+    return ingestion_services.latest_published_zarr_artifacts_by_dataset()
 
 
 def _build_collection_template(

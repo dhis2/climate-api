@@ -112,6 +112,19 @@ def group_datasets() -> dict[str, list[ArtifactRecord]]:
     return grouped
 
 
+def latest_published_zarr_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
+    """Return the latest published Zarr/Icechunk artifact for each dataset id."""
+    result: dict[str, ArtifactRecord] = {}
+    for dataset_id, artifacts in group_datasets().items():
+        latest = max(artifacts, key=lambda artifact: artifact.created_at)
+        if latest.publication.status != PublicationStatus.PUBLISHED:
+            continue
+        if latest.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
+            continue
+        result[dataset_id] = latest
+    return dict(sorted(result.items()))
+
+
 def list_ingestions() -> IngestionListResponse:
     """Return ingestion run records for operational/admin use."""
     records = sorted(_materialized_records(_load_records()), key=lambda record: record.created_at, reverse=True)
