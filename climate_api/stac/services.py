@@ -18,7 +18,7 @@ from climate_api.data_accessor.services.accessor import open_icechunk_dataset, o
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
-from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
+from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord
 from climate_api.shared.time import parse_period_string_to_datetime, resolve_iso_period_step
 
 CATALOG_ID = "climate-api"
