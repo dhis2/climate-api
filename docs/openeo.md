@@ -1,6 +1,6 @@
 # openEO
 
-openEO is an **open standard API** for accessing and processing Earth Observation (EO) data. Instead of downloading raw satellite or climate data and writing custom processing scripts, you describe *what you want to compute* as a process graph, and the server runs it for you on its own data.
+openEO is an **open standard API** for accessing and processing Earth Observation (EO) data. Instead of downloading raw climate or satellite data and writing custom processing scripts, you describe _what you want to compute_ as a process graph, and the server runs it for you on its own data.
 
 ---
 
@@ -10,27 +10,27 @@ Traditional EO data access is fragmented: each data provider has its own API, fo
 
 ## Why openEO for the Open Climate Service?
 
-The Open Climate Service stores climate datasets — precipitation, temperature, population — as managed Zarr/Icechunk stores and exposes them to DHIS2 users and applications. openEO gives us a standardised, well-documented way to query and transform those datasets without building a bespoke query language.
+The Open Climate Service stores climate datasets — precipitation, temperature, population — as managed Zarr stores. openEO gives us a standardised, well-documented way to query and transform those datasets without building a bespoke query language.
 
 Concretely it means:
 
 - **DHIS2 analytics apps** can request district-level climate aggregates (monthly sum, seasonal mean) without downloading raw daily rasters — the computation runs server-side and returns a small result.
 - **Data scientists** can use the standard openEO Python client or web editor directly against the service without learning a DHIS2-specific API.
 - **New datasets** added to the service are immediately queryable through the same process graph interface, with no additional API work.
-- **Interoperability** — process graphs written for the Open Climate Service work, with minor configuration changes, against any other openEO-compliant backend (Copernicus CDSE, EarthServer, etc.), and vice versa.
+- **Interoperability** — process graphs written for the Open Climate Service work, with minor configuration changes, against any other openEO-compliant backend, and vice versa.
 
 ---
 
 ## Key concepts
 
-| Concept | Description |
-|---|---|
-| **Collection** | A published dataset, equivalent to a STAC collection. Has spatial/temporal extent, variables (bands), and dimension metadata. |
-| **Process** | A single named operation — `load_collection`, `filter_temporal`, `aggregate_temporal_period`, `save_result`, etc. |
-| **Process graph** | A DAG of connected processes describing the full computation. Built lazily in the Python client; no data moves until execution. |
-| **Batch job** | Asynchronous execution of a process graph. Create → start → poll → download results. |
-| **Synchronous result** | `POST /result` — executes immediately and returns output in the HTTP response body. |
-| **UDP** | User-Defined Process — a named, reusable process graph stored server-side; callable like any built-in process. |
+| Concept                | Description                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Collection**         | A published dataset, equivalent to a STAC collection. Has spatial/temporal extent, variables (bands), and dimension metadata. |
+| **Process**            | A single named operation — `load_collection`, `filter_temporal`, `aggregate_temporal_period`, `save_result`, etc.             |
+| **Process graph**      | Connected processes describing the full computation.                                                                          |
+| **Batch job**          | Asynchronous execution of a process graph. Create → start → poll → download results.                                          |
+| **Synchronous result** | `POST /result` — executes immediately and returns output in the HTTP response body.                                           |
+| **UDP**                | User-Defined Process — a named, reusable process graph stored server-side; callable like any built-in process.                |
 
 ---
 
@@ -64,7 +64,7 @@ Each collection includes `cube:dimensions` (spatial `x`/`y`, temporal `t`, `band
 
 ## Building a process graph
 
-Process graphs are DAGs of composable operations. The openEO Python client builds them lazily — no data moves until you call `execute()` or `download()`.
+Process graphs are composable operations. The openEO Python client builds them lazily — no data moves until you call `execute()` or `download()`.
 
 ```python
 cube = conn.load_collection(
@@ -167,19 +167,19 @@ Completed batch jobs write their output to disk and expose it as an asset link a
 
 Key processes for climate work:
 
-| Process | What it does |
-|---|---|
-| `load_collection` | Open a published dataset as an openEO data cube |
-| `filter_temporal` | Restrict the time dimension to an interval |
-| `filter_bbox` | Restrict the spatial extent |
-| `filter_bands` | Select a subset of variables/bands |
-| `apply` | Apply an element-wise callback to every pixel |
-| `reduce_dimension` | Collapse a dimension with a reducer (e.g. mean, sum) |
+| Process                     | What it does                                              |
+| --------------------------- | --------------------------------------------------------- |
+| `load_collection`           | Open a published dataset as an openEO data cube           |
+| `filter_temporal`           | Restrict the time dimension to an interval                |
+| `filter_bbox`               | Restrict the spatial extent                               |
+| `filter_bands`              | Select a subset of variables/bands                        |
+| `apply`                     | Apply an element-wise callback to every pixel             |
+| `reduce_dimension`          | Collapse a dimension with a reducer (e.g. mean, sum)      |
 | `aggregate_temporal_period` | Group by calendar period (month, season, year) and reduce |
-| `aggregate_spatial` | Zonal statistics over GeoJSON geometries |
-| `resample_cube_spatial` | Reproject and resample to a target grid |
-| `merge_cubes` | Combine two aligned cubes |
-| `save_result` | Finalise the result — controls the output format |
+| `aggregate_spatial`         | Zonal statistics over GeoJSON geometries                  |
+| `resample_cube_spatial`     | Reproject and resample to a target grid                   |
+| `merge_cubes`               | Combine two aligned cubes                                 |
+| `save_result`               | Finalise the result — controls the output format          |
 
 ---
 
@@ -187,15 +187,15 @@ Key processes for climate work:
 
 The `format` argument of `save_result` controls what the server writes. `GET /file_formats` advertises all supported formats to clients.
 
-| Format key | Title | Output type | Notes |
-|---|---|---|---|
-| `ZARR` | Zarr | Raster | Default. Zarr v3 directory store; served chunk-by-chunk |
-| `NETCDF` | NetCDF | Raster | Raw float values — compatible with CDO, NCO, xarray, R |
-| `GTIFF` | GeoTIFF | Raster | Raw float values with embedded CRS — compatible with QGIS, GDAL |
-| `PNG` | PNG | Raster | Styled image using the collection's colormap and rescale range; transparent background |
-| `CSV` | CSV | Raster / Vector | Tabular — ideal for time series and zonal statistics output |
-| `GEOJSON` | GeoJSON | Vector | Default for `aggregate_spatial` results; one feature per geometry |
-| `PARQUET` | GeoParquet | Vector | Columnar binary — efficient for large vector datasets |
+| Format key | Title      | Output type     | Notes                                                                                  |
+| ---------- | ---------- | --------------- | -------------------------------------------------------------------------------------- |
+| `ZARR`     | Zarr       | Raster          | Default. Zarr v3 directory store; served chunk-by-chunk                                |
+| `NETCDF`   | NetCDF     | Raster          | Raw float values — compatible with CDO, NCO, xarray, R                                 |
+| `GTIFF`    | GeoTIFF    | Raster          | Raw float values with embedded CRS — compatible with QGIS, GDAL                        |
+| `PNG`      | PNG        | Raster          | Styled image using the collection's colormap and rescale range; transparent background |
+| `CSV`      | CSV        | Raster / Vector | Tabular — ideal for time series and zonal statistics output                            |
+| `GEOJSON`  | GeoJSON    | Vector          | Default for `aggregate_spatial` results; one feature per geometry                      |
+| `PARQUET`  | GeoParquet | Vector          | Columnar binary — efficient for large vector datasets                                  |
 
 ```bash
 # Monthly precipitation totals as NetCDF
@@ -317,12 +317,12 @@ openEO is an additional access layer on top of the existing dataset store — th
 
 ## Resources
 
-| Resource | Link |
-|---|---|
-| openEO.org — overview and use cases | <https://openeo.org> |
-| API specification (v1.2.0) | <https://openeo.org/documentation/1.0/api/> |
-| Standard process catalogue | <https://processes.openeo.org> |
-| Python client documentation | <https://open-eo.github.io/openeo-python-client/> |
-| Web editor (hosted) | <https://editor.openeo.org> |
-| openEO cookbook (Python examples) | <https://openeo.org/documentation/1.0/cookbook/> |
+| Resource                                 | Link                                               |
+| ---------------------------------------- | -------------------------------------------------- |
+| openEO.org — overview and use cases      | <https://openeo.org>                               |
+| API specification (v1.2.0)               | <https://openeo.org/documentation/1.0/api/>        |
+| Standard process catalogue               | <https://processes.openeo.org>                     |
+| Python client documentation              | <https://open-eo.github.io/openeo-python-client/>  |
+| Web editor (hosted)                      | <https://editor.openeo.org>                        |
+| openEO cookbook (Python examples)        | <https://openeo.org/documentation/1.0/cookbook/>   |
 | openeo-processes-dask (execution engine) | <https://github.com/Open-EO/openeo-processes-dask> |
