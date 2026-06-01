@@ -1091,7 +1091,9 @@ def test_plan_sync_marks_request_target_clamped_by_availability(monkeypatch: pyt
                 "kind": "temporal",
                 "execution": "append",
                 "availability": {
-                    "latest_available_function": "open_climate_service.providers.availability.chirps3_daily_latest_available"
+                    "latest_available_function": (
+                        "open_climate_service.providers.availability.chirps3_daily_latest_available"
+                    )
                 },
             },
             "ingestion": {},

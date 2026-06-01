@@ -168,7 +168,9 @@ class DatasetRecord(BaseModel):
     source: str | None = Field(default=None, description="Upstream source name.")
     source_url: str | None = Field(default=None, description="Upstream source documentation URL.")
     extent: ArtifactCoverage = Field(description="Current covered spatial and temporal extent of the dataset.")
-    last_updated: datetime = Field(description="Timestamp when Open Climate Service last materialized or updated the dataset.")
+    last_updated: datetime = Field(
+        description="Timestamp when Open Climate Service last materialized or updated the dataset."
+    )
     links: list[DatasetAccessLink] = Field(
         default_factory=list,
         description="Available API access links for this managed dataset.",

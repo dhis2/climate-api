@@ -12,7 +12,11 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from open_climate_service.data_accessor.services.accessor import _coverage_from_dataset, open_icechunk_dataset, open_zarr_dataset
+from open_climate_service.data_accessor.services.accessor import (
+    _coverage_from_dataset,
+    open_icechunk_dataset,
+    open_zarr_dataset,
+)
 from open_climate_service.data_manager.services import downloader
 from open_climate_service.ingestions import services as ingestion_services
 

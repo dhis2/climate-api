@@ -19,7 +19,12 @@ from open_climate_service.data_accessor.services.accessor import open_icechunk_d
 from open_climate_service.data_manager.services.utils import get_time_dim
 from open_climate_service.data_registry.services import datasets as registry_datasets
 from open_climate_service.ingestions import services as ingestion_services
-from open_climate_service.ingestions.schemas import ArtifactFormat, ArtifactRecord, ArtifactRequestScope, PublicationStatus
+from open_climate_service.ingestions.schemas import (
+    ArtifactFormat,
+    ArtifactRecord,
+    ArtifactRequestScope,
+    PublicationStatus,
+)
 from open_climate_service.publications.services import managed_dataset_id_for_scope
 from open_climate_service.shared.time import _coerce_numpy_datetime, utc_today
 

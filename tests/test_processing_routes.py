@@ -334,7 +334,9 @@ def test_post_process_execution_returns_500_for_invalid_execution_function(
     def _raise_import_error(full_path: str) -> object:
         raise ModuleNotFoundError(f"No module named for {full_path}")
 
-    monkeypatch.setattr("open_climate_service.processing.routes.process_registry._get_dynamic_function", _raise_import_error)
+    monkeypatch.setattr(
+        "open_climate_service.processing.routes.process_registry._get_dynamic_function", _raise_import_error
+    )
 
     response = client.post("/processes/broken_process/execution", json={})
 
@@ -363,7 +365,9 @@ def test_post_process_execution_returns_400_for_execution_value_error(
 
         return _func
 
-    monkeypatch.setattr("open_climate_service.processing.routes.process_registry._get_dynamic_function", _raise_value_error)
+    monkeypatch.setattr(
+        "open_climate_service.processing.routes.process_registry._get_dynamic_function", _raise_value_error
+    )
 
     response = client.post("/processes/broken_process/execution", json={})
 
