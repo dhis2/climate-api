@@ -20,6 +20,7 @@ from climate_api.ingestions.schemas import (
     CoverageTemporal,
     PublicationStatus,
 )
+from climate_api.openeo import collections as openeo_collections
 from climate_api.stac import services as stac_services
 
 
@@ -88,9 +89,8 @@ def test_stac_landing_returns_catalog(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["type"] == "Catalog"
-    assert any(link["rel"] == "child" for link in payload["links"]) or any(
-        link["rel"] == "data" for link in payload["links"]
-    )
+    assert any(link["rel"] == "self" for link in payload["links"])
+    assert any(link["rel"] == "root" for link in payload["links"])
 
 
 def test_stac_catalog_lists_child_collections(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,8 +249,10 @@ def test_stac_collection_compatibility_route_builds_collection(
 
 
 def test_collections_logs_skipped_dataset_failures(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    calls: list[tuple[str, str, str]] = []
+
     monkeypatch.setattr(
         stac_services,
         "_eligible_artifacts_by_dataset",
@@ -261,13 +263,15 @@ def test_collections_logs_skipped_dataset_failures(
         raise stac_services.HTTPException(status_code=503, detail="store unavailable")
 
     monkeypatch.setattr(stac_services, "build_collection", _raise)
+    monkeypatch.setattr(openeo_collections.logger, "warning", lambda *args: calls.append(args))
 
-    with caplog.at_level("WARNING"):
-        response = client.get("/collections")
+    response = client.get("/collections")
 
     assert response.status_code == 200
     assert response.json()["collections"] == []
-    assert "Skipping collection 'broken_dataset'" in caplog.text
+    assert calls == [
+        ("Skipping collection '%s' from openEO listing: %s", "broken_dataset", "store unavailable")
+    ]
 
 
 def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
