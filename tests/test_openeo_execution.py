@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 import xarray as xr
+from fastapi.testclient import TestClient
 
 from climate_api.openeo.execution import (
     _augment_with_udps,
@@ -209,11 +210,7 @@ def test_openeo_job_service_create_execute_and_get_results(
 
     record = job_service.create_job(
         OpenEOJobCreate(
-            process={
-                "process_graph": {
-                    "result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}
-                }
-            }
+            process={"process_graph": {"result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}}}
         )
     )
 
@@ -255,15 +252,11 @@ def test_result_assets_none_output_returns_empty() -> None:
     assert _result_assets(_record(None)) == {}
 
 
-def test_create_job_does_not_advertise_missing_logs_endpoint(client) -> None:
+def test_create_job_does_not_advertise_missing_logs_endpoint(client: TestClient) -> None:
     response = client.post(
         "/jobs",
         json={
-            "process": {
-                "process_graph": {
-                    "result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}
-                }
-            }
+            "process": {"process_graph": {"result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}}}
         },
     )
 
@@ -272,7 +265,7 @@ def test_create_job_does_not_advertise_missing_logs_endpoint(client) -> None:
     assert all(link["rel"] != "logs" for link in links)
 
 
-def test_put_udp_rejects_predefined_process_id(client) -> None:
+def test_put_udp_rejects_predefined_process_id(client: TestClient) -> None:
     response = client.put(
         "/process_graphs/load_collection",
         json={"summary": "Bad override", "process_graph": {}},
@@ -325,7 +318,7 @@ def test_run_process_graph_keeps_runtime_failures_as_500(monkeypatch: pytest.Mon
 
 
 def test_result_route_rejects_synchronous_zarr_datacube(
-    client, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         "climate_api.openeo.execution.run_process_graph",
