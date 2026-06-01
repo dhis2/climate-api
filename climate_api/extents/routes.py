@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("", response_model=ExtentRecord)
 def get_extent() -> ExtentRecord:
-    """Return the configured extent for this Climate API instance."""
+    """Return the configured extent for this Open Climate Service instance."""
     extent = services.get_extent()
     if extent is None:
         raise HTTPException(status_code=404, detail="No extent configured")

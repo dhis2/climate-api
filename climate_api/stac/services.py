@@ -22,8 +22,8 @@ from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord
 from climate_api.shared.time import parse_period_string_to_datetime, resolve_iso_period_step
 
 CATALOG_ID = "climate-api"
-CATALOG_TITLE = "DHIS2 Climate API"
-CATALOG_DESCRIPTION = "Published Climate API GeoZarr datasets"
+CATALOG_TITLE = "DHIS2 Open Climate Service"
+CATALOG_DESCRIPTION = "Published Open Climate Service GeoZarr datasets"
 STAC_VERSION = "1.1.0"
 DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.3.0/schema.json"
 PROJECTION_EXTENSION = "https://stac-extensions.github.io/projection/v1.1.0/schema.json"

@@ -1,6 +1,6 @@
 # Setup Guide
 
-This guide walks through configuring a new Climate API instance for a specific country, using Rwanda as the example.
+This guide walks through configuring a new Open Climate Service instance for a specific country, using Rwanda as the example.
 
 ## Prerequisites
 

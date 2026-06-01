@@ -1,6 +1,6 @@
-# DHIS2 Climate API
+# DHIS2 Open Climate Service
 
-Climate and Earth Observation data is distributed across dozens of providers — each with different APIs, data formats, and access mechanisms. The Climate API unifies this fragmented landscape behind a single, consistent interface.
+Climate and Earth Observation data is distributed across dozens of providers — each with different APIs, data formats, and access mechanisms. The Open Climate Service unifies this fragmented landscape behind a single, consistent interface.
 
 Each instance is configured for a specific country or region, and all data extraction, processing, and storage is scoped to that spatial extent. It abstracts data access across heterogeneous sources (CHIRPS, ERA5, WorldPop, and others), stores outputs as GeoZarr, and exposes them through standards-based endpoints.
 

@@ -1,6 +1,6 @@
 # Processes
 
-The Climate API exposes two complementary processing interfaces:
+The Open Climate Service exposes two complementary processing interfaces:
 
 - **openEO process graphs** — the primary interface for data analysis. Submit a DAG of composable operations via `POST /result` (synchronous) or `POST /jobs` (batch). 120+ standard processes are available out of the box. See the [openEO guide](openeo.md).
 - **Native processes** — custom plugin functions registered via YAML, callable synchronously at `POST /processes/{id}/execution` and from openEO process graphs. Shaped to align progressively with [OGC API Processes](https://ogcapi.ogc.org/processes/).

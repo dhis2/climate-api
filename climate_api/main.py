@@ -1,4 +1,4 @@
-"""DHIS2 Climate API -- Climate and earth observation data API for DHIS2."""
+"""DHIS2 Open Climate Service -- Climate and earth observation data API for DHIS2."""
 
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -68,7 +68,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the Climate API FastAPI application.
+    """Create and configure the Open Climate Service FastAPI application.
 
     This is the public entry point for embedding the API in a larger application:
 

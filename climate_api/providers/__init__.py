@@ -1,1 +1,1 @@
-"""Provider-specific Climate API helpers."""
+"""Provider-specific Open Climate Service helpers."""

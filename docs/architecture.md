@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how the Climate API is structured, why it is structured that way, and what the consequences are of each design decision. It is written for developers who will maintain or extend the platform over time.
+This document explains how the Open Climate Service is structured, why it is structured that way, and what the consequences are of each design decision. It is written for developers who will maintain or extend the platform over time.
 
 ---
 
@@ -72,7 +72,7 @@ The relationship is: one template → many artifacts over time → one managed d
 
 ### Extent
 
-The **extent** is the spatial bounding box configured for this Climate API instance. It is set once in `climate-api.yaml` and does not change at runtime. Every ingestion is automatically scoped to this extent — operators do not specify it per-request.
+The **extent** is the spatial bounding box configured for this Open Climate Service instance. It is set once in `climate-api.yaml` and does not change at runtime. Every ingestion is automatically scoped to this extent — operators do not specify it per-request.
 
 This is a deliberate design constraint: each instance serves one place. A Sierra Leone instance serves Sierra Leone. Multi-country coverage requires multiple instances.
 

@@ -1,6 +1,6 @@
 """Discover published datasets via the STAC catalog and open one with xarray.
 
-Requires a running Climate API instance and at least one published dataset.
+Requires a running Open Climate Service instance and at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 

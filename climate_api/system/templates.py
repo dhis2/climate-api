@@ -1,4 +1,4 @@
-"""Server-side HTML rendering and root resource representations for the Climate API."""
+"""Server-side HTML rendering and root resource representations for the Open Climate Service."""
 
 import importlib.resources
 import logging
@@ -42,7 +42,7 @@ ROOT_RESPONSES: dict[int | str, dict[str, Any]] = {
 def root_json(base: str) -> RootResponse:
     """Build the root navigation document for the JSON representation."""
     return RootResponse(
-        message="Welcome to DHIS2 Climate API",
+        message="Welcome to DHIS2 Open Climate Service",
         links=[
             Link(href=f"{base}/ogcapi/", rel="ogcapi", title="OGC API"),
             Link(href=f"{base}/stac/catalog.json", rel="stac", title="STAC Catalog"),

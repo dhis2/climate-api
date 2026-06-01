@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class ExtentRecord(BaseModel):
-    """Configured spatial extent for this Climate API instance."""
+    """Configured spatial extent for this Open Climate Service instance."""
 
     name: str | None = Field(default=None, description="Human-readable name of the extent.")
     description: str | None = Field(default=None, description="Optional descriptive text for the extent.")

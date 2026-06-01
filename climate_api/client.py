@@ -1,4 +1,4 @@
-"""Lightweight client for discovering and opening published Climate API datasets."""
+"""Lightweight client for discovering and opening published Open Climate Service datasets."""
 
 import os
 from urllib.parse import urlparse
@@ -20,7 +20,7 @@ def _id_from_href(href: str) -> str:
 
 
 class Client:
-    """Client for a Climate API instance.
+    """Client for a Open Climate Service instance.
 
     Maintains a persistent HTTP connection for efficient repeated calls.
     Use as a context manager to ensure the connection is closed:
@@ -29,7 +29,7 @@ class Client:
             datasets = client.catalog()
 
     Args:
-        base_url: Base URL of the running Climate API (e.g. ``http://localhost:8000``).
+        base_url: Base URL of the running Open Climate Service (e.g. ``http://localhost:8000``).
         timeout: HTTP request timeout in seconds (default: 30).
     """
 

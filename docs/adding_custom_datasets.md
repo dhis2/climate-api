@@ -1,6 +1,6 @@
 # Adding custom datasets
 
-This guide explains how to add a new dataset source to your Climate API instance — for example a national meteorological service, a regional satellite product, or a custom model output.
+This guide explains how to add a new dataset source to your Open Climate Service instance — for example a national meteorological service, a regional satellite product, or a custom model output.
 
 The built-in dataset templates (CHIRPS3, ERA5-Land, WorldPop) ship as package data. Custom datasets are layered on top by pointing `plugins_dir` in your `climate-api.yaml` at a plugins directory. That directory serves two purposes: YAML dataset templates go in its `datasets/` subfolder, and Python modules placed directly under it are importable by their dotted path (e.g. `mypackage.sources.download`) without installing them as a package.
 
@@ -54,7 +54,7 @@ Any extra keyword arguments from `ingestion.default_params` in the YAML template
 
 The API normalises coordinate names at write time: `valid_time` → `time`, `lat`/`latitude` → `y`, `lon`/`longitude` → `x`. Using the canonical names in your output avoids any ambiguity, but upstream names are handled automatically.
 
-Install your package in the same environment as the Climate API:
+Install your package in the same environment as the Open Climate Service:
 
 ```bash
 pip install ./mypackage

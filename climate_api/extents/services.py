@@ -8,7 +8,7 @@ from climate_api import config as api_config
 
 
 def get_extent() -> dict[str, Any] | None:
-    """Return the configured extent for this Climate API instance, or None if not set."""
+    """Return the configured extent for this Open Climate Service instance, or None if not set."""
     extent = api_config.get_config().get("extent")
     if extent is None:
         return None
@@ -24,4 +24,4 @@ def get_extent_or_404() -> dict[str, Any]:
     extent = get_extent()
     if extent is not None:
         return extent
-    raise HTTPException(status_code=404, detail="No extent is configured for this Climate API instance")
+    raise HTTPException(status_code=404, detail="No extent is configured for this Open Climate Service instance")

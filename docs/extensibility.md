@@ -1,6 +1,6 @@
 # Extensibility
 
-The Climate API is designed around a consistent plugin pattern: built-in behaviour lives in the package, and custom behaviour is layered on top through a `plugins_dir` directory and Python dotted paths — without forking or patching core code.
+The Open Climate Service is designed around a consistent plugin pattern: built-in behaviour lives in the package, and custom behaviour is layered on top through a `plugins_dir` directory and Python dotted paths — without forking or patching core code.
 
 The same pattern applies at every extension point:
 

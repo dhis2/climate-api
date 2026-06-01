@@ -1,4 +1,4 @@
-"""Time helpers shared across Climate API modules."""
+"""Time helpers shared across Open Climate Service modules."""
 
 import logging
 import re

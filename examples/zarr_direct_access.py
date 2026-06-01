@@ -1,6 +1,6 @@
 """Open a published GeoZarr dataset directly and demonstrate spatial and temporal subsetting.
 
-Requires a running Climate API instance with at least one published dataset.
+Requires a running Open Climate Service instance with at least one published dataset.
 Adjust BASE_URL if the API is not running on the default local address.
 """
 

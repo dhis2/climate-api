@@ -32,7 +32,7 @@ class SyncKind(StrEnum):
 class SyncAction(StrEnum):
     """Planner-selected sync action.
 
-    APPEND means Climate API updates an existing managed dataset by writing only
+    APPEND means Open Climate Service updates an existing managed dataset by writing only
     the missing periods needed to reach the planned target end by extending the
     committed artifact store.
     """
@@ -112,7 +112,7 @@ class ArtifactRecord(BaseModel):
 class CreateIngestionRequest(BaseModel):
     """Request payload for creating or updating a managed dataset."""
 
-    dataset_id: str = Field(description="Source dataset template id from the Climate API registry.")
+    dataset_id: str = Field(description="Source dataset template id from the Open Climate Service registry.")
     start: str = Field(description="Start period to ingest.")
     end: str | None = Field(default=None, description="Optional end period to ingest.")
     overwrite: bool = Field(
@@ -135,7 +135,7 @@ class ArtifactListResponse(BaseModel):
     )
     items: list[ArtifactRecord] = Field(
         default_factory=list,
-        description="Internal artifact records managed by this Climate API instance.",
+        description="Internal artifact records managed by this Open Climate Service instance.",
     )
 
 
@@ -168,7 +168,7 @@ class DatasetRecord(BaseModel):
     source: str | None = Field(default=None, description="Upstream source name.")
     source_url: str | None = Field(default=None, description="Upstream source documentation URL.")
     extent: ArtifactCoverage = Field(description="Current covered spatial and temporal extent of the dataset.")
-    last_updated: datetime = Field(description="Timestamp when Climate API last materialized or updated the dataset.")
+    last_updated: datetime = Field(description="Timestamp when Open Climate Service last materialized or updated the dataset.")
     links: list[DatasetAccessLink] = Field(
         default_factory=list,
         description="Available API access links for this managed dataset.",
@@ -214,7 +214,7 @@ class IngestionListResponse(BaseModel):
     )
     items: list[IngestionResponse] = Field(
         default_factory=list,
-        description="Ingestion run records available in this Climate API instance.",
+        description="Ingestion run records available in this Open Climate Service instance.",
     )
 
 
@@ -228,7 +228,7 @@ class DatasetListResponse(BaseModel):
     )
     items: list[DatasetRecord] = Field(
         default_factory=list,
-        description="Managed datasets available in this Climate API instance.",
+        description="Managed datasets available in this Open Climate Service instance.",
         examples=[
             [
                 {
@@ -328,5 +328,5 @@ class SyncResponse(BaseModel):
     )
     sync_detail: SyncDetail | None = Field(
         default=None,
-        description="Planner output describing how Climate API interpreted the sync request.",
+        description="Planner output describing how Open Climate Service interpreted the sync request.",
     )

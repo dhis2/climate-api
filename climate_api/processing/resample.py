@@ -40,7 +40,7 @@ DERIVED_DATA_DIR: Path = _derived_data_dir()
 
 
 def _frequency_to_period_type(frequency: str) -> str:
-    """Map a pandas frequency alias to a Climate API period_type string."""
+    """Map a pandas frequency alias to a Open Climate Service period_type string."""
     name = type(pd.tseries.frequencies.to_offset(frequency)).__name__
     if any(x in name for x in ("Hour", "Minute", "Second")):
         return "hourly"

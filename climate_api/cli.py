@@ -1,8 +1,8 @@
-"""Command-line entry point for running the Climate API with uvicorn."""
+"""Command-line entry point for running the Open Climate Service with uvicorn."""
 
 import uvicorn
 
 
 def main() -> None:
-    """Start the Climate API server."""
+    """Start the Open Climate Service server."""
     uvicorn.run("climate_api.main:app", host="0.0.0.0", port=8000)
