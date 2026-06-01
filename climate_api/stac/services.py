@@ -18,7 +18,7 @@ from climate_api.data_accessor.services.accessor import open_icechunk_dataset, o
 from climate_api.data_manager.services.utils import get_time_dim, get_x_y_dims
 from climate_api.data_registry.services import datasets as registry_datasets
 from climate_api.ingestions import services as ingestion_services
-from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord, PublicationStatus
+from climate_api.ingestions.schemas import ArtifactFormat, ArtifactRecord
 from climate_api.shared.time import parse_period_string_to_datetime, resolve_iso_period_step
 
 CATALOG_ID = "climate-api"
@@ -127,15 +127,7 @@ def build_collection(dataset_id: str, request: Request) -> dict[str, object]:
 
 
 def _eligible_artifacts_by_dataset() -> dict[str, ArtifactRecord]:
-    result: dict[str, ArtifactRecord] = {}
-    for dataset_id, artifacts in ingestion_services.group_datasets().items():
-        latest = max(artifacts, key=lambda artifact: artifact.created_at)
-        if latest.publication.status != PublicationStatus.PUBLISHED:
-            continue
-        if latest.format not in {ArtifactFormat.ZARR, ArtifactFormat.ICECHUNK}:
-            continue
-        result[dataset_id] = latest
-    return dict(sorted(result.items()))
+    return ingestion_services.latest_published_zarr_artifacts_by_dataset()
 
 
 def _build_collection_template(

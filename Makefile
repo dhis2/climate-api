@@ -6,6 +6,14 @@ help: ## Show this help
 sync: ## Install dependencies with uv
 	uv sync
 
+sync-gdal: ## Pin gdal override to the installed system libgdal version, then sync
+	@GDAL_VERSION=$$(gdal-config --version 2>/dev/null) && \
+		[ -n "$$GDAL_VERSION" ] || (echo "gdal-config not found — install libgdal-dev first" && exit 1) && \
+		echo "System GDAL: $$GDAL_VERSION" && \
+		sed -i.bak "s/\"gdal==[^\"]*\"/\"gdal==$$GDAL_VERSION\"/" pyproject.toml && \
+		rm -f pyproject.toml.bak && \
+		uv sync
+
 run: ## Start the app with uvicorn
 	uv run uvicorn climate_api.main:app --reload --reload-include "*.html" --reload-include "*.yaml" --reload-include "*.yml"
 

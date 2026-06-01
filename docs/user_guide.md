@@ -58,12 +58,12 @@ dataset_id = list_datasets()[0]["id"]
 ds = open_dataset(dataset_id)
 ```
 
-Each dataset has a `time` dimension, `x` and `y` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
+Each dataset has a `t` dimension (time), `x` and `y` spatial dimensions, and a data variable matching the variable (e.g. `precip` for CHIRPS, `t2m` for ERA5-Land temperature).
 
 Select the first time step:
 
 ```python
-snapshot = ds.isel(time=0)
+snapshot = ds.isel(t=0)
 print(snapshot)
 ```
 
@@ -80,13 +80,13 @@ print(point[variable].values)
 Compute the spatial mean over the first 10 time steps (slicing first avoids reading the full dataset over HTTP):
 
 ```python
-spatial_mean = ds[variable].isel(time=slice(10)).mean(dim=["y", "x"])
+spatial_mean = ds[variable].isel(t=slice(10)).mean(dim=["y", "x"])
 print(spatial_mean.to_dataframe())
 ```
 
 ## What's next
 
-- See [built_in_datasets.md](built_in_datasets.md) for coverage, units, and sync behaviour of each built-in dataset.
-- See [`examples/stac_discover_and_open.py`](../examples/stac_discover_and_open.py) for a complete discovery and access script.
-- See [`examples/zarr_direct_access.py`](../examples/zarr_direct_access.py) for direct Zarr access and spatial/temporal subsetting.
-- See [managed_data_api_guide.md](managed_data_api_guide.md) for the full ingestion and sync API reference.
+- **Process data** — run temporal aggregations, spatial filters, and custom calculations via openEO process graphs. See [openeo.md](openeo.md) and [`examples/openeo_process_graph.py`](../examples/openeo_process_graph.py).
+- **Built-in datasets** — coverage, units, and sync behaviour of each source. See [built_in_datasets.md](built_in_datasets.md).
+- **Discovery scripts** — [`examples/stac_discover_and_open.py`](../examples/stac_discover_and_open.py) and [`examples/zarr_direct_access.py`](../examples/zarr_direct_access.py).
+- **Admin API** — ingestion, sync, and publication reference. See [managed_data_api_guide.md](managed_data_api_guide.md).

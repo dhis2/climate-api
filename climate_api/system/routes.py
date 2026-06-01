@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import sys
 import urllib.parse
 from collections.abc import AsyncIterator
@@ -12,8 +13,17 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.responses import RedirectResponse, StreamingResponse
 
+from climate_api import config as api_config
+
 from .schemas import AppInfo, HealthStatus, Status
-from .templates import ROOT_RESPONSES, app_version, render_landing, render_manage, render_maps, root_json, wants_json
+from .templates import (
+    ROOT_RESPONSES,
+    app_version,
+    render_landing,
+    render_manage,
+    render_maps,
+    wants_json,
+)
 
 router = APIRouter()
 
@@ -28,10 +38,16 @@ async def _sse_events(queue: asyncio.Queue[dict[str, Any] | None]) -> AsyncItera
 
 @router.get("/", response_class=Response, responses=ROOT_RESPONSES)
 def read_index(request: Request) -> Response:
-    """Return the landing page (HTML) or a navigation object (JSON with ?f=json)."""
-    base = str(request.base_url).rstrip("/")
+    """Return openEO capabilities (JSON) or the landing page (HTML)."""
+    import os
+
+    # Use CLIMATE_API_BASE_URL when set so links are correct behind a reverse proxy.
+    base = os.getenv("CLIMATE_API_BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
     if wants_json(request):
-        return JSONResponse(root_json(base).model_dump())
+        from climate_api.openeo.capabilities import build_capabilities
+
+        caps = build_capabilities(base)
+        return JSONResponse(caps.model_dump())
     return HTMLResponse(render_landing(app_version, base))
 
 
@@ -40,6 +56,14 @@ def maps(request: Request) -> HTMLResponse:
     """Return the interactive map viewer."""
     base = str(request.base_url).rstrip("/")
     return HTMLResponse(render_maps(base))
+
+
+@router.get("/openeo", response_class=HTMLResponse, include_in_schema=False)
+def openeo_editor(request: Request) -> RedirectResponse:
+    """Redirect to the openEO Web Editor pre-connected to this backend."""
+    base = os.getenv("CLIMATE_API_BASE_URL", "").rstrip("/") or str(request.base_url).rstrip("/")
+    params = urllib.parse.urlencode({"server": base, "server-title": api_config.get_name()})
+    return RedirectResponse(f"https://editor.openeo.org/?{params}", status_code=302)
 
 
 @router.get("/manage", response_class=HTMLResponse, include_in_schema=False)

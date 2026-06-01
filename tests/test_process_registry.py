@@ -208,25 +208,6 @@ def test_process_registry_rejects_non_mapping_outputs(monkeypatch: pytest.Monkey
         process_registry.list_processes()
 
 
-def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    processes_subdir = tmp_path / "processes"
-    processes_subdir.mkdir()
-    (processes_subdir / "null_job_control_options.yaml").write_text(
-        """
-- id: null_job_control_options
-  title: Null job control options
-  jobControlOptions:
-  execution:
-    function: mypackage.execute.run
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
-
-    process = process_registry.list_processes()[0]
-    assert process["jobControlOptions"] == ["sync-execute"]
-
-
 def test_process_registry_defaults_null_expose(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     processes_subdir = tmp_path / "processes"
     processes_subdir.mkdir()
@@ -244,6 +225,25 @@ def test_process_registry_defaults_null_expose(monkeypatch: pytest.MonkeyPatch, 
 
     process = process_registry.list_processes()[0]
     assert process["expose"] is True
+
+
+def test_process_registry_defaults_null_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    processes_subdir = tmp_path / "processes"
+    processes_subdir.mkdir()
+    (processes_subdir / "null_job_control_options.yaml").write_text(
+        """
+- id: null_job_control_options
+  title: Null job control options
+  jobControlOptions:
+  execution:
+    function: mypackage.execute.run
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(process_registry, "CONFIGS_DIR", processes_subdir)
+
+    process = process_registry.list_processes()[0]
+    assert process["jobControlOptions"] == ["sync-execute"]
 
 
 def test_process_registry_rejects_empty_job_control_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

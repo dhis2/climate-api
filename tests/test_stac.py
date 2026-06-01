@@ -20,12 +20,25 @@ from climate_api.ingestions.schemas import (
     CoverageTemporal,
     PublicationStatus,
 )
+from climate_api.openeo import collections as openeo_collections
 from climate_api.stac import services as stac_services
 
 
 @pytest.fixture(autouse=True)
 def _clear_xstac_collection_cache() -> None:
     stac_services._clear_xstac_collection_cache()
+
+
+def _minimal_xstac_payload(dataset_id: str = "chirps3_precipitation_daily") -> dict[str, object]:
+    """Return a minimal xstac-style collection payload for tests that don't need full metadata."""
+    return {
+        "type": "Collection",
+        "id": dataset_id,
+        "extent": {"spatial": {"bbox": [[0, 0, 0, 0]]}, "temporal": {"interval": [[None, None]]}},
+        "cube:dimensions": {"time": {"type": "temporal", "extent": ["2026-01-01", "2026-01-10"]}},
+        "cube:variables": {"precip": {"type": "data", "dimensions": ["time", "y", "x"]}},
+        "assets": {"zarr": {}},
+    }
 
 
 def _artifact(
@@ -70,34 +83,38 @@ def _artifact(
     )
 
 
-def test_catalog_lists_published_zarr_datasets(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        ingestion_services,
-        "list_artifacts",
-        lambda: SimpleNamespace(items=[_artifact(artifact_id="a1")]),
-    )
-
+def test_stac_landing_returns_catalog(client: TestClient) -> None:
     response = client.get("/stac/catalog.json")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["type"] == "Catalog"
-    assert payload["links"][0]["href"].endswith("/stac/catalog.json")
-    assert any(link["rel"] == "child" for link in payload["links"])
+    assert any(link["rel"] == "self" for link in payload["links"])
+    assert any(link["rel"] == "root" for link in payload["links"])
 
 
-def test_catalog_lists_published_icechunk_datasets(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stac_catalog_lists_child_collections(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        ingestion_services,
-        "list_artifacts",
-        lambda: SimpleNamespace(items=[_artifact(artifact_id="a1", format=ArtifactFormat.ICECHUNK)]),
+        stac_services,
+        "_eligible_artifacts_by_dataset",
+        lambda: {"chirps3_precipitation_daily": _artifact(artifact_id="a1")},
     )
 
     response = client.get("/stac/catalog.json")
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(link["rel"] == "child" for link in payload["links"])
+    child_links = [link for link in payload["links"] if link["rel"] == "child"]
+    assert len(child_links) == 1
+    assert child_links[0]["href"].endswith("/stac/collections/chirps3_precipitation_daily")
+
+
+def test_stac_landing_links_to_collections(client: TestClient) -> None:
+    response = client.get("/stac")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(link["href"].endswith("/stac/catalog.json") for link in payload["links"] if link["rel"] == "root")
 
 
 def test_catalog_self_link_reflects_request_path(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -195,7 +212,7 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     )
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
@@ -206,14 +223,51 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
     assert payload["extent"]["temporal"]["interval"] == [["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]]
     assert payload["cube:dimensions"]["x"]["step"] == 0.05
     assert payload["cube:dimensions"]["y"]["step"] == -0.05
-    assert payload["cube:dimensions"]["time"]["extent"] == ["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]
-    assert payload["cube:dimensions"]["time"]["step"] == "P1D"
+    assert payload["cube:dimensions"]["t"]["extent"] == ["2026-01-01T00:00:00Z", "2026-01-10T00:00:00Z"]
+    assert payload["cube:dimensions"]["t"]["step"] == "P1D"
     assert payload["cube:variables"]["precip"]["unit"] == "mm/day"
     assert payload["cube:variables"]["precip"]["attrs"] == {
         "long_name": "Precipitation",
         "units": "mm/day",
     }
     assert "https://stac-extensions.github.io/projection/v2.0.0/schema.json" in payload["stac_extensions"]
+
+
+def test_stac_collection_compatibility_route_builds_collection(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        stac_services,
+        "build_collection",
+        lambda dataset_id, request: {"type": "Collection", "id": dataset_id, "links": []},
+    )
+
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "chirps3_precipitation_daily"
+
+
+def test_collections_logs_skipped_dataset_failures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(
+        stac_services,
+        "_eligible_artifacts_by_dataset",
+        lambda: {"broken_dataset": _artifact(artifact_id="a1", dataset_id="broken_dataset")},
+    )
+
+    def _raise(dataset_id: str, request: object) -> dict[str, object]:
+        raise stac_services.HTTPException(status_code=503, detail="store unavailable")
+
+    monkeypatch.setattr(stac_services, "build_collection", _raise)
+    monkeypatch.setattr(openeo_collections.logger, "warning", lambda *args: calls.append(args))
+
+    response = client.get("/collections")
+
+    assert response.status_code == 200
+    assert response.json()["collections"] == []
+    assert calls == [("Skipping collection '%s' from openEO listing: %s", "broken_dataset", "store unavailable")]
 
 
 def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -243,11 +297,11 @@ def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: py
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["links"][0]["href"] == "https://climate.example.org/stac/collections/chirps3_precipitation_daily"
+    assert payload["links"][0]["href"] == "https://climate.example.org/collections/chirps3_precipitation_daily"
 
 
 def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,11 +347,11 @@ def test_collection_sets_hourly_step_to_pt1h(client: TestClient, monkeypatch: py
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/era5land_temperature_hourly")
+    response = client.get("/collections/era5land_temperature_hourly")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["cube:dimensions"]["valid_time"]["step"] == "PT1H"
+    assert payload["cube:dimensions"]["t"]["step"] == "PT1H"
 
 
 def test_collection_uses_level0_href_for_pyramid_zarr_store(
@@ -331,7 +385,7 @@ def test_collection_uses_level0_href_for_pyramid_zarr_store(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
@@ -363,7 +417,7 @@ def test_collection_uses_root_href_for_icechunk_store(client: TestClient, monkey
         },
     )
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
@@ -402,7 +456,7 @@ def test_collection_uses_level0_href_for_remote_pyramid_zarr_store(
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": None})
     monkeypatch.setattr(stac_services, "_is_pyramid_zarr", lambda _: True)
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
@@ -416,12 +470,12 @@ def test_collection_returns_404_for_unknown_dataset(client: TestClient, monkeypa
         lambda: SimpleNamespace(items=[]),
     )
 
-    response = client.get("/stac/collections/unknown-dataset")
+    response = client.get("/collections/unknown-dataset")
 
     assert response.status_code == 404
 
 
-def test_catalog_prefers_latest_artifact_per_managed_dataset(
+def test_collections_prefers_latest_artifact_per_managed_dataset(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     older = _artifact(artifact_id="a1", created_at=datetime(2026, 1, 9, tzinfo=UTC))
@@ -431,17 +485,21 @@ def test_catalog_prefers_latest_artifact_per_managed_dataset(
         "list_artifacts",
         lambda: SimpleNamespace(items=[older, newer]),
     )
+    monkeypatch.setattr(stac_services, "_build_collection_with_xstac", lambda **_: _minimal_xstac_payload())
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {})
 
-    response = client.get("/stac/catalog.json")
+    response = client.get("/collections")
 
     assert response.status_code == 200
     payload = response.json()
-    child_links = [link for link in payload["links"] if link["rel"] == "child"]
-    assert len(child_links) == 1
-    assert "chirps3_precipitation_daily" in child_links[0]["href"]
+    collections = payload["collections"]
+    assert len(collections) == 1
+    assert collections[0]["id"] == "chirps3_precipitation_daily"
 
 
-def test_catalog_sorts_child_links_by_managed_dataset_id(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_collections_sorts_by_managed_dataset_id(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         ingestion_services,
         "list_artifacts",
@@ -459,13 +517,17 @@ def test_catalog_sorts_child_links_by_managed_dataset_id(client: TestClient, mon
             ]
         ),
     )
+    monkeypatch.setattr(stac_services, "_build_collection_with_xstac", lambda **_: _minimal_xstac_payload())
+    monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
+    monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {})
+    monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {})
 
-    response = client.get("/stac/catalog.json")
+    response = client.get("/collections")
 
     assert response.status_code == 200
     payload = response.json()
-    child_hrefs = [link["href"] for link in payload["links"] if link["rel"] == "child"]
-    assert child_hrefs == sorted(child_hrefs)
+    collection_ids = [col["id"] for col in payload["collections"]]
+    assert collection_ids == sorted(collection_ids)
 
 
 def test_build_collection_with_xstac_normalizes_pystac_collection(
@@ -536,8 +598,8 @@ def test_collection_reuses_cached_xstac_payload(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    first_response = client.get("/stac/collections/chirps3_precipitation_daily")
-    second_response = client.get("/stac/collections/chirps3_precipitation_daily")
+    first_response = client.get("/collections/chirps3_precipitation_daily")
+    second_response = client.get("/collections/chirps3_precipitation_daily")
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
@@ -595,14 +657,15 @@ def test_collection_preserves_template_links_when_xstac_mutates_template(
     monkeypatch.setattr(stac_services, "_zarr_asset_metadata", lambda _: {"zarr:consolidated": True})
     monkeypatch.setattr(stac_services, "_zarr_open_kwargs", lambda _: {"consolidated": True})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 200
     payload = response.json()
     links = {link["rel"]: link["href"] for link in payload["links"]}
-    assert links["self"].endswith("/stac/collections/chirps3_precipitation_daily")
-    assert links["root"].endswith("/stac/catalog.json")
-    assert links["parent"].endswith("/stac/catalog.json")
+    assert links["self"].endswith("/collections/chirps3_precipitation_daily")
+    # root/parent links from stac_services point to /stac (rewritten from /stac/catalog.json)
+    assert links["root"].endswith("/stac")
+    assert links["parent"].endswith("/stac")
     assert links["alternate"].endswith("/datasets/chirps3_precipitation_daily")
 
 
@@ -613,7 +676,7 @@ def test_collection_returns_500_for_missing_artifact_store_metadata(
     monkeypatch.setattr(ingestion_services, "list_artifacts", lambda: SimpleNamespace(items=[artifact]))
     monkeypatch.setattr(stac_services.registry_datasets, "get_dataset", lambda _: {"period_type": "daily"})
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 500
     assert "no readable storage path metadata" in response.json()["detail"]
@@ -637,7 +700,7 @@ def test_collection_returns_503_when_zarr_store_cannot_be_opened(
         raise_file_not_found,
     )
 
-    response = client.get("/stac/collections/chirps3_precipitation_daily")
+    response = client.get("/collections/chirps3_precipitation_daily")
 
     assert response.status_code == 503
     assert "temporarily unavailable" in response.json()["detail"]

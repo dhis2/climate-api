@@ -394,21 +394,21 @@
 
       async function loadCatalog() {
         try {
-          const res = await fetch("{{ base }}/stac/catalog.json");
+          const res = await fetch("{{ base }}/collections");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const catalog = await res.json();
-          const children =
-            catalog.links?.filter((l) => l.rel === "child") ?? [];
-          if (children.length === 0) {
+          const body = await res.json();
+          const collections = body.collections ?? [];
+          if (collections.length === 0) {
             setStatus(
               "No published datasets found. Ingest and publish a dataset first."
             );
             return;
           }
-          for (const link of children) {
+          for (const col of collections) {
+            const href = `{{ base }}/collections/${col.id}`;
             const opt = document.createElement("option");
-            opt.value = link.href;
-            opt.textContent = link.title ?? link.href;
+            opt.value = href;
+            opt.textContent = col.title ?? col.id;
             selectEl.appendChild(opt);
           }
           setStatus(

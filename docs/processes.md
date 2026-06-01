@@ -1,6 +1,13 @@
 # Processes
 
-Processes are named operations that produce derived datasets from existing ingested data. They are exposed through the native `/processes` endpoints and are shaped to align progressively with the [OGC API Processes](https://ogcapi.ogc.org/processes/) standard.
+The Climate API exposes two complementary processing interfaces:
+
+- **openEO process graphs** — the primary interface for data analysis. Submit a DAG of composable operations via `POST /result` (synchronous) or `POST /jobs` (batch). 120+ standard processes are available out of the box. See the [openEO guide](openeo.md).
+- **Native processes** — custom plugin functions registered via YAML, callable synchronously at `POST /processes/{id}/execution` and from openEO process graphs. Shaped to align progressively with [OGC API Processes](https://ogcapi.ogc.org/processes/).
+
+This page documents the native processes. For process graph execution, see [openeo.md](openeo.md).
+
+---
 
 ---
 

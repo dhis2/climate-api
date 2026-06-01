@@ -2,40 +2,42 @@ import pytest
 from fastapi.testclient import TestClient
 
 from climate_api.ingestions import services as ingestion_services
-from climate_api.system.schemas import HealthStatus, RootResponse
+from climate_api.system.schemas import HealthStatus
 
 
-def test_root_returns_html_by_default(client: TestClient) -> None:
-    response = client.get("/")
+def test_root_returns_html_for_browser_request(client: TestClient) -> None:
+    response = client.get("/", headers={"accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Open Climate Service" in response.text
 
 
 def test_root_html_shows_extent(client: TestClient) -> None:
-    response = client.get("/")
+    response = client.get("/", headers={"accept": "text/html"})
     assert "Sierra Leone" in response.text
 
 
 def test_root_html_links_to_key_endpoints(client: TestClient) -> None:
-    response = client.get("/")
+    response = client.get("/", headers={"accept": "text/html"})
     assert "/docs" in response.text
     assert "/stac/catalog.json" in response.text
 
 
-def test_root_f_json_returns_json(client: TestClient) -> None:
+def test_root_f_json_returns_openeo_capabilities(client: TestClient) -> None:
     response = client.get("/?f=json")
     assert response.status_code == 200
     assert "application/json" in response.headers["content-type"]
-    result = RootResponse.model_validate(response.json())
-    assert result.message == "Welcome to DHIS2 Climate API"
+    payload = response.json()
+    assert payload["api_version"] == "1.2.0"
+    assert "backend_version" in payload
+    assert "endpoints" in payload
 
 
-def test_root_accept_json_returns_json(client: TestClient) -> None:
+def test_root_accept_json_returns_openeo_capabilities(client: TestClient) -> None:
     response = client.get("/", headers={"accept": "application/json"})
     assert response.status_code == 200
-    result = RootResponse.model_validate(response.json())
-    assert result.message == "Welcome to DHIS2 Climate API"
+    payload = response.json()
+    assert payload["api_version"] == "1.2.0"
 
 
 def test_root_accept_json_and_html_equal_q_returns_json(client: TestClient) -> None:
@@ -50,14 +52,12 @@ def test_root_accept_html_higher_q_returns_html(client: TestClient) -> None:
     assert "text/html" in response.headers["content-type"]
 
 
-def test_root_json_contains_links(client: TestClient) -> None:
+def test_root_json_contains_openeo_links(client: TestClient) -> None:
     response = client.get("/?f=json")
-    result = RootResponse.model_validate(response.json())
-    rels = [link.rel for link in result.links]
-    assert "extent" in rels
-    assert "ingestions" in rels
-    assert "datasets" in rels
-    assert "docs" in rels
+    payload = response.json()
+    rels = [link["rel"] for link in payload["links"]]
+    assert "self" in rels
+    assert "data" in rels
 
 
 def test_health_returns_200(client: TestClient) -> None:

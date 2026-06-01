@@ -5,6 +5,30 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 
+[tool.uv]
+override-dependencies = [
+    # openeo-pg-parser-networkx requires geojson-pydantic<2.0.0; our project uses >=2.1.0 which is compatible at runtime
+    "geojson-pydantic>=2.1.0",
+    # openeo-processes-dask has stale constraints; all safe to override (library doesn't use these directly)
+    "zarr>=3.1.6",
+    "pyarrow>=19.0",
+    "xarray>=2025.12.0",
+    "numpy>=2.2",
+    "dask>=2024.1.0",
+    "dask-geopandas>=0.4",
+    "geopandas>=1.1",
+    "xvec>=0.3",
+    "rioxarray>=0.17",
+    "pystac>=1.10",
+    # gdal Python bindings must match system libgdal.
+    # Update this version when your system libgdal changes: gdal-config --version
+    # CI rewrites this line dynamically before uv sync (see .github/workflows/ci.yml).
+    "gdal==3.12.2",
+]
+
+[tool.uv.sources]
+openeo-processes-dask = { git = "https://github.com/dhis2/openeo-processes-dask", branch = "python313-arm64-compat" }
+
 [project]
 name = "climate-api"
 version = "0.1.0a1"
@@ -40,6 +64,9 @@ dependencies = [
     "rioxarray>=0.17",
     "portalocker>=3.2.0",
     "dhis2eo>=1.2.1",
+    "openeo-pg-parser-networkx>=2026.3.3",
+    "openeo-processes-dask[implementations]",
+    "python-multipart>=0.0.29",
 ]
 
 [project.urls]
@@ -52,6 +79,7 @@ climate-api = "climate_api.cli:main"
 [tool.ruff]
 target-version = "py313"
 line-length = 120
+exclude = ["vendor/"]
 
 [tool.ruff.lint]
 fixable = ["ALL"]
@@ -90,7 +118,7 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac"]
+module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.*", "earthkit.*", "metpy.*", "matplotlib.*", "yaml", "xproj", "topozarr.*", "geozarr_toolkit", "xstac", "openeo_pg_parser_networkx", "openeo_pg_parser_networkx.*", "openeo_processes_dask", "openeo_processes_dask.*", "dask_geopandas", "dask_geopandas.*"]
 ignore_missing_imports = true
 
 [tool.pyright]
@@ -120,4 +148,5 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.2",
     "types-shapely>=2.1,<3",
+    "watchfiles>=1.2.0",
 ]
