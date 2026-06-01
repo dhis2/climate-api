@@ -210,7 +210,7 @@ def _record(output_path: str | None) -> OpenEOJobRecord:
 
 def test_result_assets_zarr() -> None:
     assets = _result_assets(_record("/some/path/result.zarr"))
-    assert assets["result"]["type"] == "application/vnd+zarr"
+    assert assets["result"]["type"] == "application/x-zarr"
     assert assets["result"]["href"].endswith("result.zarr/")
 
 
@@ -222,3 +222,24 @@ def test_result_assets_geojson() -> None:
 
 def test_result_assets_none_output_returns_empty() -> None:
     assert _result_assets(_record(None)) == {}
+
+
+def test_create_job_does_not_advertise_missing_logs_endpoint(client) -> None:
+    response = client.post(
+        "/jobs",
+        json={"process": {"process_graph": {"result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}}}},
+    )
+
+    assert response.status_code == 201
+    links = response.json()["links"]
+    assert all(link["rel"] != "logs" for link in links)
+
+
+def test_put_udp_rejects_predefined_process_id(client) -> None:
+    response = client.put(
+        "/process_graphs/load_collection",
+        json={"summary": "Bad override", "process_graph": {}},
+    )
+
+    assert response.status_code == 400
+    assert "conflicts with a predefined process" in response.json()["detail"]

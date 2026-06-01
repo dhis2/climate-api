@@ -454,6 +454,11 @@ def get_udp(process_graph_id: str) -> UDPRecord:
 @udp_router.put("/{process_graph_id}", status_code=200)
 def put_udp(process_graph_id: str, body: dict[str, Any] = Body(...)) -> UDPRecord:
     """Store or replace a user-defined process."""
+    if process_graph_id in _reserved_process_ids():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Process graph id '{process_graph_id}' conflicts with a predefined process",
+        )
     return udp_store.put_udp(process_graph_id, body)
 
 
@@ -476,3 +481,7 @@ def _abs_base(request: Request) -> str:
     if base_url:
         return base_url.rstrip("/")
     return str(request.base_url).rstrip("/")
+def _reserved_process_ids() -> set[str]:
+    """Return process ids that must not be replaced by a UDP."""
+    return {proc["id"] for proc in processes_service.list_openeo_processes() if isinstance(proc.get("id"), str)}
+

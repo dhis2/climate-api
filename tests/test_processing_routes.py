@@ -43,6 +43,33 @@ def test_get_processes_omits_internal_only_processes(client: TestClient, monkeyp
     assert "public_process" in ids
 
 
+def test_get_processes_returns_openeo_catalog_while_execution_stays_native(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        processing_services,
+        "run_resample_process",
+        lambda **kwargs: ("artifact-123", dataset_record("chirps3_precipitation_daily_w_mon_sum")),
+    )
+
+    catalog_response = client.get("/processes")
+    execution_response = client.post(
+        "/processes/resample/execution",
+        json={
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "frequency": "W-MON",
+            "method": "sum",
+            "start": "2026-01-05",
+        },
+    )
+
+    assert catalog_response.status_code == 200
+    assert "processes" in catalog_response.json()
+    assert execution_response.status_code == 200
+    assert execution_response.json()["status"] == "completed"
+
+
 def test_get_unknown_process_detail_returns_404(client: TestClient) -> None:
     response = client.get("/processes/unknown_process")
 

@@ -224,7 +224,6 @@ class OpenEOJobService:
             links=[
                 {"rel": "self", "href": f"/jobs/{job_id}", "type": "application/json"},
                 {"rel": "results", "href": f"/jobs/{job_id}/results", "type": "application/json"},
-                {"rel": "logs", "href": f"/jobs/{job_id}/logs", "type": "application/json"},
             ],
         )
         return store_create_job(record)
@@ -463,7 +462,7 @@ def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
                 # Trailing slash signals a directory root; Zarr HTTP clients
                 # append chunk paths (e.g. .zmetadata, t/0.0) to this href.
                 "href": f"/jobs/{record.id}/results/result.zarr/",
-                "type": "application/vnd+zarr",
+                "type": "application/x-zarr",
                 "title": "Zarr result store",
                 "roles": ["data"],
             }
@@ -503,7 +502,7 @@ def _result_assets(record: OpenEOJobRecord) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 _RASTER_FORMATS: dict[str, tuple[str, str]] = {
-    "ZARR": (".zarr", "application/vnd+zarr"),
+    "ZARR": (".zarr", "application/x-zarr"),
     "NETCDF": (".nc", "application/netcdf"),
     "NC": (".nc", "application/netcdf"),
     "NETCDF4": (".nc", "application/netcdf"),
@@ -560,6 +559,8 @@ def _write_raster(ds: Any, results_dir: Any, fmt: str) -> str | None:
         da = ds[var]
         if "spatial_ref" in da.coords:
             da = da.drop_vars("spatial_ref")
+        if da.rio.crs is None:
+            da = da.rio.write_crs("EPSG:4326")
         da.rio.to_raster(path)
         return path
 
@@ -626,7 +627,6 @@ def _write_png(ds: Any, results_dir: Any) -> str | None:
         arr = arr.isel({arr.dims[0]: 0})
 
     data = arr.values.astype(float)
-    data[data == 0] = np.nan  # treat exact-zero as nodata like the map viewer
 
     # Look up render settings from the published collection via the dataset registry
     colormap_name = "viridis"

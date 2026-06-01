@@ -88,7 +88,25 @@ def test_stac_landing_returns_catalog(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["type"] == "Catalog"
-    assert any(link["rel"] == "data" for link in payload["links"])
+    assert any(link["rel"] == "child" for link in payload["links"]) or any(
+        link["rel"] == "data" for link in payload["links"]
+    )
+
+
+def test_stac_catalog_lists_child_collections(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        stac_services,
+        "_eligible_artifacts_by_dataset",
+        lambda: {"chirps3_precipitation_daily": _artifact(artifact_id="a1")},
+    )
+
+    response = client.get("/stac/catalog.json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    child_links = [link for link in payload["links"] if link["rel"] == "child"]
+    assert len(child_links) == 1
+    assert child_links[0]["href"].endswith("/stac/collections/chirps3_precipitation_daily")
 
 
 def test_stac_landing_links_to_collections(client: TestClient) -> None:
@@ -97,8 +115,7 @@ def test_stac_landing_links_to_collections(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     data_links = [link for link in payload["links"] if link["rel"] == "data"]
-    assert len(data_links) == 1
-    assert data_links[0]["href"].endswith("/collections")
+    assert any(link["href"].endswith("/stac/catalog.json") for link in payload["links"] if link["rel"] == "root")
 
 
 def test_catalog_self_link_reflects_request_path(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -215,6 +232,21 @@ def test_collection_uses_xstac_and_adds_expected_fields(client: TestClient, monk
         "units": "mm/day",
     }
     assert "https://stac-extensions.github.io/projection/v2.0.0/schema.json" in payload["stac_extensions"]
+
+
+def test_stac_collection_compatibility_route_builds_collection(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        stac_services,
+        "build_collection",
+        lambda dataset_id, request: {"type": "Collection", "id": dataset_id, "links": []},
+    )
+
+    response = client.get("/stac/collections/chirps3_precipitation_daily")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "chirps3_precipitation_daily"
 
 
 def test_collection_uses_configured_base_url(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
