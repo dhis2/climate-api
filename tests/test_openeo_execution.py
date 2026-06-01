@@ -286,3 +286,19 @@ def test_run_process_graph_keeps_runtime_failures_as_500(monkeypatch: pytest.Mon
     exc = exc_info.value
     assert getattr(exc, "status_code", None) == 500
     assert "Process graph execution failed" in str(getattr(exc, "detail", exc))
+
+
+def test_result_route_rejects_synchronous_zarr_datacube(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.openeo.execution.run_process_graph",
+        lambda process, request=None: xr.Dataset(
+            {"temperature": xr.DataArray(np.ones((2, 2), dtype=np.float32), dims=["y", "x"])}
+        ),
+    )
+
+    response = client.post("/result", json={"process_graph": {"result": {"process_id": "load_collection", "result": True}}})
+
+    assert response.status_code == 400
+    assert "do not support ZARR output" in response.json()["detail"]

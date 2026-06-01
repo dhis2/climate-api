@@ -313,8 +313,8 @@ def execute_synchronous(
 ) -> Any:
     """Execute a process graph synchronously and return the result.
 
-    Returns JSON for scalar/dict results, or a 200 response with Zarr
-    metadata for dataset results.
+    Returns JSON for scalar/dict results, or an exported file for
+    synchronously-supported non-Zarr raster/vector formats.
     """
     from climate_api.openeo.execution import run_process_graph
 
@@ -347,36 +347,32 @@ def execute_synchronous(
         result = result.to_dataset(name=result.name or "result")
 
     if isinstance(result, xr.Dataset):
-        if fmt != "ZARR":
-            with tempfile.TemporaryDirectory() as tmp:
-                from pathlib import Path
+        if fmt == "ZARR":
+            raise HTTPException(
+                status_code=400,
+                detail="Synchronous datacube results do not support ZARR output; use a non-ZARR format or submit a batch job",
+            )
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path
 
-                output = _write_raster(result, Path(tmp), fmt)
-                if output is None:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Format '{fmt}' produced no output",
-                    )
-                data = Path(output).read_bytes()
-                mime_map = {
-                    ".nc": "application/netcdf",
-                    ".tif": "image/tiff; subtype=geotiff",
-                    ".png": "image/png",
-                    ".csv": "text/csv",
-                    ".geojson": "application/geo+json",
-                    ".parquet": "application/vnd.apache.parquet",
-                }
-                suffix = Path(output).suffix
-                media_type = mime_map.get(suffix, "application/octet-stream")
-                return Response(content=data, media_type=media_type)
-        # Default / ZARR: return metadata JSON
-        info: dict[str, Any] = {
-            "type": "datacube",
-            "dims": dict(result.dims),
-            "variables": list(result.data_vars),
-            "coords": {k: _coord_summary(v) for k, v in result.coords.items()},
-        }
-        return JSONResponse(info)
+            output = _write_raster(result, Path(tmp), fmt)
+            if output is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Format '{fmt}' produced no output",
+                )
+            data = Path(output).read_bytes()
+            mime_map = {
+                ".nc": "application/netcdf",
+                ".tif": "image/tiff; subtype=geotiff",
+                ".png": "image/png",
+                ".csv": "text/csv",
+                ".geojson": "application/geo+json",
+                ".parquet": "application/vnd.apache.parquet",
+            }
+            suffix = Path(output).suffix
+            media_type = mime_map.get(suffix, "application/octet-stream")
+            return Response(content=data, media_type=media_type)
 
     # Try vector
     try:
@@ -484,4 +480,3 @@ def _abs_base(request: Request) -> str:
 def _reserved_process_ids() -> set[str]:
     """Return process ids that must not be replaced by a UDP."""
     return {proc["id"] for proc in processes_service.list_openeo_processes() if isinstance(proc.get("id"), str)}
-

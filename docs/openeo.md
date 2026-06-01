@@ -86,12 +86,11 @@ cube = cube.apply(lambda x: x / 1_000_000).max_time()
 
 ## Synchronous execution
 
-`POST /result` executes a process graph in the foreground and returns the result immediately. For raster results, the server returns datacube metadata (dimensions, dtype, coordinate ranges) as JSON.
+`POST /result` executes a process graph in the foreground and returns the result immediately. Synchronous raster execution is intended for concrete export formats such as `NetCDF`, `GeoTIFF`, `PNG`, or `CSV`. Zarr datacube output is not served synchronously; use a batch job for that.
 
 ```python
-result = conn.execute(cube)
-print(result)
-# {"type": "datacube", "name": "pop_total", "dims": {"y": 3600, "x": 3600}, ...}
+result = conn.execute(cube.save_result(format="NetCDF"))
+print(type(result))
 ```
 
 Equivalent with curl:
@@ -112,7 +111,7 @@ curl -s -X POST http://127.0.0.1:8000/result \
         },
         "result": {
           "process_id": "save_result",
-          "arguments": {"data": {"from_node": "load"}, "format": "Zarr"},
+          "arguments": {"data": {"from_node": "load"}, "format": "NetCDF"},
           "result": true
         }
       }
