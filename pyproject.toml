@@ -71,8 +71,10 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/dhis2/climate-service"
-Documentation = "https://github.com/dhis2/climate-service/tree/main/docs"
+Repository = "https://github.com/dhis2/open-climate-service"
+Documentation = "https://github.com/dhis2/open-climate-service/tree/main/docs"
+"Bug Tracker" = "https://github.com/dhis2/open-climate-service/issues"
+Changelog = "https://github.com/dhis2/open-climate-service/releases"
 
 [project.scripts]
 climate-service = "open_climate_service.cli:main"
