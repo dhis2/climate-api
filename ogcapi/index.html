@@ -1,0 +1,2669 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Climate data tailored for your country, ready for climate-smart decisions">
+      
+      
+      
+        <link rel="canonical" href="https://dhis2.github.io/climate-api/ogcapi/">
+      
+      
+        <link rel="prev" href="../implementation-status/">
+      
+      
+        <link rel="next" href="../user_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>OGC API - Open Climate Service</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ogc-api-and-pygeoapi" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Open Climate Service" class="md-header__button md-logo" aria-label="Open Climate Service" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Open Climate Service
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              OGC API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dhis2/climate-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dhis2/climate-api
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../setup_guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../user_guide/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Open Climate Service" class="md-nav__button md-logo" aria-label="Open Climate Service" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    Open Climate Service
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dhis2/climate-api" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dhis2/climate-api
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zarr_and_geozarr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zarr and GeoZarr
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_description/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation-status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OGC API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OGC API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ogc-api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC API overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pygeoapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pygeoapi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-level-sections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top-level sections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resources
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cql-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CQL filtering
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CQL filtering">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example queries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Processes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Processes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#available-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-inputs-download-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common inputs (download processes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#era5-land-era5-land-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERA5-Land (era5-land-download)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chirps3-chirps3-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CHIRPS3 (chirps3-download)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zonal-statistics-zonal-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zonal statistics (zonal-statistics)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#process-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chirps3-to-dhis2-pipeline-chirps3-dhis2-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CHIRPS3 to DHIS2 pipeline (chirps3-dhis2-pipeline)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-execution-and-job-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async execution and job management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Async execution and job management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#submitting-an-async-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting an async request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polling-job-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling job status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieving-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieving results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#listing-all-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing all jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deleting-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deleting a job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synchronous-execution-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synchronous execution (default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin system
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin system">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-loading-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How loading works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-directory-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin directory layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-custom-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a custom provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-custom-processor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a custom processor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openeo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openEO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../built_in_datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Built-in datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transforms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transforms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../processes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Processes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../instance_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Instance guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding_custom_datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding custom datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extensibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extensibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../managed_data_api_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ogc-api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OGC API overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pygeoapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pygeoapi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#top-level-sections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top-level sections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resources
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cql-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CQL filtering
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CQL filtering">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example queries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Processes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Processes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#available-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available processes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-inputs-download-processes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common inputs (download processes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#era5-land-era5-land-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERA5-Land (era5-land-download)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chirps3-chirps3-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CHIRPS3 (chirps3-download)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zonal-statistics-zonal-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zonal statistics (zonal-statistics)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#process-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chirps3-to-dhis2-pipeline-chirps3-dhis2-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CHIRPS3 to DHIS2 pipeline (chirps3-dhis2-pipeline)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-execution-and-job-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async execution and job management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Async execution and job management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#submitting-an-async-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting an async request
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polling-job-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polling job status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieving-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieving results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#listing-all-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listing all jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deleting-a-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deleting a job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synchronous-execution-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synchronous execution (default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin system
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin system">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-loading-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How loading works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-directory-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin directory layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-custom-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a custom provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-custom-processor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a custom processor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ogc-api-and-pygeoapi">OGC API and pygeoapi<a class="headerlink" href="#ogc-api-and-pygeoapi" title="Permanent link">&para;</a></h1>
+<h2 id="ogc-api-overview">OGC API overview<a class="headerlink" href="#ogc-api-overview" title="Permanent link">&para;</a></h2>
+<p>OGC API is a family of standards from the <a href="https://www.ogc.org/">Open Geospatial Consortium</a> that define RESTful interfaces for geospatial data. Each standard covers a specific data type or interaction pattern:</p>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://ogcapi.ogc.org/features/">Features</a></td>
+<td>Vector feature access (GeoJSON, etc.)</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/coverages/">Coverages</a></td>
+<td>Gridded / raster data</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/edr/">EDR</a></td>
+<td>Environmental Data Retrieval (point, trajectory, corridor queries)</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/processes/">Processes</a></td>
+<td>Server-side processing / workflows</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/maps/">Maps</a></td>
+<td>Rendered map images</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/tiles/">Tiles</a></td>
+<td>Tiled data (vector and map tiles)</td>
+</tr>
+<tr>
+<td><a href="https://ogcapi.ogc.org/records/">Records</a></td>
+<td>Catalogue / metadata search</td>
+</tr>
+</tbody>
+</table>
+<p>All standards share a common core: JSON/HTML responses, OpenAPI-described endpoints, and content negotiation. The full specification catalogue is at <a href="https://ogcapi.ogc.org">https://ogcapi.ogc.org</a>.</p>
+<h2 id="pygeoapi">pygeoapi<a class="headerlink" href="#pygeoapi" title="Permanent link">&para;</a></h2>
+<p><a href="https://pygeoapi.io">pygeoapi</a> is a Python server that implements the OGC API standards listed above. It is the OGC Reference Implementation for OGC API - Features.</p>
+<p>In this project pygeoapi is mounted as a sub-application at <code>/ogcapi</code>. The integration is minimal -- a single re-export in <code>src/climate_api/routers/ogcapi.py</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pygeoapi.starlette_app</span><span class="w"> </span><span class="kn">import</span> <span class="n">APP</span> <span class="k">as</span> <span class="n">pygeoapi_app</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">app</span> <span class="o">=</span> <span class="n">pygeoapi_app</span>  <span class="c1"># mounted by the main FastAPI app</span>
+</code></pre></div>
+<p>All dataset and behaviour configuration happens in YAML, not Python code.</p>
+<ul>
+<li>pygeoapi docs: <a href="https://docs.pygeoapi.io">https://docs.pygeoapi.io</a></li>
+<li>Source: <a href="https://github.com/geopython/pygeoapi">https://github.com/geopython/pygeoapi</a></li>
+</ul>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>pygeoapi is configured through a single generated YAML file whose path is set by the <code>PYGEOAPI_CONFIG</code> environment variable. In this repo that generated file lives under <code>data/pygeoapi/pygeoapi-config.yml</code>, and it is derived from the checked-in base config at <code>config/pygeoapi/base.yml</code>.</p>
+<h3 id="top-level-sections">Top-level sections<a class="headerlink" href="#top-level-sections" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">server</span><span class="p">:</span><span class="w"> </span><span class="c1"># host, port, URL, limits, CORS, languages, admin toggle</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">logging</span><span class="p">:</span><span class="w"> </span><span class="c1"># log level and optional log file</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="c1"># service identification, contact, license</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="c1"># datasets and processes exposed by the API</span>
+</code></pre></div>
+<h3 id="server"><code>server</code><a class="headerlink" href="#server" title="Permanent link">&para;</a></h3>
+<p>Controls runtime behaviour -- bind address, public URL, response encoding, language negotiation, pagination limits, and the optional admin API.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">server</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">bind</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8000/ogcapi</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">mimetype</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">application/json; charset=UTF-8</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">encoding</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">utf-8</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">languages</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en-US</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fr-CA</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">default_items</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">max_items</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">admin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</code></pre></div>
+<h3 id="metadata"><code>metadata</code><a class="headerlink" href="#metadata" title="Permanent link">&para;</a></h3>
+<p>Service-level identification, contact details, and license. Supports multilingual values.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">identification</span><span class="p">:</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">title</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">      </span><span class="nt">en</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DHIS2 Climate API</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">      </span><span class="nt">en</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OGC API compliant geospatial data API</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">provider</span><span class="p">:</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DHIS2 Climate API</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://dhis2.org</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">contact</span><span class="p">:</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DHIS2 Climate Team</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">climate@dhis2.org</span>
+</code></pre></div>
+<h3 id="resources"><code>resources</code><a class="headerlink" href="#resources" title="Permanent link">&para;</a></h3>
+<p>Each key under <code>resources</code> defines a collection or process. A collection needs at minimum a <code>type</code>, <code>title</code>, <code>description</code>, <code>extents</code>, and one or more <code>providers</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">lakes</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">collection</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Large Lakes</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lakes of the world, public domain</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="nt">extents</span><span class="p">:</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="nt">spatial</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="nt">bbox</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">-180</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">-90</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">180</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">90</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">        </span><span class="nt">crs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://www.opengis.net/def/crs/OGC/1.3/CRS84</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="nt">providers</span><span class="p">:</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">feature</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GeoJSON</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">        </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tests/data/ne_110m_lakes.geojson</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">        </span><span class="nt">id_field</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">id</span>
+</code></pre></div>
+<p>Full configuration reference: <a href="https://docs.pygeoapi.io/en/latest/configuration.html">https://docs.pygeoapi.io/en/latest/configuration.html</a></p>
+<h2 id="resource-types">Resource types<a class="headerlink" href="#resource-types" title="Permanent link">&para;</a></h2>
+<p>The <code>type</code> field on a provider determines which OGC API standard the collection exposes.</p>
+<table>
+<thead>
+<tr>
+<th>Provider type</th>
+<th>OGC API standard</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>feature</code></td>
+<td>Features</td>
+<td>Vector data (points, lines, polygons). Backends include CSV, GeoJSON, PostGIS, Elasticsearch, and others.</td>
+</tr>
+<tr>
+<td><code>coverage</code></td>
+<td>Coverages</td>
+<td>Gridded / raster data. Backends include rasterio, xarray, and S3-hosted COGs.</td>
+</tr>
+<tr>
+<td><code>map</code></td>
+<td>Maps</td>
+<td>Rendered map images, typically proxied from an upstream WMS via <code>WMSFacade</code>.</td>
+</tr>
+<tr>
+<td><code>process</code></td>
+<td>Processes</td>
+<td>Server-side processing tasks. In Climate API, the native <code>/processes</code> surface is authoritative; pygeoapi process support is not the primary process runtime.</td>
+</tr>
+</tbody>
+</table>
+<p>A single collection can have multiple providers (e.g. both <code>feature</code> and <code>tile</code> on the same resource).</p>
+<h2 id="cql-filtering">CQL filtering<a class="headerlink" href="#cql-filtering" title="Permanent link">&para;</a></h2>
+<p>pygeoapi supports <a href="https://docs.ogc.org/is/21-065r2/21-065r2.html">CQL2</a> text filters on collections backed by a CQL-capable provider. Filters are passed as query parameters:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>?filter=&lt;expression&gt;
+</code></pre></div>
+<p>The <code>dhis2-org-units-cql</code> collection exposes this capability. Its filterable properties are <code>name</code>, <code>code</code>, <code>shortName</code>, <code>level</code>, and <code>openingDate</code>.</p>
+<h3 id="supported-operators">Supported operators<a class="headerlink" href="#supported-operators" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Operators</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Comparison</td>
+<td><code>=</code>, <code>&lt;&gt;</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td>
+<td><code>level=2</code></td>
+</tr>
+<tr>
+<td>Pattern matching</td>
+<td><code>LIKE</code>, <code>ILIKE</code> (<code>%</code> = any chars, <code>_</code> = single char)</td>
+<td><code>name LIKE '%Hospital%'</code></td>
+</tr>
+<tr>
+<td>Range</td>
+<td><code>BETWEEN ... AND ...</code></td>
+<td><code>level BETWEEN 2 AND 3</code></td>
+</tr>
+<tr>
+<td>Set membership</td>
+<td><code>IN (...)</code></td>
+<td><code>level IN (1,2)</code></td>
+</tr>
+<tr>
+<td>Null checks</td>
+<td><code>IS NULL</code>, <code>IS NOT NULL</code></td>
+<td><code>code IS NOT NULL</code></td>
+</tr>
+<tr>
+<td>Logical</td>
+<td><code>AND</code>, <code>OR</code>, <code>NOT</code></td>
+<td><code>level=3 AND name LIKE '%CH%'</code></td>
+</tr>
+</tbody>
+</table>
+<p>String values must be enclosed in <strong>single quotes</strong>.</p>
+<h3 id="example-queries">Example queries<a class="headerlink" href="#example-queries" title="Permanent link">&para;</a></h3>
+<p>Exact match on level:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=level=2
+</code></pre></div>
+<p>String match on name:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=name=&#39;0002 CH Mittaphap&#39;
+</code></pre></div>
+<p>LIKE (case-sensitive pattern):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=name LIKE &#39;%Hospital%&#39;
+</code></pre></div>
+<p>ILIKE (case-insensitive pattern):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=name ILIKE &#39;%hospital%&#39;
+</code></pre></div>
+<p>Combined filter with AND:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=level=3 AND name LIKE &#39;%CH%&#39;
+</code></pre></div>
+<p>BETWEEN range:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=level BETWEEN 2 AND 3
+</code></pre></div>
+<p>IN set membership:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=level IN (1,2)
+</code></pre></div>
+<p>NULL check combined with comparison:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>/ogcapi/collections/dhis2-org-units-cql/items?filter=code IS NULL AND level=5
+</code></pre></div>
+<h2 id="processes">Processes<a class="headerlink" href="#processes" title="Permanent link">&para;</a></h2>
+<p>OGC API - Processes exposes server-side processing tasks. Each process defines typed inputs and outputs and can be executed synchronously or asynchronously via <code>POST</code>.</p>
+<p>For Climate API, the canonical process surface is now the native <a href="../processes/"><code>/processes</code></a> API. The <code>/ogcapi/processes</code> paths below describe the older pygeoapi-centered process surface and should not be treated as the primary entrypoint for current native process work.</p>
+<h3 id="available-processes">Available processes<a class="headerlink" href="#available-processes" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Process</th>
+<th>ID</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zonal statistics</td>
+<td><code>zonal-statistics</code></td>
+<td>Compute zonal stats from GeoJSON features and a raster source</td>
+</tr>
+<tr>
+<td>ERA5-Land</td>
+<td><code>era5-land-download</code></td>
+<td>Download ERA5-Land hourly climate data (temperature, precipitation, etc.)</td>
+</tr>
+<tr>
+<td>CHIRPS3</td>
+<td><code>chirps3-download</code></td>
+<td>Download CHIRPS3 daily precipitation data</td>
+</tr>
+<tr>
+<td>CHIRPS3 -&gt; DHIS2 pipeline</td>
+<td><code>chirps3-dhis2-pipeline</code></td>
+<td>Fetch features, download CHIRPS3, aggregate by feature, generate DHIS2 dataValueSet (optional auto-import)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/ogcapi/processes</code></td>
+<td>List all available processes</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/ogcapi/processes/{processId}</code></td>
+<td>Describe a process (inputs, outputs, metadata)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/ogcapi/processes/{processId}/execution</code></td>
+<td>Execute a process (sync or async)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/ogcapi/jobs</code></td>
+<td>List all jobs</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/ogcapi/jobs/{jobId}</code></td>
+<td>Get job status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/ogcapi/jobs/{jobId}/results</code></td>
+<td>Get job results</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/ogcapi/jobs/{jobId}</code></td>
+<td>Cancel or delete a job</td>
+</tr>
+</tbody>
+</table>
+<h3 id="common-inputs-download-processes">Common inputs (download processes)<a class="headerlink" href="#common-inputs-download-processes" title="Permanent link">&para;</a></h3>
+<p><code>era5-land-download</code> and <code>chirps3-download</code> share these inputs:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Start date in <code>YYYY-MM</code> format</td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td>string</td>
+<td>yes</td>
+<td>End date in <code>YYYY-MM</code> format</td>
+</tr>
+<tr>
+<td><code>bbox</code></td>
+<td>array[number]</td>
+<td>yes</td>
+<td>Bounding box <code>[west, south, east, north]</code></td>
+</tr>
+<tr>
+<td><code>dry_run</code></td>
+<td>boolean</td>
+<td>no</td>
+<td>If true (default), return data without pushing to DHIS2</td>
+</tr>
+</tbody>
+</table>
+<p>Note: <code>chirps3-dhis2-pipeline</code> has its own contract (<code>start_date</code>, <code>end_date</code>, feature-source selectors, and output options).</p>
+<h3 id="era5-land-era5-land-download">ERA5-Land (<code>era5-land-download</code>)<a class="headerlink" href="#era5-land-era5-land-download" title="Permanent link">&para;</a></h3>
+<p>Downloads ERA5-Land hourly climate data via the <a href="https://earthdatahub.destine.eu">DestinE Earth Data Hub</a>. Authentication uses <code>~/.netrc</code> — see <a href="../setup_guide/#era5-land-via-destine-earth-data-hub">setup_guide.md</a> for registration and setup.</p>
+<p>Additional inputs:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>variables</code></td>
+<td>array[string]</td>
+<td>no</td>
+<td><code>["2m_temperature", "total_precipitation"]</code></td>
+<td>ERA5-Land variable names</td>
+</tr>
+</tbody>
+</table>
+<p>Example request:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/ogcapi/processes/era5-land-download/execution<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="s1">    &quot;inputs&quot;: {</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="s1">      &quot;start&quot;: &quot;2024-01&quot;,</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="s1">      &quot;end&quot;: &quot;2024-03&quot;,</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="s1">      &quot;bbox&quot;: [32.0, -2.0, 35.0, 1.0],</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="s1">      &quot;variables&quot;: [&quot;2m_temperature&quot;],</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="s1">      &quot;dry_run&quot;: true</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="s1">    }</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<h3 id="chirps3-chirps3-download">CHIRPS3 (<code>chirps3-download</code>)<a class="headerlink" href="#chirps3-chirps3-download" title="Permanent link">&para;</a></h3>
+<p>Downloads CHIRPS3 daily precipitation data.</p>
+<p>Additional inputs:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stage</code></td>
+<td>string</td>
+<td>no</td>
+<td><code>"final"</code></td>
+<td>Product stage: <code>"final"</code> or <code>"prelim"</code></td>
+</tr>
+</tbody>
+</table>
+<p>Example request:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/ogcapi/processes/chirps3-download/execution<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="s1">    &quot;inputs&quot;: {</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="s1">      &quot;start&quot;: &quot;2024-01&quot;,</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="s1">      &quot;end&quot;: &quot;2024-03&quot;,</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="s1">      &quot;bbox&quot;: [32.0, -2.0, 35.0, 1.0],</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="s1">      &quot;stage&quot;: &quot;final&quot;,</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="s1">      &quot;dry_run&quot;: true</span>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="s1">    }</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<h3 id="zonal-statistics-zonal-statistics">Zonal statistics (<code>zonal-statistics</code>)<a class="headerlink" href="#zonal-statistics-zonal-statistics" title="Permanent link">&para;</a></h3>
+<p>Calculates statistics over raster values for each input GeoJSON feature.</p>
+<p>This can be used with:</p>
+<ul>
+<li>features from the <code>sierra-leone-districts</code> collection</li>
+<li>raster from the <code>sierra-leone-population</code> collection (<code>tests/data/sle_pop_2026_CN_1km_R2025A_UA_v1.tif</code>)</li>
+</ul>
+<p>Inputs:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>geojson</code></td>
+<td>object or string</td>
+<td>yes</td>
+<td>-</td>
+<td>GeoJSON <code>FeatureCollection</code> object, or path/URL to a GeoJSON file</td>
+</tr>
+<tr>
+<td><code>raster</code></td>
+<td>string</td>
+<td>yes</td>
+<td>-</td>
+<td>Raster path or URL</td>
+</tr>
+<tr>
+<td><code>band</code></td>
+<td>integer</td>
+<td>no</td>
+<td><code>1</code></td>
+<td>1-based band index</td>
+</tr>
+<tr>
+<td><code>stats</code></td>
+<td>array[string]</td>
+<td>no</td>
+<td><code>["mean"]</code></td>
+<td>Any of: <code>count</code>, <code>sum</code>, <code>mean</code>, <code>min</code>, <code>max</code>, <code>median</code>, <code>std</code></td>
+</tr>
+<tr>
+<td><code>feature_id_property</code></td>
+<td>string</td>
+<td>no</td>
+<td><code>"id"</code></td>
+<td>Fallback property key for feature IDs</td>
+</tr>
+<tr>
+<td><code>output_property</code></td>
+<td>string</td>
+<td>no</td>
+<td><code>"zonal_statistics"</code></td>
+<td>Property name for computed statistics</td>
+</tr>
+<tr>
+<td><code>all_touched</code></td>
+<td>boolean</td>
+<td>no</td>
+<td><code>false</code></td>
+<td>Include all pixels touched by geometry</td>
+</tr>
+<tr>
+<td><code>include_nodata</code></td>
+<td>boolean</td>
+<td>no</td>
+<td><code>false</code></td>
+<td>Include nodata values in calculations</td>
+</tr>
+<tr>
+<td><code>nodata</code></td>
+<td>number</td>
+<td>no</td>
+<td>raster nodata</td>
+<td>Optional nodata override</td>
+</tr>
+</tbody>
+</table>
+<p>Example request using local Sierra Leone resources:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/ogcapi/processes/zonal-statistics/execution<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="s1">    &quot;inputs&quot;: {</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="s1">      &quot;geojson&quot;: &quot;tests/data/sierra_leone_districts.geojson&quot;,</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="s1">      &quot;raster&quot;: &quot;tests/data/sle_pop_2026_CN_1km_R2025A_UA_v1.tif&quot;,</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="s1">      &quot;stats&quot;: [&quot;count&quot;, &quot;sum&quot;, &quot;mean&quot;, &quot;min&quot;, &quot;max&quot;],</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="s1">      &quot;output_property&quot;: &quot;population_stats&quot;</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="s1">    }</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<p>Example response shape:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="p">{</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;features&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FeatureCollection&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Feature&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;district-id&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">          </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;District name&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">          </span><span class="nt">&quot;population_stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">            </span><span class="nt">&quot;count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1234.0</span><span class="p">,</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">            </span><span class="nt">&quot;sum&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">567890.12</span><span class="p">,</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="w">            </span><span class="nt">&quot;mean&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">460.2</span><span class="p">,</span>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">            </span><span class="nt">&quot;min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="w">            </span><span class="nt">&quot;max&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">999.0</span>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="w">          </span><span class="p">}</span>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a><span class="w">        </span><span class="nt">&quot;geometry&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Polygon&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;coordinates&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="process-output">Process output<a class="headerlink" href="#process-output" title="Permanent link">&para;</a></h3>
+<p>All processes return a JSON object with:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;completed&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">&quot;files&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;path/to/file1.nc&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;path/to/file2.nc&quot;</span><span class="p">],</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">&quot;summary&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span><span class="nt">&quot;file_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="nt">&quot;start&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="nt">&quot;end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-03&quot;</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Data downloaded (dry run)&quot;</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="chirps3-to-dhis2-pipeline-chirps3-dhis2-pipeline">CHIRPS3 to DHIS2 pipeline (<code>chirps3-dhis2-pipeline</code>)<a class="headerlink" href="#chirps3-to-dhis2-pipeline-chirps3-dhis2-pipeline" title="Permanent link">&para;</a></h3>
+<p>Runs four steps in one execution:</p>
+<ol>
+<li>Get features (from DHIS2 or provided GeoJSON)</li>
+<li>Fetch CHIRPS3 data for union bbox</li>
+<li>Process dataset (spatial + temporal aggregation)</li>
+<li>Generate DHIS2 <code>dataValueSet</code> payload (optional auto-import)</li>
+</ol>
+<p>Example request using DHIS2 org units as source features:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/ogcapi/processes/chirps3-dhis2-pipeline/execution<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="s1">    &quot;inputs&quot;: {</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="s1">      &quot;start_date&quot;: &quot;2024-01-01&quot;,</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="s1">      &quot;end_date&quot;: &quot;2024-03-31&quot;,</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="s1">      &quot;org_unit_level&quot;: 3,</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="s1">      &quot;data_element&quot;: &quot;DEMO_DATA_ELEMENT_UID&quot;,</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="s1">      &quot;temporal_resolution&quot;: &quot;monthly&quot;,</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="s1">      &quot;temporal_reducer&quot;: &quot;sum&quot;,</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="s1">      &quot;spatial_reducer&quot;: &quot;mean&quot;,</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="s1">      &quot;stage&quot;: &quot;final&quot;,</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="s1">      &quot;dry_run&quot;: true,</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="s1">      &quot;auto_import&quot;: false</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="s1">    }</span>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<p>The response includes:</p>
+<ul>
+<li><code>files</code>: downloaded CHIRPS3 monthly files</li>
+<li><code>dataValueSet</code>: DHIS2-compatible payload (<code>dataValues</code> array)</li>
+<li><code>importResponse</code>: populated only when <code>auto_import=true</code> and <code>dry_run=false</code></li>
+</ul>
+<p>Notes:</p>
+<ul>
+<li><code>parent_org_unit</code> is optional. For large DHIS2 instances, prefer <code>parent_org_unit</code> + <code>org_unit_level</code> (or explicit <code>org_unit_ids</code>) to avoid fetching very large feature sets.</li>
+<li><code>org_unit_level</code> alone runs across the full level by default.</li>
+<li><code>category_option_combo</code> and <code>attribute_option_combo</code> are optional. If omitted, they are not sent in <code>dataValues</code>, allowing DHIS2 defaults where supported.</li>
+<li><code>temporal_resolution</code> supports <code>daily</code>, <code>weekly</code>, and <code>monthly</code>.</li>
+</ul>
+<h2 id="async-execution-and-job-management">Async execution and job management<a class="headerlink" href="#async-execution-and-job-management" title="Permanent link">&para;</a></h2>
+<p>Climate data downloads (ERA5-Land, CHIRPS3) can take minutes. To avoid HTTP timeouts, processes support asynchronous execution via the <code>Prefer: respond-async</code> header.</p>
+<h3 id="submitting-an-async-request">Submitting an async request<a class="headerlink" href="#submitting-an-async-request" title="Permanent link">&para;</a></h3>
+<p>Add the <code>Prefer: respond-async</code> header to a normal execution request. The server returns <code>201 Created</code> with a <code>Location</code> header pointing to the job status endpoint.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/ogcapi/processes/chirps3-download/execution<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Prefer: respond-async&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="s1">    &quot;inputs&quot;: {</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="s1">      &quot;start&quot;: &quot;2024-01&quot;,</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="s1">      &quot;end&quot;: &quot;2024-01&quot;,</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="s1">      &quot;bbox&quot;: [32, -2, 35, 1]</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="s1">    }</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<p>Response (<code>201 Created</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p">{</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">&quot;jobID&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc123&quot;</span><span class="p">,</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;accepted&quot;</span><span class="p">,</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;process&quot;</span><span class="p">,</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Job accepted&quot;</span><span class="p">,</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">  </span><span class="nt">&quot;...&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>The <code>Location</code> response header contains the job URL, e.g. <code>/ogcapi/jobs/abc123</code>.</p>
+<h3 id="polling-job-status">Polling job status<a class="headerlink" href="#polling-job-status" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>curl<span class="w"> </span>http://localhost:8000/ogcapi/jobs/<span class="o">{</span>jobId<span class="o">}</span>
+</code></pre></div>
+<p>The <code>status</code> field progresses through: <code>accepted</code> -&gt; <code>running</code> -&gt; <code>successful</code> (or <code>failed</code>).</p>
+<h3 id="retrieving-results">Retrieving results<a class="headerlink" href="#retrieving-results" title="Permanent link">&para;</a></h3>
+<p>Once status is <code>successful</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>curl<span class="w"> </span>http://localhost:8000/ogcapi/jobs/<span class="o">{</span>jobId<span class="o">}</span>/results
+</code></pre></div>
+<h3 id="listing-all-jobs">Listing all jobs<a class="headerlink" href="#listing-all-jobs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>curl<span class="w"> </span>http://localhost:8000/ogcapi/jobs
+</code></pre></div>
+<h3 id="deleting-a-job">Deleting a job<a class="headerlink" href="#deleting-a-job" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>DELETE<span class="w"> </span>http://localhost:8000/ogcapi/jobs/<span class="o">{</span>jobId<span class="o">}</span>
+</code></pre></div>
+<h3 id="synchronous-execution-default">Synchronous execution (default)<a class="headerlink" href="#synchronous-execution-default" title="Permanent link">&para;</a></h3>
+<p>Without the <code>Prefer</code> header, requests execute synchronously and return results directly. This is unchanged from before.</p>
+<h2 id="plugin-system">Plugin system<a class="headerlink" href="#plugin-system" title="Permanent link">&para;</a></h2>
+<p>pygeoapi uses a plugin architecture so that new data backends, output formats, and processing tasks can be added without modifying the core.</p>
+<h3 id="plugin-categories">Plugin categories<a class="headerlink" href="#plugin-categories" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Base class</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>provider</strong></td>
+<td><code>pygeoapi.provider.base.BaseProvider</code></td>
+<td>Data access (read features, coverages, tiles, etc.)</td>
+</tr>
+<tr>
+<td><strong>formatter</strong></td>
+<td><code>pygeoapi.formatter.base.BaseFormatter</code></td>
+<td>Output format conversion (e.g. CSV export)</td>
+</tr>
+<tr>
+<td><strong>process</strong></td>
+<td><code>pygeoapi.process.base.BaseProcessor</code></td>
+<td>Server-side processing logic</td>
+</tr>
+<tr>
+<td><strong>process_manager</strong></td>
+<td><code>pygeoapi.process.manager.base.BaseManager</code></td>
+<td>Job tracking and async execution</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-loading-works">How loading works<a class="headerlink" href="#how-loading-works" title="Permanent link">&para;</a></h3>
+<p>In the YAML config the <code>name</code> field on a provider or processor identifies the plugin. pygeoapi resolves it in two ways:</p>
+<ol>
+<li><strong>Short name</strong> -- a built-in alias registered in pygeoapi's plugin registry (e.g. <code>GeoJSON</code>, <code>CSV</code>, <code>rasterio</code>).</li>
+<li><strong>Dotted Python path</strong> -- a fully-qualified class name for custom plugins (e.g. <code>mypackage.providers.MyProvider</code>).</li>
+</ol>
+<h3 id="plugin-directory-layout">Plugin directory layout<a class="headerlink" href="#plugin-directory-layout" title="Permanent link">&para;</a></h3>
+<p>Custom plugins live under <code>src/climate_api/routers/ogcapi/plugins/</code>, organized by type:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>plugins/
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>  __init__.py
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>  providers/            # Data access plugins (BaseProvider subclasses)
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    __init__.py
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    dhis2_common.py     # Shared DHIS2 models and helpers
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    dhis2_org_units.py  # Feature provider for DHIS2 org units
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>    dhis2_org_units_cql.py  # Feature provider with CQL filter support
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>    dhis2eo.py          # EDR provider stub
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>  processes/            # Processing plugins (BaseProcessor subclasses)
+<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>    __init__.py
+<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>    schemas.py          # Pydantic models for process inputs/outputs
+<a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>    era5_land.py        # ERA5-Land download processor
+<a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>    chirps3.py          # CHIRPS3 download processor
+</code></pre></div>
+<h3 id="creating-a-custom-provider">Creating a custom provider<a class="headerlink" href="#creating-a-custom-provider" title="Permanent link">&para;</a></h3>
+<p>A custom provider subclasses the appropriate base class and implements the required methods.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pygeoapi.provider.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseProvider</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyProvider</span><span class="p">(</span><span class="n">BaseProvider</span><span class="p">):</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_def</span><span class="p">):</span>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">provider_def</span><span class="p">)</span>
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>
+<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">identifier</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>        <span class="o">...</span>
+<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>
+<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>        <span class="o">...</span>
+</code></pre></div>
+<p>Reference it in the config by dotted path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">providers</span><span class="p">:</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">feature</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">climate_api.routers.ogcapi.plugins.providers.my_provider.MyProvider</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">    </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/data</span>
+</code></pre></div>
+<h3 id="creating-a-custom-processor">Creating a custom processor<a class="headerlink" href="#creating-a-custom-processor" title="Permanent link">&para;</a></h3>
+<p>A custom processor subclasses <code>BaseProcessor</code>, defines <code>PROCESS_METADATA</code>, and implements <code>execute()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pygeoapi.process.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseProcessor</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">PROCESS_METADATA</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="s2">&quot;0.1.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="s2">&quot;my-process&quot;</span><span class="p">,</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;My Process&quot;</span><span class="p">,</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>    <span class="s2">&quot;jobControlOptions&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;sync-execute&quot;</span><span class="p">],</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>    <span class="s2">&quot;inputs&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="o">...</span> <span class="p">},</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>    <span class="s2">&quot;outputs&quot;</span><span class="p">:</span> <span class="p">{</span> <span class="o">...</span> <span class="p">},</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="p">}</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyProcessor</span><span class="p">(</span><span class="n">BaseProcessor</span><span class="p">):</span>
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">processor_def</span><span class="p">):</span>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">processor_def</span><span class="p">,</span> <span class="n">PROCESS_METADATA</span><span class="p">)</span>
+<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a>
+<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a>        <span class="c1"># Validate inputs, run processing, return (mimetype, result)</span>
+<a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a>        <span class="k">return</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;completed&quot;</span><span class="p">}</span>
+</code></pre></div>
+<p>Reference it in the config:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">my-process</span><span class="p">:</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span><span class="nt">processor</span><span class="p">:</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">climate_api.routers.ogcapi.plugins.processes.my_process.MyProcessor</span>
+</code></pre></div>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>OGC API standards catalogue: <a href="https://ogcapi.ogc.org">https://ogcapi.ogc.org</a></li>
+<li>OGC API - Features spec: <a href="https://ogcapi.ogc.org/features/">https://ogcapi.ogc.org/features/</a></li>
+<li>OGC API - Coverages spec: <a href="https://ogcapi.ogc.org/coverages/">https://ogcapi.ogc.org/coverages/</a></li>
+<li>OGC API - EDR spec: <a href="https://ogcapi.ogc.org/edr/">https://ogcapi.ogc.org/edr/</a></li>
+<li>OGC API - Processes spec: <a href="https://ogcapi.ogc.org/processes/">https://ogcapi.ogc.org/processes/</a></li>
+<li>pygeoapi documentation: <a href="https://docs.pygeoapi.io">https://docs.pygeoapi.io</a></li>
+<li>pygeoapi configuration guide: <a href="https://docs.pygeoapi.io/en/latest/configuration.html">https://docs.pygeoapi.io/en/latest/configuration.html</a></li>
+<li>pygeoapi data publishing guide: <a href="https://docs.pygeoapi.io/en/latest/data-publishing/">https://docs.pygeoapi.io/en/latest/data-publishing/</a></li>
+<li>pygeoapi plugins: <a href="https://docs.pygeoapi.io/en/latest/plugins.html">https://docs.pygeoapi.io/en/latest/plugins.html</a></li>
+<li>Community plugins wiki: <a href="https://github.com/geopython/pygeoapi/wiki/CommunityPlugins">https://github.com/geopython/pygeoapi/wiki/CommunityPlugins</a></li>
+<li>pygeoapi source: <a href="https://github.com/geopython/pygeoapi">https://github.com/geopython/pygeoapi</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
