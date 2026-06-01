@@ -13,7 +13,7 @@ STAC_VERSION = "1.1.0"
 
 def build_capabilities(base_url: str) -> OpenEOCapabilities:
     """Return the openEO capabilities document."""
-    backend_version = _pkg_version("climate-service")
+    backend_version = _pkg_version("open-climate-service")
     name = api_config.get_name()
 
     endpoints = [

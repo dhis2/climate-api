@@ -24,7 +24,7 @@ _cache: dict[str, jinja2.Template] = {}
 _log = logging.getLogger(__name__)
 
 try:
-    app_version = _pkg_version("climate-service")
+    app_version = _pkg_version("open-climate-service")
 except PackageNotFoundError:
     app_version = "unknown"
 
