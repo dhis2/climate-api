@@ -4,8 +4,8 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 
-from open_climate_service import config as api_config
-from open_climate_service.main import app
+from climate_service import config as api_config
+from climate_service.main import app
 
 _TEST_CONFIG = """\
 extent:
@@ -17,16 +17,16 @@ data_dir: ./data
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _test_open_climate_service_config(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
-    config_file = tmp_path_factory.mktemp("config") / "open-climate-service.yaml"
+def _test_climate_service_config(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    config_file = tmp_path_factory.mktemp("config") / "climate-service.yaml"
     config_file.write_text(_TEST_CONFIG, encoding="utf-8")
-    old = os.environ.get("OPEN_CLIMATE_SERVICE_CONFIG")
-    os.environ["OPEN_CLIMATE_SERVICE_CONFIG"] = str(config_file)
+    old = os.environ.get("CLIMATE_SERVICE_CONFIG")
+    os.environ["CLIMATE_SERVICE_CONFIG"] = str(config_file)
     yield
     if old is None:
-        os.environ.pop("OPEN_CLIMATE_SERVICE_CONFIG", None)
+        os.environ.pop("CLIMATE_SERVICE_CONFIG", None)
     else:
-        os.environ["OPEN_CLIMATE_SERVICE_CONFIG"] = old
+        os.environ["CLIMATE_SERVICE_CONFIG"] = old
 
 
 @pytest.fixture(autouse=True)

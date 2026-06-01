@@ -129,7 +129,7 @@ This means the realized time range of the derived artifact may be shorter than t
 Once materialized, the derived dataset can be opened like any other managed dataset:
 
 ```python
-from open_climate_service.client import Client
+from climate_service.client import Client
 
 api = Client("http://127.0.0.1:8000")
 ds = api.open("era5land_temperature_hourly_1d_mean")

@@ -1,6 +1,6 @@
 # DHIS2 Open Climate Service
 
-Agent context for the `open-climate-service` repository. Provider-agnostic — intended to be readable by any AI coding assistant.
+Agent context for the `climate-service` repository. Provider-agnostic — intended to be readable by any AI coding assistant.
 
 ## Project overview
 
@@ -16,7 +16,7 @@ Key concepts:
 ## Repository layout
 
 ```
-open_climate_service/
+climate_service/
   data_manager/     # download and zarr build (downloader.py)
   data_accessor/    # open zarr / netcdf for read (accessor.py)
   data_registry/    # dataset template YAML loading

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 
-import open_climate_service.main as main
+import climate_service.main as main
 
 
 @pytest.mark.anyio

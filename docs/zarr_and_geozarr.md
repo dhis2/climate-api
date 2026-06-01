@@ -112,7 +112,7 @@ These attributes are computed from the actual coordinate bounds of the written d
 
 ## CRS handling
 
-The instance CRS is configured in `open-climate-service.yaml`:
+The instance CRS is configured in `climate-service.yaml`:
 
 ```yaml
 extent:

@@ -16,7 +16,7 @@ The same pattern applies at every extension point:
 
 ## Dataset templates
 
-Dataset templates are YAML files that describe a data source. Built-ins live in the package (`open_climate_service/data/datasets/`). Custom templates are loaded from `plugins_dir/datasets/`.
+Dataset templates are YAML files that describe a data source. Built-ins live in the package (`climate_service/data/datasets/`). Custom templates are loaded from `plugins_dir/datasets/`.
 
 ```
 plugins/
@@ -25,7 +25,7 @@ plugins/
 ```
 
 ```yaml
-# open-climate-service.yaml
+# climate-service.yaml
 plugins_dir: ./plugins/
 ```
 
@@ -99,7 +99,7 @@ Transforms are functions applied to a dataset after download and before the Zarr
 
 ```yaml
 transforms:
-  - open_climate_service.transforms.kelvin_to_celsius
+  - climate_service.transforms.kelvin_to_celsius
   - mypackage.transforms.clamp_negatives
 ```
 
@@ -133,7 +133,7 @@ For the built-in transforms and a full description of the pipeline, see [Transfo
 
 Processes are named operations that produce derived datasets (e.g. temporal resampling). They are backed by YAML files and dispatched via `POST /processes/{id}/execution`.
 
-Built-in processes live in `open_climate_service/data/processes/`. Custom processes are loaded from `plugins_dir/processes/`.
+Built-in processes live in `climate_service/data/processes/`. Custom processes are loaded from `plugins_dir/processes/`.
 
 ```
 plugins/
@@ -183,6 +183,6 @@ For the built-in `resample` process and usage examples, see [Processes](processe
 
 ## What is not pluggable
 
-**Availability functions** (`sync.availability.latest_available_function`) accept a dotted path but only resolve built-in functions in `open_climate_service.providers.availability`. Plugin paths are not reliably supported — the path is resolved without `plugins_dir` on `sys.path`. Use one of the built-in availability functions instead, or open an issue if a new provider cadence is needed.
+**Availability functions** (`sync.availability.latest_available_function`) accept a dotted path but only resolve built-in functions in `climate_service.providers.availability`. Plugin paths are not reliably supported — the path is resolved without `plugins_dir` on `sys.path`. Use one of the built-in availability functions instead, or open an issue if a new provider cadence is needed.
 
-See [issue #95](https://github.com/dhis2/open-climate-service/issues/95) for the planned fix.
+See [issue #95](https://github.com/dhis2/climate-service/issues/95) for the planned fix.
