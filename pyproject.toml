@@ -74,7 +74,7 @@ Repository = "https://github.com/dhis2/climate-service"
 Documentation = "https://github.com/dhis2/climate-service/tree/main/docs"
 
 [project.scripts]
-climate-service = "climate_service.cli:main"
+climate-service = "open_climate_service.cli:main"
 
 [tool.ruff]
 target-version = "py313"
@@ -92,7 +92,7 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
 "**/__init__.py" = ["D104"]
-"climate_service/**/*.py" = ["D102", "D105", "D107"]
+"open_climate_service/**/*.py" = ["D102", "D105", "D107"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -122,7 +122,7 @@ module = ["pygeoapi.*", "rasterio.*", "pygeofilter.*", "requests.*", "geopandas.
 ignore_missing_imports = true
 
 [tool.pyright]
-include = ["climate_service", "tests"]
+include = ["open_climate_service", "tests"]
 exclude = ["**/.venv"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"

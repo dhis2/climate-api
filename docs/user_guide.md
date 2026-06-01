@@ -34,10 +34,10 @@ The `assets.zarr` field contains everything needed to open the dataset:
 
 ## Opening a dataset with xarray
 
-The `climate_service.client` module provides a `Client` class for discovering and opening datasets:
+The `open_climate_service.client` module provides a `Client` class for discovering and opening datasets:
 
 ```python
-from climate_service.client import Client
+from open_climate_service.client import Client
 
 api = Client("http://127.0.0.1:8000")
 
@@ -52,7 +52,7 @@ print(ds)
 The `base_url` defaults to the `CLIMATE_SERVICE_BASE_URL` environment variable (falling back to `http://127.0.0.1:8000`), so module-level functions work without any argument when the env var is set:
 
 ```python
-from climate_service.client import list_datasets, open_dataset  # reads CLIMATE_SERVICE_BASE_URL
+from open_climate_service.client import list_datasets, open_dataset  # reads CLIMATE_SERVICE_BASE_URL
 
 dataset_id = list_datasets()[0]["id"]
 ds = open_dataset(dataset_id)

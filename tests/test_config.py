@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from climate_service.config import DEFAULT_CRS, DEFAULT_NAME, get_config, get_crs, get_data_dir, get_name
-from climate_service.data_registry.services import datasets as dataset_registry
-from climate_service.extents import services as extent_services
+from open_climate_service.config import DEFAULT_CRS, DEFAULT_NAME, get_config, get_crs, get_data_dir, get_name
+from open_climate_service.data_registry.services import datasets as dataset_registry
+from open_climate_service.extents import services as extent_services
 
 
 def test_get_data_dir_returns_none_when_no_config(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,7 +143,7 @@ def test_get_crs_raises_for_unknown_epsg_code(monkeypatch: pytest.MonkeyPatch, t
         get_crs()
 
 
-def test_get_name_defaults_to_climate_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_name_defaults_to_open_climate_service(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CLIMATE_SERVICE_CONFIG", raising=False)
     assert get_name() == DEFAULT_NAME
 

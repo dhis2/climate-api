@@ -9,8 +9,8 @@ import pytest
 import xarray as xr
 from fastapi.testclient import TestClient
 
-from climate_service.ingestions import services as ingestion_services
-from climate_service.ingestions.schemas import (
+from open_climate_service.ingestions import services as ingestion_services
+from open_climate_service.ingestions.schemas import (
     ArtifactCoverage,
     ArtifactFormat,
     ArtifactPublication,
@@ -20,8 +20,8 @@ from climate_service.ingestions.schemas import (
     CoverageTemporal,
     PublicationStatus,
 )
-from climate_service.openeo import collections as openeo_collections
-from climate_service.stac import services as stac_services
+from open_climate_service.openeo import collections as openeo_collections
+from open_climate_service.stac import services as stac_services
 
 
 @pytest.fixture(autouse=True)

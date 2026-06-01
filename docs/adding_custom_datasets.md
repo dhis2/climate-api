@@ -111,13 +111,13 @@ sync:
   kind: temporal
   execution: append
   availability:
-    latest_available_function: climate_service.providers.availability.lagged_latest_available
+    latest_available_function: open_climate_service.providers.availability.lagged_latest_available
     lag_hours: 48
 ```
 
 | Field | Description |
 | ----- | ----------- |
-| `latest_available_function` | Dotted path to a built-in availability function in `climate_service.providers.availability` |
+| `latest_available_function` | Dotted path to a built-in availability function in `open_climate_service.providers.availability` |
 | `lag_hours` / `lag_days` | Data is delayed by this many hours or days |
 | `allow_future` | Allow requesting future dates (e.g. forecasts or projections). Default: `false` |
 
@@ -167,7 +167,7 @@ append. Rechunking, pyramid behavior, and full migration away from
 
 ```yaml
 transforms:
-  - climate_service.transforms.kelvin_to_celsius
+  - open_climate_service.transforms.kelvin_to_celsius
   - mypackage.transforms.my_custom_transform
 ```
 

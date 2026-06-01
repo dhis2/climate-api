@@ -34,23 +34,23 @@ The public surface is intentionally small:
 
 ## Main Code References
 
-- [src/climate_service/main.py](../src/climate_service/main.py)
+- [src/open_climate_service/main.py](../src/open_climate_service/main.py)
   - app assembly and router mounting
-- [src/climate_service/ingestions/routes.py](../src/climate_service/ingestions/routes.py)
+- [src/open_climate_service/ingestions/routes.py](../src/open_climate_service/ingestions/routes.py)
   - ingestion, dataset, zarr, and sync routes
-- [src/climate_service/ingestions/services.py](../src/climate_service/ingestions/services.py)
+- [src/open_climate_service/ingestions/services.py](../src/open_climate_service/ingestions/services.py)
   - internal artifact persistence, dataset grouping, sync service wiring, Zarr browsing
-- [src/climate_service/ingestions/sync_engine.py](../src/climate_service/ingestions/sync_engine.py)
+- [src/open_climate_service/ingestions/sync_engine.py](../src/open_climate_service/ingestions/sync_engine.py)
   - sync planning and execution engine
-- [src/climate_service/ingestions/schemas.py](../src/climate_service/ingestions/schemas.py)
+- [src/open_climate_service/ingestions/schemas.py](../src/open_climate_service/ingestions/schemas.py)
   - public ingestion, dataset, and sync contracts
-- [src/climate_service/providers/availability.py](../src/climate_service/providers/availability.py)
+- [src/open_climate_service/providers/availability.py](../src/open_climate_service/providers/availability.py)
   - provider-specific sync availability policies
-- [src/climate_service/extents/routes.py](../src/climate_service/extents/routes.py)
+- [src/open_climate_service/extents/routes.py](../src/open_climate_service/extents/routes.py)
   - extent discovery endpoint
-- [src/climate_service/extents/services.py](../src/climate_service/extents/services.py)
+- [src/open_climate_service/extents/services.py](../src/open_climate_service/extents/services.py)
   - extent registry backed by CLIMATE_SERVICE_CONFIG
-- [src/climate_service/publications/services.py](../src/climate_service/publications/services.py)
+- [src/open_climate_service/publications/services.py](../src/open_climate_service/publications/services.py)
   - pygeoapi publication and stable managed dataset id logic
 - `extent:` block in `climate-service.yaml` (CLIMATE_SERVICE_CONFIG)
   - configured spatial extent for this Open Climate Service instance

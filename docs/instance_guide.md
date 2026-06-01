@@ -95,7 +95,7 @@ install: ## Install dependencies with uv
 
 run: ## Start the API with uvicorn
 	set -a && . ./.env && set +a && \
-		uv run uvicorn climate_service.main:app --reload --reload-include "*.yaml" --reload-include "*.yml" --port 8000
+		uv run uvicorn open_climate_service.main:app --reload --reload-include "*.yaml" --reload-include "*.yml" --port 8000
 ```
 
 ## Step 4: Configure the instance

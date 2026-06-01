@@ -16,7 +16,7 @@ Key concepts:
 ## Repository layout
 
 ```
-climate_service/
+open_climate_service/
   data_manager/     # download and zarr build (downloader.py)
   data_accessor/    # open zarr / netcdf for read (accessor.py)
   data_registry/    # dataset template YAML loading

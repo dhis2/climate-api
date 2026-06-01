@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from climate_service.transforms.reproject import reproject_to_instance_crs
+from open_climate_service.transforms.reproject import reproject_to_instance_crs
 
 _DATASET: dict[str, Any] = {"id": "test", "variable": "value"}
 

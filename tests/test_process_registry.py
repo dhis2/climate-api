@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from climate_service.data_registry.services import processes as process_registry
+from open_climate_service.data_registry.services import processes as process_registry
 
 
 def test_builtin_processes_include_resample(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -20,7 +20,7 @@ def test_builtin_resample_has_execution_function(monkeypatch: pytest.MonkeyPatch
     resample = process_registry.get_process("resample")
     assert resample is not None
     assert resample["title"] == "Temporal resampling"
-    assert resample["execution"]["function"] == "climate_service.processing.services.execute_resample"
+    assert resample["execution"]["function"] == "open_climate_service.processing.services.execute_resample"
     assert resample["jobControlOptions"] == ["sync-execute", "async-execute"]
 
 

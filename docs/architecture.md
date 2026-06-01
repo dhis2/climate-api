@@ -10,7 +10,7 @@ The platform has four first-class concepts. Understanding the distinction betwee
 
 ### Dataset template
 
-A **template** is a YAML blueprint that describes a data source. Built-ins live in `climate_service/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-service.yaml`. It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
+A **template** is a YAML blueprint that describes a data source. Built-ins live in `open_climate_service/data/datasets/` inside the package (loaded via `importlib.resources`). Custom templates live in `{plugins_dir}/datasets/` where `plugins_dir` is set in `climate-service.yaml`. It has no state — it describes what _could_ be ingested, not what _has been_ ingested.
 
 A template defines:
 
@@ -30,8 +30,8 @@ The platform is currently in a transition between two ingestion strategies:
 - the legacy download-and-rebuild path based on `ingestion.function`
 - the new per-period streaming path based on `ingestion.plugin`
 
-The new path is implemented internally in `climate_service.streaming`, while
-`climate_service.ingestions` remains the application-facing layer that owns routes,
+The new path is implemented internally in `open_climate_service.streaming`, while
+`open_climate_service.ingestions` remains the application-facing layer that owns routes,
 artifact records, and publication state.
 
 For the first implementation slice:
@@ -157,9 +157,9 @@ The hierarchy is:
   |                    |
   |                    +-- calls the ingestion execution function
   |                           |
-  |                           +-- climate_service.ingestions.services
+  |                           +-- open_climate_service.ingestions.services
   |                                  |
-  |                                  +-- climate_service.streaming      (new path)
+  |                                  +-- open_climate_service.streaming      (new path)
   |                                  +-- legacy download path       (old path)
   |
   +-- /processes/resample
@@ -170,8 +170,8 @@ The hierarchy is:
                        |
                        +-- calls the resample execution function
                               |
-                              +-- climate_service.processing.services
-                              +-- climate_service.ingestions.services
+                              +-- open_climate_service.processing.services
+                              +-- open_climate_service.ingestions.services
 ```
 
 The important distinction is:
@@ -287,7 +287,7 @@ sync:
   kind: temporal
   execution: append
   availability:
-    latest_available_function: climate_service.providers.availability.lagged_latest_available
+    latest_available_function: open_climate_service.providers.availability.lagged_latest_available
     lag_hours: 120
 ```
 
@@ -361,7 +361,7 @@ Responsibilities are intentionally split:
 
 - the plugin knows the source
 - the orchestrator knows resume, concurrency, and store commits
-- `climate_service.ingestions` knows artifacts, publication, and API responses
+- `open_climate_service.ingestions` knows artifacts, publication, and API responses
 
 Ticket 1 only uses this contract for direct CHIRPS3 ingest. Sync reuse and
 broader source migration are follow-up work.

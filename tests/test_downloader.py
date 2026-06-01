@@ -12,9 +12,9 @@ from fastapi import HTTPException
 from topozarr.pyramid import Pyramid
 from xarray import DataTree
 
-from climate_service.data_accessor.services.accessor import _coverage_from_dataset, open_icechunk_dataset, open_zarr_dataset
-from climate_service.data_manager.services import downloader
-from climate_service.ingestions import services as ingestion_services
+from open_climate_service.data_accessor.services.accessor import _coverage_from_dataset, open_icechunk_dataset, open_zarr_dataset
+from open_climate_service.data_manager.services import downloader
+from open_climate_service.ingestions import services as ingestion_services
 
 
 def test_resolve_download_dir_uses_data_dir_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -270,7 +270,7 @@ def test_download_dataset_returns_400_when_bbox_outside_dataset_extents(
 def test_download_dataset_returns_409_for_plugin_only_templates() -> None:
     dataset: dict[str, Any] = {
         "id": "chirps3_precipitation_daily",
-        "ingestion": {"plugin": "climate_service.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
+        "ingestion": {"plugin": "open_climate_service.streaming.plugins.chirps3.CHIRPS3DailyPlugin"},
     }
 
     with pytest.raises(HTTPException) as exc_info:
