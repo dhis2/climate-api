@@ -21,7 +21,7 @@ If you only need to run climate-service with built-in datasets and no custom plu
 
 ```
 my-climate-service/
-├── pyproject.toml          # declares climate-service as a dependency
+├── pyproject.toml          # declares open-climate-service as a dependency
 ├── uv.lock                 # locked dependency tree for reproducible installs
 ├── Makefile                # install / run shortcuts
 ├── climate-service.yaml        # instance config: extent, CRS, data_dir, plugins_dir
