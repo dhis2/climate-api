@@ -44,6 +44,9 @@ def create_ingestion(
     return immediately with 202 + ``Location: /jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
+        _get_dataset_or_404(request.dataset_id)
+        get_extent_or_404()
+
         from climate_api.ingestions.processes import execute_ingestion
         from climate_api.jobs.service import get_job_service
 
@@ -140,6 +143,8 @@ def sync_dataset(
     return immediately with 202 + ``Location: /jobs/{id}``.
     """
     if _prefer_respond_async(prefer):
+        services.plan_sync_dataset(dataset_id=dataset_id, end=request.end)
+
         from climate_api.ingestions.processes import execute_sync
         from climate_api.jobs.service import get_job_service
 

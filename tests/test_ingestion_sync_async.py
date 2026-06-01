@@ -3,6 +3,7 @@
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from climate_api.ingestions.schemas import IngestionResponse, SyncResponse
@@ -89,10 +90,45 @@ def test_post_ingestion_without_prefer_header_returns_synchronous_response(
     assert response.json()["ingestion_id"] == "artifact-sync"
 
 
+def test_post_ingestion_respond_async_rejects_unknown_dataset_immediately(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.routes._get_dataset_or_404",
+        lambda _dataset_id: (_ for _ in ()).throw(HTTPException(status_code=404, detail="Dataset not found")),
+    )
+
+    response = client.post(
+        "/ingestions",
+        headers={"Prefer": "respond-async"},
+        json={"dataset_id": "unknown_dataset", "start": "2026-01-01"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dataset not found"
+
+
 def test_post_sync_respond_async_returns_202_with_location(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.routes.services.plan_sync_dataset",
+        lambda **_kwargs: {
+            "source_dataset_id": "chirps3_precipitation_daily",
+            "sync_kind": "temporal",
+            "action": "append",
+            "reason": "new_periods_available_for_append",
+            "message": "Sync will append.",
+            "current_start": "2026-01-01",
+            "current_end": "2026-01-31",
+            "target_end": "2026-02-10",
+            "target_end_source": "request",
+            "delta_start": "2026-02-01",
+            "delta_end": "2026-02-10",
+        },
+    )
     monkeypatch.setattr(
         "climate_api.ingestions.processes.services.sync_dataset",
         lambda **kwargs: {
@@ -130,6 +166,25 @@ def test_post_sync_respond_async_returns_202_with_location(
     assert payload["dataset"] is None
     assert payload["sync_detail"] is None
     assert payload["message"] == "Sync queued"
+
+
+def test_post_sync_respond_async_rejects_unplannable_request_immediately(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.ingestions.routes.services.plan_sync_dataset",
+        lambda **_kwargs: (_ for _ in ()).throw(HTTPException(status_code=400, detail="invalid end period")),
+    )
+
+    response = client.post(
+        "/sync/chirps3_precipitation_daily",
+        headers={"Prefer": "respond-async"},
+        json={"end": "bad-period", "publish": True},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid end period"
 
 
 def test_post_sync_without_prefer_header_returns_synchronous_response(
