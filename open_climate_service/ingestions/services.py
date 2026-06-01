@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import mimetypes
@@ -395,7 +396,14 @@ def _load_streaming_plugin(plugin_path: str, *, params: dict[str, object]) -> In
         plugin_cls = getattr(module, attr_name)
         if not callable(plugin_cls):
             raise TypeError(f"{plugin_path} is not callable")
-        plugin = plugin_cls(**params)
+        constructor_kwargs = dict(params)
+        signature = inspect.signature(plugin_cls)
+        accepts_var_kwargs = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+        )
+        if not accepts_var_kwargs:
+            constructor_kwargs = {name: value for name, value in params.items() if name in signature.parameters}
+        plugin = plugin_cls(**constructor_kwargs)
         if not isinstance(plugin, IngestionPlugin):
             raise TypeError(
                 f"{plugin_path} does not implement the required streaming plugin contract "

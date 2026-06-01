@@ -19,6 +19,7 @@ from open_climate_service.ingestions.schemas import (
     PublicationStatus,
 )
 from open_climate_service.publications.services import managed_dataset_id_for
+from open_climate_service.streaming.plugins.chirps3 import CHIRPS3DailyPlugin
 
 
 @pytest.fixture(autouse=True)
@@ -652,6 +653,17 @@ def test_load_streaming_plugin_rejects_symbol_outside_plugin_protocol(monkeypatc
             "open_climate_service.ingestions.services._NotAPlugin",
             params={"stage": "final"},
         )
+
+
+def test_load_streaming_plugin_filters_runtime_only_params_for_constructor() -> None:
+    plugin = services._load_streaming_plugin(
+        "open_climate_service.streaming.plugins.chirps3.CHIRPS3DailyPlugin",
+        params={"stage": "final", "country_code": "SLE"},
+    )
+
+    assert isinstance(plugin, CHIRPS3DailyPlugin)
+    assert plugin.stage == "final"
+    assert plugin.flavor == "rnl"
 
 
 def test_create_artifact_allows_streaming_coverage_clamped_to_source_availability(
