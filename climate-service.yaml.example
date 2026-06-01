@@ -2,8 +2,8 @@
 # Replace the values below with your country before deploying.
 # See docs/setup_guide.md for field descriptions.
 
-id: sle                  # unique identifier for this instance — used as the STAC catalog id
-name: Sierra Leone       # human-readable name shown in the web UI (optional, defaults to "Open Climate Service")
+id: sierra-leone-climate-service   # unique identifier for this instance — used as the STAC catalog id
+name: Sierra Leone Climate Service   # human-readable name shown in the web UI (optional, defaults to "Open Climate Service")
 
 extent:
   name: Sierra Leone

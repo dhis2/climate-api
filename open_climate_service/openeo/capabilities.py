@@ -58,7 +58,7 @@ def build_capabilities(base_url: str) -> OpenEOCapabilities:
         id="climate-service",
         title=name,
         description=(
-            "openEO-compatible backend for the DHIS2 Open Climate Service. "
+            "openEO-compatible backend for the Open Climate Service. "
             "Access and process ERA5-Land climate datasets for health and climate analysis."
         ),
         production=False,

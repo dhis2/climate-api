@@ -75,11 +75,11 @@ Service-level identification, contact details, and license. Supports multilingua
 metadata:
   identification:
     title:
-      en: DHIS2 Open Climate Service
+      en: Open Climate Service
     description:
       en: OGC API compliant geospatial data API
   provider:
-    name: DHIS2 Open Climate Service
+    name: Open Climate Service
     url: https://dhis2.org
   contact:
     name: DHIS2 Climate Team

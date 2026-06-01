@@ -1,4 +1,4 @@
-# DHIS2 Open Climate Service
+# Open Climate Service
 
 ## Climate Data & Earth Observation Integration Platform
 
@@ -10,7 +10,7 @@ _Project Description · 2026_
 
 Climate change and extreme weather events pose severe threats to low- and middle-income countries, but data fragmentation makes it difficult to analyze these threats and forecast future impacts in an accurate and timely way. Climate and earth observation data is distributed across dozens of providers — each with different APIs, data formats, and access mechanisms. Integrating this fragmented landscape into operational systems requires specialised expertise for every data source, a barrier that limits its use across sectors in low- and middle-income countries.
 
-This project develops the DHIS2 Open Climate Service — an open-source, standards-based, and decentralised integration platform that unifies this fragmented space behind a single, consistent interface. By abstracting data access across heterogeneous sources and harmonising outputs into a common format, the platform enables organisations to automatically ingest, process, and analyse global, national, and local climate and environmental data without requiring specialised expertise for each data provider. Although developed in close alignment with DHIS2 to support seamless integration with national health information systems, the platform is designed to operate independently of any specific software platform, and can serve as shared infrastructure for any sector that requires systematic access to harmonised climate and environmental data — including health, agriculture, land management, and forest monitoring.
+This project develops the Open Climate Service — an open-source, standards-based, and decentralised integration platform that unifies this fragmented space behind a single, consistent interface. By abstracting data access across heterogeneous sources and harmonising outputs into a common format, the platform enables organisations to automatically ingest, process, and analyse global, national, and local climate and environmental data without requiring specialised expertise for each data provider. Although developed in close alignment with DHIS2 to support seamless integration with national health information systems, the platform is designed to operate independently of any specific software platform, and can serve as shared infrastructure for any sector that requires systematic access to harmonised climate and environmental data — including health, agriculture, land management, and forest monitoring.
 
 A key design principle is data sovereignty: the platform is deployable on national or regional infrastructure without dependency on proprietary services, ensuring that countries retain full control over their data. Outputs are stored and served using open geospatial standards, making the platform an open foundation rather than a closed system. Local data providers and developers can connect their own data sources, build custom analytical workflows, and extend the platform to address specific needs. This openness and interoperability is a deliberate design choice — the goal is not a single monolithic tool, but shared infrastructure that countries and communities can adapt and innovate upon.
 
@@ -20,7 +20,7 @@ The platform is being developed in close collaboration with HISP groups in the c
 
 ## 2. Overview
 
-The DHIS2 Open Climate Service is a no-code data integration platform that enables earth observation (EO) and climate data from multiple upstream sources to be downloaded, processed, harmonised, and loaded into DHIS2 and the CHAP Modelling Platform.
+The Open Climate Service is a no-code data integration platform that enables earth observation (EO) and climate data from multiple upstream sources to be downloaded, processed, harmonised, and loaded into DHIS2 and the CHAP Modelling Platform.
 
 The platform is built as a Python-based REST API (FastAPI) and exposes both native endpoints and OGC API-compliant endpoints (via pygeoapi). Data is stored in cloud-native GeoZarr format and can be consumed by the DHIS2 Climate App, the DHIS2 Maps App, DHIS2 Climate Tools, the CHAP Modelling Platform, and third-party tools such as QGIS.
 

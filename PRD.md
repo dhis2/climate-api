@@ -1,7 +1,7 @@
-# DHIS2 Open Climate Service — Product Requirements Document (PRD)
+# Open Climate Service — Product Requirements Document (PRD)
 
 ## 1) Overview
-DHIS2 Open Climate Service is a no-code geospatial data integration platform that enables users to discover, fetch, process, harmonize, and load earth observation and related datasets into DHIS2 and the CHAP Modelling Platform.
+Open Climate Service is a no-code geospatial data integration platform that enables users to discover, fetch, process, harmonize, and load earth observation and related datasets into DHIS2 and the CHAP Modelling Platform.
 
 DHIS2 Maps app and DHIS2 Climate app are core downstream consumers of this API, with `climate-service` replacing functionality currently sourced from Google Earth Engine.
 

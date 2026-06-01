@@ -1,4 +1,4 @@
-"""DHIS2 Open Climate Service -- Climate and earth observation data API for DHIS2."""
+"""Open Climate Service -- Climate and earth observation data API for DHIS2."""
 
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable

@@ -21,7 +21,7 @@ from open_climate_service.ingestions import services as ingestion_services
 from open_climate_service.ingestions.schemas import ArtifactFormat, ArtifactRecord
 from open_climate_service.shared.time import parse_period_string_to_datetime, resolve_iso_period_step
 
-CATALOG_TITLE = "DHIS2 Open Climate Service"
+CATALOG_TITLE = "Open Climate Service"
 CATALOG_DESCRIPTION = "Published Open Climate Service GeoZarr datasets"
 STAC_VERSION = "1.1.0"
 DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.3.0/schema.json"
