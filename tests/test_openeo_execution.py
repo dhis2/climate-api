@@ -18,7 +18,7 @@ from climate_api.openeo.execution import (
     run_process_graph,
 )
 from climate_api.openeo.jobs import OpenEOJobService, _result_assets
-from climate_api.openeo.schemas import OpenEOJobRecord, OpenEOJobStatus
+from climate_api.openeo.schemas import OpenEOJobCreate, OpenEOJobRecord, OpenEOJobStatus
 from climate_api.shared.time import utc_now
 
 # ---------------------------------------------------------------------------
@@ -192,6 +192,36 @@ def test_persist_result_geodataframe_writes_geojson(job_service: OpenEOJobServic
 
     assert output_path is not None
     assert output_path.endswith(".geojson")
+
+
+def test_openeo_job_service_create_execute_and_get_results(
+    job_service: OpenEOJobService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "climate_api.openeo.execution.run_process_graph",
+        lambda process: {"ignored": True},
+    )
+    monkeypatch.setattr(
+        job_service,
+        "_persist_result",
+        lambda job_id, result: f"/tmp/{job_id}/result.geojson",
+    )
+
+    record = job_service.create_job(
+        OpenEOJobCreate(
+            process={
+                "process_graph": {
+                    "result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}
+                }
+            }
+        )
+    )
+
+    job_service._execute(record.id)
+    results = job_service.get_results(record.id)
+
+    assert results.id == record.id
+    assert results.assets["result"]["href"].endswith("result.geojson")
 
 
 # ---------------------------------------------------------------------------
