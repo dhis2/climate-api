@@ -460,7 +460,7 @@
         const colormapName = renders.colormap_name ?? "viridis";
         const fillValue = renders.nodata ?? null;
         const variable =
-          renders["climate_api:variable"] ??
+          renders["open_climate_service:variable"] ??
           Object.keys(collection["cube:variables"] ?? {})[0] ??
           "data";
 
@@ -539,7 +539,7 @@
             k !== collection.id
         );
         const units =
-          renders["climate_api:units"] ??
+          renders["open_climate_service:units"] ??
           collection["cube:variables"]?.[variable]?.unit ??
           "";
         metaSource.textContent = source ?? "—";
