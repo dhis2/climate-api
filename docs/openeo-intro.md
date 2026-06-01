@@ -1,14 +1,22 @@
 # openEO — A Team Introduction
 
-openEO is an **open standard API** for accessing and processing Earth Observation (EO) data in the cloud. Instead of downloading raw satellite or climate data and writing custom processing scripts, you describe *what you want to compute* as a process graph, and the server runs it for you — on its own data, at any scale.
+openEO is an **open standard API** for accessing and processing Earth Observation (EO) data. Instead of downloading raw satellite or climate data and writing custom processing scripts, you describe *what you want to compute* as a process graph, and the server runs it for you on its own data.
 
 ---
 
 ## Why openEO?
 
-Traditional EO data access is fragmented: each data provider has its own API, format, and tools. openEO solves this by defining a vendor-neutral HTTP API so the same client code works against any compliant backend — whether it's Google Earth Engine, Copernicus CDSE, or this Climate API.
+Traditional EO data access is fragmented: each data provider has its own API, format, and tools. openEO solves this by defining a vendor-neutral HTTP API so the same client code works against any compliant backend.
 
-For DHIS2 this means district-level climate indicators can be computed server-side without transferring large rasters to the client. A process graph replaces what would otherwise be a custom ETL script.
+## Why openEO for the Open Climate Service?
+
+The Open Climate Service stores climate datasets — precipitation, temperature, population — as managed Zarr/Icechunk stores and exposes them to DHIS2 users and applications. openEO gives us a standardised, well-documented way to query and transform those datasets without building a bespoke query language.
+
+Concretely it means:
+- **DHIS2 analytics apps** can request district-level climate aggregates (monthly sum, seasonal mean) without downloading raw daily rasters — the computation runs server-side and returns a small result.
+- **Data scientists** can use the standard openEO Python client or web editor directly against the service without learning a DHIS2-specific API.
+- **New datasets** added to the service are immediately queryable through the same process graph interface, with no additional API work.
+- **Interoperability** — process graphs written for the Open Climate Service work, with minor configuration changes, against any other openEO-compliant backend (Copernicus CDSE, EarthServer, etc.), and vice versa.
 
 ---
 
@@ -19,7 +27,7 @@ For DHIS2 this means district-level climate indicators can be computed server-si
 A **collection** is a dataset available on the backend — equivalent to a STAC collection. Each collection has a spatial and temporal extent, a list of variables (bands), and metadata describing its dimensions.
 
 ```
-GET /collections                      → list all available datasets
+GET /collections                               → list all available datasets
 GET /collections/chirps3_precipitation_daily   → metadata for one dataset
 ```
 
@@ -69,11 +77,11 @@ Example — compute monthly precipitation sum for a bounding box:
 A **batch job** runs a process graph asynchronously. You create it, start it, poll for status, then download results.
 
 ```
-POST /jobs          → create job (returns job_id)
-POST /jobs/{id}/results   → start execution
-GET  /jobs/{id}           → poll status (queued → running → finished)
-GET  /jobs/{id}/results   → download output files
-DELETE /jobs/{id}         → clean up
+POST /jobs                  → create job (returns job_id)
+POST /jobs/{id}/results     → start execution
+GET  /jobs/{id}             → poll status (queued → running → finished)
+GET  /jobs/{id}/results     → download output files
+DELETE /jobs/{id}           → clean up
 ```
 
 ### Synchronous execution
@@ -86,7 +94,7 @@ UDPs let you store a named, reusable process graph on the backend — think of t
 
 ---
 
-## Interacting with the Climate API
+## Interacting with the Open Climate Service
 
 ### Web editor
 
@@ -143,7 +151,7 @@ See [`examples/openeo_process_graph.py`](../examples/openeo_process_graph.py) fo
 
 ---
 
-## How the Climate API implements openEO
+## How the Open Climate Service implements openEO
 
 ```
 openEO client
@@ -165,7 +173,7 @@ load_collection             ← reads from Icechunk/Zarr managed dataset store
 save_result                 ← writes output file; returns asset href
 ```
 
-The backend is backed by the same Icechunk/Zarr dataset store used by the native ingestion and sync endpoints — openEO is an additional access layer, not a separate data store.
+openEO is an additional access layer on top of the existing dataset store — the same data served via the native ingestion and sync endpoints is available through process graphs with no duplication.
 
 ---
 
@@ -180,6 +188,6 @@ The backend is backed by the same Icechunk/Zarr dataset store used by the native
 | Web editor (hosted) | <https://editor.openeo.org> |
 | openEO cookbook (Python examples) | <https://openeo.org/documentation/1.0/cookbook/> |
 | openeo-processes-dask (our execution engine) | <https://github.com/Open-EO/openeo-processes-dask> |
-| Climate API openEO guide | [`docs/openeo.md`](openeo.md) |
+| Open Climate Service openEO guide | [`docs/openeo.md`](openeo.md) |
 | Full Python client example | [`examples/openeo_process_graph.py`](../examples/openeo_process_graph.py) |
 | Zonal statistics example | [`examples/zonal_statistics.py`](../examples/zonal_statistics.py) |
