@@ -485,7 +485,7 @@ wheels = [
 ]
 
 [[package]]
-name = "climate-api"
+name = "climate-service"
 version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [

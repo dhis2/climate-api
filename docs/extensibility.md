@@ -185,4 +185,4 @@ For the built-in `resample` process and usage examples, see [Processes](processe
 
 **Availability functions** (`sync.availability.latest_available_function`) accept a dotted path but only resolve built-in functions in `open_climate_service.providers.availability`. Plugin paths are not reliably supported — the path is resolved without `plugins_dir` on `sys.path`. Use one of the built-in availability functions instead, or open an issue if a new provider cadence is needed.
 
-See [issue #95](https://github.com/dhis2/climate-service/issues/95) for the planned fix.
+See [issue #95](https://github.com/dhis2/open-climate-service/issues/95) for the planned fix.

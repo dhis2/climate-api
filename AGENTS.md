@@ -1,6 +1,6 @@
 # DHIS2 Open Climate Service
 
-Agent context for the `climate-service` repository. Provider-agnostic — intended to be readable by any AI coding assistant.
+Agent context for the `open-climate-service` repository. Provider-agnostic — intended to be readable by any AI coding assistant.
 
 ## Project overview
 

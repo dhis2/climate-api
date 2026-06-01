@@ -13,8 +13,8 @@ This guide walks through configuring a new Open Climate Service instance for a s
 ## Step 1: Clone and install
 
 ```bash
-git clone https://github.com/dhis2/climate-service.git
-cd climate-service
+git clone https://github.com/dhis2/open-climate-service.git
+cd open-climate-service
 make sync
 ```
 

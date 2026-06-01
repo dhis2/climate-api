@@ -266,7 +266,7 @@ The storage backend is configured entirely via environment variables — no code
 
 | Resource                | Link / Description                           |
 | ----------------------- | -------------------------------------------- |
-| Open Climate Service GitHub      | https://github.com/dhis2/climate-service         |
+| Open Climate Service GitHub      | https://github.com/dhis2/open-climate-service         |
 | DHIS2 climate data      | https://dhis2.org/climate/climate-data/      |
 | CHAP Modelling Platform | https://chap.dhis2.org/                      |
 | dhis2eo                 | https://github.com/dhis2/dhis2eo             |
