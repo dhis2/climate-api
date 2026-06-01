@@ -133,6 +133,34 @@ class JobService:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         return record
 
+    def submit_callable_job(
+        self,
+        *,
+        func: Any,
+        label: str,
+        request: dict[str, Any],
+        max_attempts: int = 1,
+    ) -> JobRecord:
+        """Submit a callable directly as a background job — no YAML registry needed.
+
+        ``func`` must be a module-level function so its dotted path can be stored
+        in the job record and re-imported on restart.  ``label`` is the human-readable
+        process name shown in GET /jobs/{id} as ``processID``.
+        """
+        qualname = getattr(func, "__qualname__", "")
+        if "<locals>" in qualname:
+            raise ValueError(f"submit_callable_job requires a module-level function; got {qualname!r}")
+        fn_path = f"{func.__module__}.{qualname}"
+        # Strip any caller-supplied __fn_path__ to prevent function-path injection,
+        # then set the reserved key so it cannot be overridden.
+        safe_request = {k: v for k, v in request.items() if k != "__fn_path__"}
+        safe_request["__fn_path__"] = fn_path
+        return self._create_and_enqueue(
+            process_id=label,
+            request=safe_request,
+            max_attempts=max_attempts,
+        )
+
     def submit_process_job(
         self,
         *,
@@ -140,11 +168,21 @@ class JobService:
         request: dict[str, Any],
         max_attempts: int = 1,
     ) -> JobRecord:
-        """Create and asynchronously submit one process execution job."""
+        """Submit a YAML-registered process as a background job."""
         process = process_registry.get_process(process_id)
         if process is None or not process["expose"]:
             raise HTTPException(status_code=404, detail=f"Unknown process '{process_id}'")
+        # Strip the reserved key so a caller-supplied __fn_path__ cannot hijack execution.
+        safe_request = {k: v for k, v in request.items() if k != "__fn_path__"}
+        return self._create_and_enqueue(process_id=process_id, request=safe_request, max_attempts=max_attempts)
 
+    def _create_and_enqueue(
+        self,
+        *,
+        process_id: str,
+        request: dict[str, Any],
+        max_attempts: int,
+    ) -> JobRecord:
         job_id = str(uuid4())
         record = JobRecord(
             job_id=job_id,
@@ -388,12 +426,16 @@ class JobService:
                 return
 
     def _invoke_process(self, record: JobRecord) -> Any:
-        process = process_registry.get_process(record.process_id)
-        if process is None or not process["expose"]:
-            raise ValueError(f"Unknown process '{record.process_id}'")
-        func = process_registry.get_process_function(record.process_id)
+        fn_path = record.request.get("__fn_path__")
+        if fn_path and isinstance(fn_path, str):
+            func = process_registry._get_dynamic_function(fn_path)
+        else:
+            process = process_registry.get_process(record.process_id)
+            if process is None or not process["expose"]:
+                raise ValueError(f"Unknown process '{record.process_id}'")
+            func = process_registry.get_process_function(record.process_id)
         context = JobExecutionContext(self, record.job_id)
-        kwargs = dict(record.request)
+        kwargs = {k: v for k, v in record.request.items() if k != "__fn_path__"}
         if _supports_argument(func, "on_progress"):
             kwargs["on_progress"] = context.report_progress
         if _supports_argument(func, "is_cancel_requested"):
