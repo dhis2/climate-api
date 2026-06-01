@@ -73,6 +73,7 @@ nav:
       - OGC API: ogcapi.md
   - Guides:
       - Accessing data: user_guide.md
+      - openEO introduction: openeo-intro.md
       - openEO process graphs: openeo.md
       - Built-in datasets: built_in_datasets.md
       - Transforms: transforms.md
