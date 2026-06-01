@@ -4,6 +4,7 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
+module-name = "open_climate_service"
 
 [tool.uv]
 override-dependencies = [
