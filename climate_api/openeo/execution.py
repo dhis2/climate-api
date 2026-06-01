@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request
 from climate_api.data_accessor.services.accessor import open_icechunk_dataset, open_zarr_dataset
 from climate_api.data_manager.services.utils import get_time_dim
 from climate_api.ingestions import services as ingestion_services
-from climate_api.ingestions.schemas import ArtifactFormat, PublicationStatus
+from climate_api.ingestions.schemas import ArtifactFormat
 
 logger = logging.getLogger(__name__)
 

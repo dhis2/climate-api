@@ -3,7 +3,6 @@
 from fastapi import APIRouter, Request
 
 from climate_api.stac import services as stac_services
-
 from climate_api.stac.schemas import StacCatalogResponse
 
 router = APIRouter()

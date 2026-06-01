@@ -350,7 +350,10 @@ def execute_synchronous(
         if fmt == "ZARR":
             raise HTTPException(
                 status_code=400,
-                detail="Synchronous datacube results do not support ZARR output; use a non-ZARR format or submit a batch job",
+                detail=(
+                    "Synchronous datacube results do not support ZARR output; "
+                    "use a non-ZARR format or submit a batch job"
+                ),
             )
         with tempfile.TemporaryDirectory() as tmp:
             from pathlib import Path

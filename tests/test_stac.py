@@ -114,7 +114,6 @@ def test_stac_landing_links_to_collections(client: TestClient) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    data_links = [link for link in payload["links"] if link["rel"] == "data"]
     assert any(link["href"].endswith("/stac/catalog.json") for link in payload["links"] if link["rel"] == "root")
 
 

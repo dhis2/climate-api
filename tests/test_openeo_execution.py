@@ -258,7 +258,13 @@ def test_result_assets_none_output_returns_empty() -> None:
 def test_create_job_does_not_advertise_missing_logs_endpoint(client) -> None:
     response = client.post(
         "/jobs",
-        json={"process": {"process_graph": {"result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}}}},
+        json={
+            "process": {
+                "process_graph": {
+                    "result": {"process_id": "constant", "arguments": {"x": 1}, "result": True}
+                }
+            }
+        },
     )
 
     assert response.status_code == 201
@@ -328,7 +334,10 @@ def test_result_route_rejects_synchronous_zarr_datacube(
         ),
     )
 
-    response = client.post("/result", json={"process_graph": {"result": {"process_id": "load_collection", "result": True}}})
+    response = client.post(
+        "/result",
+        json={"process_graph": {"result": {"process_id": "load_collection", "result": True}}},
+    )
 
     assert response.status_code == 400
     assert "do not support ZARR output" in response.json()["detail"]
