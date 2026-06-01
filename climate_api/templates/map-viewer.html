@@ -490,14 +490,12 @@
           }
         }
 
-        const initialTimeIndex = Math.max(0, timeStepCount() - 1);
-
         let cm;
         try {
           cm = buildColormap(colormapName);
           const zarrVersion = zarr["zarr:zarr_format"] ?? null;
           const selector =
-            timeStepCount() > 0 ? { [timeDimKey]: initialTimeIndex } : {};
+            timeStepCount() > 0 ? { [timeDimKey]: 0 } : {};
           activeLayer = new ZarrLayer({
             id: "zarr-layer",
             source: zarr.href,
@@ -526,9 +524,9 @@
         // Time slider.
         if (timeStepCount() > 1) {
           timeSlider.max = timeStepCount() - 1;
-          timeSlider.value = initialTimeIndex;
-          timeValueEl.textContent = timeStepAt(initialTimeIndex);
-          timeCountEl.textContent = `${initialTimeIndex + 1} / ${timeStepCount()}`;
+          timeSlider.value = 0;
+          timeValueEl.textContent = timeStepAt(0);
+          timeCountEl.textContent = `1 / ${timeStepCount()}`;
           timeSection.classList.remove("hidden");
         }
 
