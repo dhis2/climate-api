@@ -72,7 +72,7 @@ package = false
 open-climate-service = { git = "https://github.com/dhis2/open-climate-service.git", branch = "main" }
 ```
 
-The `package = false` setting tells uv that this repository is not itself a Python package — it only declares dependencies. The `[tool.uv.sources]` block pins open-climate-service to the `main` branch on GitHub. To pin to a specific commit instead, use `rev = "abc1234"`. Installing directly from git is the intended path for now — the package name is reserved on PyPI but no stable releases have been published there yet.
+The `package = false` setting tells uv that this repository is not itself a Python package — it only declares dependencies. The `[tool.uv.sources]` block pins open-climate-service to the `main` branch on GitHub. To pin to a specific tag or commit instead, use `rev = "v0.2.0"`. Installing directly from git is the intended path for now — the package name is reserved on PyPI but no stable releases have been published there yet.
 
 Install dependencies:
 
